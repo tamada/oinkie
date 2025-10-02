@@ -12,14 +12,14 @@ pub enum Source {
     IR,
 }
 
-pub fn from_str(string: &str, bt: BirthmarkType) -> Result<Birthmark> {
+pub fn from_str(string: &str, bt: &BirthmarkType) -> Result<Birthmark> {
     match llvm_ir::Module::from_ir_str(string) {
         Ok(module) => extract_impl(module, PathBuf::from("<str>"), bt),
         Err(e) => Err(OinkieError::Format(format!("Failed to parse IR from reader: {}", e))),
     }
 }
 
-pub fn from_path<P: AsRef<Path>>(path: P, bt: BirthmarkType) -> Result<Birthmark> {
+pub fn from_path<P: AsRef<Path>>(path: P, bt: &BirthmarkType) -> Result<Birthmark> {
     let path = path.as_ref().to_path_buf();
     match find_type(&path) {
         Ok(t) => match parse_impl(&path, t) {
@@ -47,10 +47,10 @@ pub fn extract_elements(module: llvm_ir::Module, bt: &BirthmarkType) -> Result<V
     }
 }
 
-fn extract_impl<P: AsRef<Path>>(module: llvm_ir::Module, path: P, bt: BirthmarkType) -> Result<Birthmark> {
+fn extract_impl<P: AsRef<Path>>(module: llvm_ir::Module, path: P, bt: &BirthmarkType) -> Result<Birthmark> {
     let path = path.as_ref().to_path_buf();
     match extract_elements(module, &bt) {
-        Ok(elements) => Ok(Birthmark::new(bt, path, elements)),
+        Ok(elements) => Ok(Birthmark::new(bt.clone(), path, elements)),
         Err(e) => Err(e),
     }
 }

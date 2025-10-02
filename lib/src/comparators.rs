@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 use std::iter::zip;
 use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
@@ -7,20 +8,26 @@ use serde::{Serialize, Deserialize};
 use crate::birthmarks::{Birthmark, BirthmarkType, Element};
 use crate::Result;
 
-#[derive(Parser, Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
+#[derive(Serialize, Deserialize, Parser, Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
 pub enum Type {
-    #[clap(help = "Simpson's coefficient")]
+    /// Simpson's coefficient
     Simpson,
-    #[clap(help = "Jaccard index")]
+    /// Jaccard index
     Jaccard,
-    #[clap(help = "Dice's coefficient")]
+    /// Dice's coefficient
     Dice,
-    #[clap(help = "Cosine similarity")]
+    /// Cosine similarity
     Cosine,
-    #[clap(help = "Longest common subsequence")]
+    /// Longest common subsequence
     LCS,
-    #[clap(help = "Levenshtein distance (Edit distance)")]
+    /// Levenshtein distance (Edit distance)
     Levenshtein,
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 pub fn comparator(t: &Type) -> Box<dyn Comparator> {

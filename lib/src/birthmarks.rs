@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::{collections::HashMap, path::Path};
 use std::path::PathBuf;
 use clap::ValueEnum;
@@ -38,6 +39,12 @@ pub enum BirthmarkType {
     HeptaGram,
     #[clap(help = "octa-grams of opcodes (8-gram)")]
     OctaGram,
+}
+
+impl Display for BirthmarkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 impl Birthmark {

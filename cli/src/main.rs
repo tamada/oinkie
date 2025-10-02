@@ -2,8 +2,9 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
 
-use oinkie::birthmarks::BirthmarkType;
+use oinkie::birthmarks::{Birthmark, BirthmarkType};
 use oinkie::{OinkieError, Result};
+use oinkie::extractors;
 use oinkie::comparators::{Comparator, Similarity, Type as ComparatorType};
 
 #[derive(Parser, Debug)]
@@ -28,42 +29,51 @@ enum OinkieCommand {
     Execute(ExecuteOpts),
 
     #[command(name = "info", about = "Show information about the tool")]
-    Info(InfoOpts),
+    Info,
 }
 
 #[derive(Parser, Debug)]
-struct ExtractOpts {
+struct ExtractSourceOpts {
     #[clap(short = 't', long = "type", value_name = "BIRTHMARK_TYPE", default_value = "op-seq", help = "Birthmark type for extraction")]
     btype: BirthmarkType,
 
-    #[clap(short, long, default_value = "-", value_name = "DEST", help = "Output file path (default: stdout (\"-\"))")]
-    dest: String,
 
     #[clap(index = 1, value_name = "IR|BC", help = "Path to the LLVM IR or BC file")]
     inputs: Vec<PathBuf>,
 }
 
+#[derive(Parser, Debug)]
+struct ExtractOpts {
+    #[clap(short, long, default_value = "-", value_name = "DEST", help = "Output file path (default: stdout (\"-\"))")]
+    dest: String,
+
+    #[clap(flatten)]
+    source: ExtractSourceOpts,
+}
+
+fn extract_birthmarks(inputs: Vec<PathBuf>, btype: BirthmarkType) -> Result<Vec<Birthmark>> {
+    let result = inputs.iter()
+        .map(|p| extractors::from_path(p, &btype))
+        .collect::<Vec<_>>();
+    OinkieError::vec_result_to_result_vec(result)
+}
+
 fn extract(opts: ExtractOpts) -> oinkie::Result<()> {
     let mut errs = vec![];
-    for input in opts.inputs {
-        let birthmark = match oinkie::extractors::from_path(input, opts.btype.clone()) {
-            Ok(b) => b,
-            Err(e) => {
-                errs.push(e);
-                continue;
-            }
-        };
-        match serde_json::to_string_pretty(&birthmark) {
-            Ok(json) => if opts.dest == "-" {
+    let (btype, dest, inputs) = (opts.source.btype, opts.dest, opts.source.inputs);
+
+    match extract_birthmarks(inputs, btype) {
+        Ok(birthmarks) => {
+            let json = serde_json::to_string_pretty(&birthmarks)
+                .map_err(OinkieError::Json)?;
+            if dest == "-" {
                 println!("{}", json);
             } else {
-                match std::fs::write(&opts.dest, json) {
-                    Ok(_) => {},
-                    Err(e) => errs.push(OinkieError::Io(e)),
-                }
-            },
-            Err(e) => errs.push(OinkieError::Json(e)),
-        };
+                std::fs::write(dest, json)
+                    .map_err(OinkieError::Io)?;
+            }
+        },
+        Err(e) => errs.push(e),
     }
     OinkieError::error_or((), errs)
 }
@@ -89,7 +99,7 @@ struct CompareOpts {
 #[derive(Parser, Debug)]
 struct RunOpts {
     #[clap(flatten)]
-    extract_opts: ExtractOpts,
+    extract_opts: ExtractSourceOpts,
 
     #[clap(flatten)]
     compare_opts: CompareAlgorithmsOpts,
@@ -101,26 +111,25 @@ struct ExecuteOpts {
     script: PathBuf,
 }
 
-#[derive(Parser, Debug)]
-struct InfoOpts {}
-
-fn compare(opts: CompareOpts) -> oinkie::Result<()> {
-    let result = opts.birthmarks.iter()
-        .map(|p| oinkie::birthmarks::Birthmark::from_path(p))
+fn read_birthmarks_from_json(paths: Vec<PathBuf>) -> Result<Vec<Birthmark>> {
+    let result = paths.iter()
+        .map(|p| Birthmark::from_path(p))
         .collect::<Vec<_>>();
-    let comparator = oinkie::comparators::comparator(&opts.algorithm.comparator);
-    match OinkieError::vec_result_to_result_vec(result) {
-        Ok(birthmarks) => match compare_impl(birthmarks, comparator) {
+    OinkieError::vec_result_to_result_vec(result)
+}
+
+fn read_and_compare(opts: CompareOpts) -> oinkie::Result<()> {
+    let (paths, algorithm) = (opts.birthmarks, opts.algorithm);
+    let birthmarks = read_birthmarks_from_json(paths);
+    compare(birthmarks, algorithm)
+}
+
+fn compare(birthmarks: Result<Vec<Birthmark>>, opts: CompareAlgorithmsOpts) -> oinkie::Result<()> {
+    let comparator = oinkie::comparators::comparator(&opts.comparator);
+    match birthmarks {
+        Ok(birthmarks) => match calculate_similarities(birthmarks, comparator) {
             Ok(similarities) => {
-                let json = serde_json::to_string_pretty(&similarities)
-                    .map_err(OinkieError::Json)?;
-                if opts.algorithm.dest == "-" {
-                    println!("{}", json);
-                } else {
-                    std::fs::write(&opts.algorithm.dest, json)
-                        .map_err(OinkieError::Io)?;
-                }
-                Ok(())
+                output_similarities(similarities, opts.dest)
             },
             Err(e) => Err(e),
         },
@@ -128,7 +137,19 @@ fn compare(opts: CompareOpts) -> oinkie::Result<()> {
     }
 }
 
-fn compare_impl(birthmarks: Vec<oinkie::birthmarks::Birthmark>, comparator: Box<dyn Comparator>) -> oinkie::Result<Vec<Similarity>> {
+fn output_similarities(similarities: Vec<Similarity>, dest: String) -> oinkie::Result<()> {
+    let json = serde_json::to_string_pretty(&similarities)
+        .map_err(OinkieError::Json)?;
+    if dest == "-" {
+        println!("{}", json);
+    } else {
+        std::fs::write(dest, json)
+            .map_err(OinkieError::Io)?;
+    }
+    Ok(())
+}
+
+fn calculate_similarities(birthmarks: Vec<Birthmark>, comparator: Box<dyn Comparator>) -> Result<Vec<Similarity>> {
     if birthmarks.len() < 2 {
         Err(OinkieError::Fatal("At least two birthmarks are required for comparison".to_string()))
     } else {
@@ -152,22 +173,35 @@ fn compare_impl(birthmarks: Vec<oinkie::birthmarks::Birthmark>, comparator: Box<
 }
 
 fn run(opts: RunOpts) -> oinkie::Result<()> {
+    let (eopts, copts) = (opts.extract_opts, opts.compare_opts);
+    let birthmarks = extract_birthmarks(eopts.inputs, eopts.btype);
+    let (ctype, dest) = (copts.comparator, copts.dest);
+    let comparator = oinkie::comparators::comparator(&ctype);
+    match birthmarks {
+        Ok(birthmarks) => match calculate_similarities(birthmarks, comparator) {
+            Ok(similarities) => output_similarities(similarities, dest),
+            Err(e) => Err(e),
+        },
+        Err(e) => Err(e),
+    }
+}
+
+fn execute(_opts: ExecuteOpts) -> oinkie::Result<()> {
     Ok(())
 }
 
-fn execute(opts: ExecuteOpts) -> oinkie::Result<()> {
-    Ok(())
-}
-
-fn info(opts: InfoOpts) -> oinkie::Result<()> {
+fn info() -> oinkie::Result<()> {
     println!("======== Oinkie Info ========");
-    println!("======== Extractors  ========");
+    println!("Oinkie is a tool for detecting the code theft from LLVM IR/CB codes with birthmarks.
+The birthmark is a unique characteristic of a program that can be used to identify it.
+Oinkie extracts birthmarks from given IR/BC codes and compares them to calculate the similarities.");
+    println!("======== Birthmarks  ========");
     BirthmarkType::value_variants().iter().for_each(|b| {
-        println!("- {:?}: {}", b, b.to_possible_value().unwrap().get_help().unwrap());
+        println!("- {b:9}: {}", b.to_possible_value().unwrap().get_help().unwrap());
     });
     println!("======== Comparators ========");
     ComparatorType::value_variants().iter().for_each(|c| {
-        println!("- {:?}: {}", c, c.to_possible_value().unwrap().get_help().unwrap());
+        println!("- {c:9}: {}", c.to_possible_value().unwrap().get_help().unwrap());
     });
 
     Ok(())
@@ -177,10 +211,10 @@ fn perform(opts: OinkieOpts) -> oinkie::Result<()> {
     use OinkieCommand::*;
     match opts.command {
         Extract(opts) => extract(opts),
-        Compare(opts) => compare(opts),
+        Compare(opts) => read_and_compare(opts),
         Run(opts) => run(opts),
         Execute(opts) => execute(opts),
-        Info(opts) => info(opts),
+        Info => info(),
     }
 }
 
