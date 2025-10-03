@@ -46,23 +46,33 @@ pub struct Similarity {
     pub btype: BirthmarkType,
     pub a_path: PathBuf,
     pub b_path: PathBuf,
+    pub ctype: Type,
     pub score: f64,
+    pub elapsed_ms: Option<f64>,
 }
 
 pub trait Comparator {
-    fn name(&self) -> &str;
+    fn name(&self) -> String {
+        self.ctype().to_string()
+    }
+
+    fn ctype(&self) -> Type;
 
     fn compare(&self, a: &Birthmark, b: &Birthmark) -> Result<Similarity> {
+        let start = std::time::Instant::now();
         let s = match (a.len(), b.len()) {
             (0, 0) => Ok(1.0),
             (0, _) | (_, 0) => Ok(0.0),
             _ => self.compare_impl(a, b),
         };
+        let elapsed = start.elapsed();
         s.map(|score| Similarity {
             btype: a.btype.clone(),
             a_path: a.path.clone(),
             b_path: b.path.clone(),
+            ctype: self.ctype(),
             score,
+            elapsed_ms: Some(elapsed.as_secs_f64() * 1000.0),
         })
     }
 
@@ -88,8 +98,8 @@ struct Levenshtein {
 }
 
 impl Comparator for Simpson {
-    fn name(&self) -> &str {
-        "Simpson"
+    fn ctype(&self) -> Type {
+        Type::Simpson
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {
@@ -101,8 +111,8 @@ impl Comparator for Simpson {
 }
 
 impl Comparator for Jaccard {
-    fn name(&self) -> &str {
-        "Jaccard"
+    fn ctype(&self) -> Type {
+         Type::Jaccard
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {
@@ -116,8 +126,8 @@ impl Comparator for Jaccard {
 }
 
 impl Comparator for Dice{
-    fn name(&self) -> &str {
-        "Dice"
+    fn ctype(&self) -> Type {
+        Type::Dice
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {
@@ -129,8 +139,8 @@ impl Comparator for Dice{
 }
 
 impl Comparator for Cosine {
-    fn name(&self) -> &str {
-        "Cosine"
+    fn ctype(&self) -> Type {
+        Type::Cosine
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {
@@ -159,8 +169,8 @@ fn merge_keys<'a>(m1: &'a HashMap<&'a Element, usize>, m2: &'a HashMap<&'a Eleme
 }
 
 impl Comparator for LCS {
-    fn name(&self) -> &str {
-        "LCS"
+    fn ctype(&self) -> Type {
+        Type::LCS
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {
@@ -184,8 +194,8 @@ impl Comparator for LCS {
 }
 
 impl Comparator for Levenshtein {
-    fn name(&self) -> &str {
-        "Levenshtein"
+    fn ctype(&self) -> Type {
+        Type::Levenshtein
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {
