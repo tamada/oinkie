@@ -9,7 +9,8 @@ char *fizzbuzz(int n) {
     } else if (n % 5 == 0) {
         return "Buzz";
     }
-    char *result = malloc(20 * sizeof(char));
+    int len = snprintf(NULL, 0, "%d", n);
+    char *result = malloc((len + 1) * sizeof(char));
     if (result == NULL) {
         perror("malloc");
         exit(EXIT_FAILURE);

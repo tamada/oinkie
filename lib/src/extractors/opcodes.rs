@@ -80,7 +80,7 @@ impl KGram {
     }
     pub fn push(&mut self, e: String) {
         self.elements.push(e);
-        if self.elements.len() > self.value{
+        if self.elements.len() > self.value {
             self.elements.remove(0);
         }
     }

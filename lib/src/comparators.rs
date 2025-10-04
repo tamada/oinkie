@@ -135,7 +135,7 @@ impl Comparator for Dice{
                 .filter(|(a, b)| a.is_same(b))
                 .count() as f64
                 / (a.len() + b.len()) as f64)
-    }   
+    }
 }
 
 impl Comparator for Cosine {

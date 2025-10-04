@@ -39,6 +39,6 @@ func goMain(args []string) int {
 }
 
 func main() {
-	status := goMain(os.Args)
+	status := goMain(os.Args[1:])
 	os.Exit(status)
 }
