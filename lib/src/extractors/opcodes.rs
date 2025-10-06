@@ -374,12 +374,9 @@ mod tests {
         let module = llvm_ir::Module::from_ir_path(&path).unwrap();
         let birthmarks = extract(&module, &path, &BirthmarkType::OpSet, &Mode::File).unwrap();
         assert_eq!(birthmarks.len(), 1);
-        let mut res = birthmarks[0].elements.clone();
-        res.sort();
-        let expected = vec![
-            Element::Str("Call".to_string()),
-            Element::Str("Ret".to_string()),
-        ];
-        assert_eq!(res, expected);
+        let res = &birthmarks[0].elements;
+        assert!(res.contains(&Element::Str("Call".into())));
+        assert!(res.contains(&Element::Str("Ret".into())));
+        assert_eq!(res.len(), 2);
     }
 }
