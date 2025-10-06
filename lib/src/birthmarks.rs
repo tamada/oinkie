@@ -27,7 +27,7 @@ impl Info {
     }
 
     pub fn new_from(&self, name: String) -> Self {
-        Self { name: name.clone(), path: self.path.clone(), btype: self.btype.clone(), mode: self.mode.clone() }
+        Self { name, path: self.path.clone(), btype: self.btype.clone(), mode: self.mode.clone() }
     }
 
     pub fn is_same_type(&self, other: &Info) -> bool {

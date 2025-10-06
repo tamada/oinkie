@@ -139,7 +139,7 @@ impl Extractor for FunctionModeExtractor {
     }
     fn visit_func(&mut self, func: &llvm_ir::Function) {
         self.delegates.visit_func(func);
-        self.info = self.info.as_mut().map(|info| Info::new_from(&info, func.name.clone()));
+        self.info = self.info.as_ref().map(|info| Info::new_from(&info, func.name.clone()));
     }
     fn visit_func_end(&mut self, func: &llvm_ir::Function) -> Result<Vec<Element>> {
         match self.delegates.visit_func_end(func) {
@@ -176,6 +176,7 @@ impl Extractor for FunctionModeExtractor {
     fn visit_end(&mut self, module: &llvm_ir::Module) -> Result<Vec<Element>> {
         self.delegates.visit_end(module)
     }
+
     fn finish(&self) -> Result<Vec<Birthmark>> {
         Ok(self.birthmarks.clone())
     }
@@ -199,7 +200,7 @@ impl BBModeExtractor {
 impl Extractor for BBModeExtractor {
     fn visit(&mut self, module: &llvm_ir::Module, path: &PathBuf) {
         self.delegates.visit(module, path);
-        self.info = Some(Info::new(path.to_string_lossy().into(), path.clone(), self.btype(), Mode::Function));
+        self.info = Some(Info::new(path.to_string_lossy().into(), path.clone(), self.btype(), Mode::BasicBlock));
     }
 
     fn visit_func(&mut self, func: &llvm_ir::Function) {
@@ -208,7 +209,7 @@ impl Extractor for BBModeExtractor {
 
     fn visit_bb(&mut self, bb: &llvm_ir::basicblock::BasicBlock) {
         self.delegates.visit_bb(bb);
-        self.info = self.info.as_mut().map(|info| Info::new_from(&info, bb.name.clone().to_string()));
+        self.info = self.info.as_ref().map(|info| Info::new_from(&info, bb.name.clone().to_string()));
     }
 
     fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
@@ -265,7 +266,7 @@ impl FileModeExtractor {
 impl Extractor for FileModeExtractor {
     fn visit(&mut self, module: &llvm_ir::Module, path: &PathBuf) {
         self.delegates.visit(module, path);
-        self.info = Some(Info::new(path.to_string_lossy().into(), path.clone(), self.btype(), Mode::Function));
+        self.info = Some(Info::new(path.to_string_lossy().into(), path.clone(), self.btype(), Mode::File));
     }
 
     fn visit_func(&mut self, func: &llvm_ir::Function) {
