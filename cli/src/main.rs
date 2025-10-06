@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 use oinkie::birthmarks::{Birthmark, BirthmarkType};
 use oinkie::{OinkieError, Result};
-use oinkie::extractors;
+use oinkie::extractors::{self, Mode};
 use oinkie::comparators::{Comparator, Similarity, Type as ComparatorType};
 
 #[derive(Parser, Debug)]
@@ -37,6 +37,8 @@ struct ExtractSourceOpts {
     #[clap(short = 't', long = "type", value_name = "BIRTHMARK_TYPE", default_value = "op-seq", help = "Birthmark type for extraction")]
     btype: BirthmarkType,
 
+    #[clap(short = 'm', long = "mode", value_name = "EXTRACTION_MODE", default_value = "file", help = "Extraction mode")]
+    mode: Mode,
 
     #[clap(index = 1, value_name = "IR|BC", help = "Path to the LLVM IR or BC file")]
     inputs: Vec<PathBuf>,
@@ -51,18 +53,19 @@ struct ExtractOpts {
     source: ExtractSourceOpts,
 }
 
-fn extract_birthmarks(inputs: Vec<PathBuf>, btype: BirthmarkType) -> Result<Vec<Birthmark>> {
+fn extract_birthmarks(inputs: Vec<PathBuf>, btype: BirthmarkType, mode: &Mode) -> Result<Vec<Birthmark>> {
     let result = inputs.iter()
-        .map(|p| extractors::from_path(p, &btype))
+        .map(|p| extractors::from_path(p, &btype, mode))
         .collect::<Vec<_>>();
     OinkieError::vec_result_to_result_vec(result)
+        .map(|v| v.into_iter().flatten().collect())
 }
 
 fn extract(opts: ExtractOpts) -> oinkie::Result<()> {
     let mut errs = vec![];
-    let (btype, dest, inputs) = (opts.source.btype, opts.dest, opts.source.inputs);
+    let (btype, dest, inputs, mode) = (opts.source.btype, opts.dest, opts.source.inputs, opts.source.mode);
 
-    match extract_birthmarks(inputs, btype) {
+    match extract_birthmarks(inputs, btype, &mode) {
         Ok(birthmarks) => {
             let json = serde_json::to_string_pretty(&birthmarks)
                 .map_err(OinkieError::Json)?;
@@ -160,7 +163,7 @@ fn calculate_similarities(birthmarks: Vec<Birthmark>, comparator: Box<dyn Compar
                 let a = &birthmarks[i];
                 let b = &birthmarks[j];
                 if !a.is_same_type(b) {
-                    errs.push(OinkieError::Fatal(format!("Birthmark types do not match: {:?} vs {:?}", a.btype, b.btype)));
+                    errs.push(OinkieError::Fatal(format!("Birthmark types do not match: {:?} vs {:?}", a.info, b.info)));
                 }
                 match comparator.compare(a, b) {
                     Ok(similarity) => oks.push(similarity),
@@ -174,7 +177,7 @@ fn calculate_similarities(birthmarks: Vec<Birthmark>, comparator: Box<dyn Compar
 
 fn run(opts: RunOpts) -> oinkie::Result<()> {
     let (eopts, copts) = (opts.extract_opts, opts.compare_opts);
-    let birthmarks = extract_birthmarks(eopts.inputs, eopts.btype);
+    let birthmarks = extract_birthmarks(eopts.inputs, eopts.btype, &eopts.mode);
     let (ctype, dest) = (copts.comparator, copts.dest);
     let comparator = oinkie::comparators::comparator(&ctype);
     match birthmarks {

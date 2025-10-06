@@ -4,19 +4,43 @@ use std::path::PathBuf;
 use clap::ValueEnum;
 use serde::{Serialize, Deserialize};
 
+use crate::extractors::Mode;
 use crate::{OinkieError, Result};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Birthmark {
-    pub btype: BirthmarkType,
+    pub info: Info,
     pub elements: Vec<Element>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Info {
+    pub name: String,
     pub path: PathBuf,
+    pub btype: BirthmarkType,
+    pub mode: Mode,
+}
+
+impl Info {
+    pub fn new(name: String, path: PathBuf, btype: BirthmarkType, mode: Mode) -> Self {
+        Self { name, path, btype, mode }
+    }
+
+    pub fn new_from(&self, name: String) -> Self {
+        Self { name: name.clone(), path: self.path.clone(), btype: self.btype.clone(), mode: self.mode.clone() }
+    }
+
+    pub fn is_same_type(&self, other: &Info) -> bool {
+        self.btype == other.btype && self.mode == other.mode
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ValueEnum)]
 pub enum BirthmarkType {
-    #[clap(help = "Sequence of function calls (function names)")]
+    #[clap(help = "sequence of function calls (function names)")]
     Sfc,
+    #[clap(help = "frequencies of function calls (function names)")]
+    Ffc,
     #[clap(help = "frequencies of opcodes")]
     OpFreq,
     #[clap(help = "set of opcodes")]
@@ -48,11 +72,10 @@ impl Display for BirthmarkType {
 }
 
 impl Birthmark {
-    pub fn new(btype: BirthmarkType, path: PathBuf, elements: Vec<Element>) -> Self {
+    pub fn new(info: Info, elements: Vec<Element>) -> Self {
         Self {
-            btype,
+            info,
             elements,
-            path,
         }
     }
 
@@ -79,11 +102,11 @@ impl Birthmark {
     }
 
     pub fn is_same_type(&self, other: &Birthmark) -> bool {
-        self.btype == other.btype
+        self.info.is_same_type(&other.info)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
 #[serde(untagged)]
 pub enum Element {
     Str(String),

@@ -1,68 +1,240 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::birthmarks::Element;
+use crate::extractors::Extractor;
 use crate::Result;
 
-pub(super) fn extract_freq(module: &llvm_ir::Module) -> Result<Vec<Element>> {
-    let mut freq = HashMap::new();
-    for func in &module.functions {
-        for bb in &func.basic_blocks {
-            for instr in &bb.instrs {
-                let opcode = instruction_to_str(instr);
-                *freq.entry(opcode).or_insert(0) += 1;
-            }
-            *freq.entry(terminator_to_str(&bb.term)).or_insert(0) += 1;
-        }
-    }
-    Ok(freq.into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+pub(super) struct SeqExtractor {
+    opcodes: Vec<Element>,
 }
 
-pub(super) fn extract_set(module: &llvm_ir::Module) -> Result<Vec<Element>> {
-    let mut opcodes = HashSet::new();
-    for func in &module.functions {
-        for bb in &func.basic_blocks {
-            for instr in &bb.instrs {
-                let opcode = instruction_to_str(instr);
-                opcodes.insert(opcode.to_string());
-            }
-            opcodes.insert(terminator_to_str(&bb.term));
-        }
+impl SeqExtractor {
+    pub fn new() -> Self {
+        Self { opcodes: vec![] }
     }
-    Ok(opcodes.into_iter().map(|e| Element::Str(e)).collect::<Vec<_>>())
 }
 
-pub(super) fn extract_seq(module: &llvm_ir::Module) -> Result<Vec<Element>> {
-    let mut opcodes = Vec::new();
-    for func in &module.functions {
-        for bb in &func.basic_blocks {
-            for instr in &bb.instrs {
-                let opcode = instruction_to_str(instr);
-                opcodes.push(Element::Str(opcode.to_string()));
-            }
-            opcodes.push(Element::Str(terminator_to_str(&bb.term)));
-        }
+impl Extractor for SeqExtractor {
+    fn visit(&mut self, _module: &llvm_ir::Module, _path: &std::path::PathBuf) {
     }
-    Ok(opcodes)
+
+    fn btype(&self) -> crate::birthmarks::BirthmarkType {
+        crate::birthmarks::BirthmarkType::OpSeq
+    }
+
+    fn visit_func(&mut self, _func: &llvm_ir::Function) {
+    }
+    
+    fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
+    }
+    
+    fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
+        let opcode = Element::Str(instruction_to_str(instr));
+        self.opcodes.push(opcode.clone());
+        Ok(Some(opcode))
+    }
+    
+    fn visit_bb_end(&mut self, term: &llvm_ir::terminator::Terminator) -> Result<Vec<Element>> {
+        let opcode = Element::Str(terminator_to_str(term));
+        self.opcodes.push(opcode.clone());
+        Ok(self.opcodes.clone())
+    }
+    
+    fn visit_func_end(&mut self, _func: &llvm_ir::Function) -> Result<Vec<Element>> {
+        Ok(self.opcodes.clone())
+    }
+    
+    fn visit_end(&mut self, _module: &llvm_ir::Module) -> Result<Vec<Element>> {
+        Ok(self.opcodes.clone())
+    }
+    
+    fn finish(&self) -> Result<Vec<crate::birthmarks::Birthmark>> {
+        Ok(vec![])
+    }
+    
+    fn clear(&mut self) {
+        self.opcodes.clear();
+    }
 }
 
-pub(super) fn extract_kgram(module: &llvm_ir::Module, k: usize) -> Result<Vec<Element>> {
-    let mut kgrams = Vec::new();
-    for func in &module.functions {
-        let mut kgram = KGram::new(k);
-        for bb in &func.basic_blocks {
-            for inst in &bb.instrs {
-                kgram.push(instruction_to_str(inst));
-                if kgram.is_valid() {
-                    kgrams.push(kgram.to_elem());
-                }
-            }
-            kgram.push(terminator_to_str(&bb.term));
-            if kgram.is_valid() {
-                kgrams.push(kgram.to_elem())
-            }
+pub(super) struct SetExtractor {
+    opcodes: HashSet<Element>,
+}
+
+impl SetExtractor {
+    pub fn new() -> Self {
+        Self { opcodes: HashSet::new() }
+    }
+}
+
+impl Extractor for SetExtractor {
+    fn visit(&mut self, _module: &llvm_ir::Module, _path: &std::path::PathBuf) {
+    }
+
+    fn btype(&self) -> crate::birthmarks::BirthmarkType {
+        crate::birthmarks::BirthmarkType::OpSet
+    }
+    
+    fn visit_func(&mut self, _func: &llvm_ir::Function) {
+    }
+    
+    fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
+    }
+    
+    fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
+        let opcode = Element::Str(instruction_to_str(instr));
+        self.opcodes.insert(opcode.clone());
+        Ok(Some(opcode))
+    }
+    
+    fn visit_bb_end(&mut self, term: &llvm_ir::terminator::Terminator) -> Result<Vec<Element>> {
+        let opcode = Element::Str(terminator_to_str(term));
+        self.opcodes.insert(opcode.clone());
+        Ok(self.opcodes.clone().into_iter().collect())
+    }
+    
+    fn visit_func_end(&mut self, _func: &llvm_ir::Function) -> Result<Vec<Element>> {
+        Ok(self.opcodes.clone().into_iter().collect())
+    }
+    
+    fn visit_end(&mut self, _module: &llvm_ir::Module) -> Result<Vec<Element>> {
+        Ok(self.opcodes.clone().into_iter().collect())
+    }
+    
+    fn finish(&self) -> Result<Vec<crate::birthmarks::Birthmark>> {
+        Ok(vec![])
+    }
+    
+    fn clear(&mut self) {
+        self.opcodes.clear();
+    }
+}
+
+pub(super) struct FreqExtractor {
+    opcodes: HashMap<String, usize>,
+}
+
+impl FreqExtractor {
+    pub fn new() -> Self {
+        Self { opcodes: HashMap::new() }
+    }
+}
+
+impl Extractor for FreqExtractor {
+    fn btype(&self) -> crate::birthmarks::BirthmarkType {
+        crate::birthmarks::BirthmarkType::OpFreq
+    }
+
+    fn visit(&mut self, _module: &llvm_ir::Module, _path: &std::path::PathBuf) {
+    }
+
+    fn visit_func(&mut self, _func: &llvm_ir::Function) {
+    }
+
+    fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
+    }
+
+    fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
+        let opcode = instruction_to_str(instr);
+        *self.opcodes.entry(opcode.clone()).or_insert(0) += 1;
+        let v = *self.opcodes.get(&opcode).unwrap_or(&0);
+        Ok(Some(Element::Freq(v, opcode)))
+    }
+
+    fn visit_bb_end(&mut self, term: &llvm_ir::terminator::Terminator) -> Result<Vec<Element>> {
+        let opcode = terminator_to_str(term);
+        *self.opcodes.entry(opcode.clone()).or_insert(0) += 1;
+        Ok(self.opcodes.clone().into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+    }
+
+    fn visit_func_end(&mut self, _func: &llvm_ir::Function) -> Result<Vec<Element>> {
+        Ok(self.opcodes.clone().into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+    }
+
+    fn visit_end(&mut self, _module: &llvm_ir::Module) -> Result<Vec<Element>> {
+        Ok(self.opcodes.clone().into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+    }
+
+    fn finish(&self) -> Result<Vec<crate::birthmarks::Birthmark>> {
+        Ok(vec![])
+    }
+
+    fn clear(&mut self) {
+        self.opcodes.clear();
+    }
+}
+
+pub(super) struct KGramExtractor {
+    n: usize,
+    current: KGram,
+    kgrams: Vec<KGram>,
+}
+
+impl KGramExtractor {
+    pub fn new(n: usize) -> Self {
+        Self { n, current: KGram::new(n), kgrams: vec![] }
+    }
+}
+
+impl Extractor for KGramExtractor {
+    fn btype(&self) -> crate::birthmarks::BirthmarkType {
+        use crate::birthmarks::BirthmarkType::*;
+        match self.n {
+            1 => UniGram,
+            2 => BiGram,
+            3 => TriGram,
+            4 => TetraGram,
+            5 => PentaGram,
+            6 => HexaGram,
+            7 => HeptaGram,
+            8 => OctaGram,
+            _ => panic!("Unsupported k-gram size: {}", self.n),
         }
     }
-    Ok(kgrams)
+
+    fn visit(&mut self, _module: &llvm_ir::Module, _path: &std::path::PathBuf) {
+    }
+
+    fn visit_func(&mut self, _func: &llvm_ir::Function) {
+    }
+
+    fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
+    }
+
+    fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
+        self.current.push(instruction_to_str(instr));
+        if self.current.is_valid() {
+            self.kgrams.push(self.current.clone());
+            Ok(Some(self.current.to_elem()))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn visit_bb_end(&mut self, term: &llvm_ir::terminator::Terminator) -> Result<Vec<Element>> {
+        self.current.push(terminator_to_str(term));
+        if self.current.is_valid() {
+            self.kgrams.push(self.current.clone());
+        }
+        Ok(self.kgrams.clone().into_iter().map(|k| k.to_elem()).collect())
+    }
+
+    fn visit_func_end(&mut self, _func: &llvm_ir::Function) -> Result<Vec<Element>> {
+        Ok(self.kgrams.clone().into_iter().map(|k| k.to_elem()).collect())
+    }
+
+    fn visit_end(&mut self, _module: &llvm_ir::Module) -> Result<Vec<Element>> {
+        Ok(self.kgrams.clone().into_iter().map(|k| k.to_elem()).collect())
+    }
+
+    fn finish(&self) -> Result<Vec<crate::birthmarks::Birthmark>> {
+        Ok(vec![])
+    }
+
+    fn clear(&mut self) {
+        self.current = KGram::new(self.n);
+        self.kgrams.clear();
+    }
 }
 
 #[derive(Clone)]
@@ -170,6 +342,7 @@ fn instruction_to_str(inst: &llvm_ir::Instruction) -> String {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use crate::{birthmarks::BirthmarkType, extractors::{extract, Mode}};
 
     use super::*;
 
@@ -184,19 +357,25 @@ mod tests {
         }
         "#;
         let module = llvm_ir::Module::from_ir_str(ir).unwrap();
-        let res = extract_seq(&module).unwrap();
+        let birthmarks = extract(&module, PathBuf::from("<memory>"), &BirthmarkType::OpSeq, &Mode::File).unwrap();
+        assert_eq!(birthmarks.len(), 1);
+        let res = &birthmarks[0].elements;
         let expected = vec![
             Element::Str("Add".to_string()),
             Element::Str("Sub".to_string()),
             Element::Str("Ret".to_string()),
         ];
-        assert_eq!(res, expected);
+        assert_eq!(res, &expected);
     }
 
     #[test]
     fn test_set() {
-        let module = llvm_ir::Module::from_ir_path(PathBuf::from("../testdata/hello.ll")).unwrap();
-        let res = extract_set(&module).unwrap();
+        let path = PathBuf::from("../testdata/hello.ll");
+        let module = llvm_ir::Module::from_ir_path(&path).unwrap();
+        let birthmarks = extract(&module, &path, &BirthmarkType::OpSet, &Mode::File).unwrap();
+        assert_eq!(birthmarks.len(), 1);
+        let mut res = birthmarks[0].elements.clone();
+        res.sort();
         let expected = vec![
             Element::Str("Call".to_string()),
             Element::Str("Ret".to_string()),
