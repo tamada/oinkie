@@ -26,11 +26,9 @@ impl Extractor for SeqNames {
     }
 
     fn visit_func(&mut self, _func: &llvm_ir::Function) {
-        todo!()
     }
 
     fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
-        todo!()
     }
 
     fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
@@ -87,11 +85,9 @@ impl Extractor for FreqNames {
     }
 
     fn visit_func(&mut self, _func: &llvm_ir::Function) {
-        todo!()
     }
 
     fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
-        todo!()
     }
 
     fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
