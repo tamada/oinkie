@@ -116,9 +116,10 @@ struct ExecuteOpts {
 
 fn read_birthmarks_from_json(paths: Vec<PathBuf>) -> Result<Vec<Birthmark>> {
     let result = paths.iter()
-        .map(|p| Birthmark::from_path(p))
+        .map(|p| oinkie::birthmarks::load(p))
         .collect::<Vec<_>>();
     OinkieError::vec_result_to_result_vec(result)
+        .map(|v| v.into_iter().flatten().collect())
 }
 
 fn read_and_compare(opts: CompareOpts) -> oinkie::Result<()> {

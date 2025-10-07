@@ -65,6 +65,16 @@ pub enum BirthmarkType {
     OctaGram,
 }
 
+pub fn load<P: AsRef<Path>>(path: P) -> Result<Vec<Birthmark>> {
+    match std::fs::File::open(path.as_ref()) {
+        Ok(file) => match serde_json::from_reader(file) {
+            Ok(birthmark) => Ok(birthmark),
+            Err(e) => Err(OinkieError::Json(e)),
+        },
+        Err(e) => Err(OinkieError::Io(e)),
+    }
+}
+
 impl Display for BirthmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
@@ -76,16 +86,6 @@ impl Birthmark {
         Self {
             info,
             elements,
-        }
-    }
-
-    pub fn from_path(path: &Path) -> Result<Self> {
-        match std::fs::File::open(path) {
-            Ok(file) => match serde_json::from_reader(file) {
-                Ok(birthmark) => Ok(birthmark),
-                Err(e) => Err(OinkieError::Json(e)),
-            },
-            Err(e) => Err(OinkieError::Io(e)),
         }
     }
 

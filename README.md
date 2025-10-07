@@ -137,6 +137,15 @@ Extracting the `OpSeq` birthmark object by executing `oinkie extract -t op-seq c
 ]
 ```
 
+###### Entries
+
+- `info`: metadata of birthmarks.
+  - `name`: the birthmark name,
+  - `path`: the birthmark extracted from,
+  - `btype`: the birthmark type, and
+  - `mode`: the extraction mode.
+- `elements`: The birthmark elements.
+
 ##### Schema
 
 JSON schema of the birthmark object is as follows.
@@ -185,6 +194,39 @@ JSON schema of the birthmark object is as follows.
 #### Comparison Results
 
 ##### Example
+
+```json
+[
+  {
+    "btype": "OpSeq",
+    "a_info": {
+      "name": "testdata/src2ll/fizzbuzz_go.ll",
+      "path": "testdata/src2ll/fizzbuzz_go.ll",
+      "btype": "OpSeq",
+      "mode": "File"
+    },
+    "b_info": {
+      "name": "testdata/src2ll/fizzbuzz_rs.ll",
+      "path": "testdata/src2ll/fizzbuzz_rs.ll",
+      "btype": "OpSeq",
+      "mode": "File"
+    },
+    "ctype": "Simpson",
+    "score": 0.05047821466524974,
+    "elapsed_ms": 0.041832999999999995
+  },
+  ...
+]
+```
+
+###### Entries
+
+- `btype`: Birthmark type,
+- `a_info`: the metadata of the birthmark of comparison A side,
+- `b_info`: the metadata of the birthmark of comparison B side,
+- `ctype`: The comparison type,
+- `score`: the resultant similarity, and
+- `elapsed_ms`: shows the required time for comparison (milliseconds).
 
 ##### Schema
 
