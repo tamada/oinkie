@@ -16,10 +16,21 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Install LLVM and Clang
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "19.1.7"
+      - name: Install LLVM and Clang (Ubuntu)
+        if: ${{ matrix.os }} == ubuntu-latest
+        run:
+            bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+            apt-get install -y llvm-19 libpolly-19-dev
+
+      - name: Install LLVM and Clang (Windows)
+        if: ${{ matrix.os }} == windows-latest
+        run:
+            choco install llvm --version=19.1.5
+
+      - name: Install LLVM and Clang (macOS)
+        if: ${{ matrix.os }} == macos-latest
+        run:
+            brew install llvm@19
 
       - name: Setup Rust LLVM coverage tools
         run: |
@@ -30,11 +41,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Test & Build
-        env:
-          LLVM_SYS_191_PREFIX: "${{ env.LLVM_PATH }}"
         run: |
-          echo "${{ env.LLVM_PATH }}"
-          ls ${{ env.LLVM_PATH }}
           cargo build
           cargo llvm-cov --lcov --output-path coverage.lcov
 
