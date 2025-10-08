@@ -16,6 +16,11 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      - name: Install LLVM and Clang
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "19.1.7"
+
       - name: Setup Rust LLVM coverage tools
         run: |
           rustup component add llvm-tools-preview
