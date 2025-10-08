@@ -230,6 +230,75 @@ JSON schema of the birthmark object is as follows.
 
 ##### Schema
 
+```json
+{
+  "type": "array",
+  "minItems": 0,
+  "items": {
+    "type": "object",
+    "required": ["btype", "a_info", "b_info", "ctype", "score", "elapsed_ms"],
+    "additionalProperties": false,
+    "properties": {
+      "btype": {
+        "type": "string"
+      },
+      "a_info": {
+        "type": "object",
+        "required": [ "name", "path", "btype", "mode" ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "btype": {
+            "type": "string",
+            "pattern": "(OpSeq|OpFreq...)"
+          },
+          "mode": {
+            "type": "string",
+            "pattern": "(File|Function|BasicBlock)"
+          }
+        }
+      },
+      "b_info": {
+        "type": "object",
+        "required": [ "name", "path", "btype", "mode" ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "btype": {
+            "type": "string",
+            "pattern": "(OpSeq|OpFreq...)"
+          },
+          "mode": {
+            "type": "string",
+            "pattern": "(File|Function|BasicBlock)"
+          }
+        }
+      },
+      "ctype": {
+        "type": "string",
+        "pattern": "(Simpson|Jaccard|Dice|Cosine|LCS|Levenshtein)"
+      },
+      "score": {
+        "type": "float"
+      },
+      "elapsed_ms": {
+        "type": "float"
+      }
+    }
+  }
+}
+```
+
+
+
 ## Academic Papers
 
 ### By myself

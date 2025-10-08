@@ -33,6 +33,8 @@ jobs:
         env:
           LLVM_SYS_191_PREFIX: "${{ env.LLVM_PATH }}"
         run: |
+          echo "${{ env.LLVM_PATH }}"
+          ls ${{ env.LLVM_PATH }}
           cargo build
           cargo llvm-cov --lcov --output-path coverage.lcov
 
