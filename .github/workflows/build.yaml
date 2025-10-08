@@ -24,15 +24,15 @@ jobs:
       - name: Setup Rust LLVM coverage tools
         run: |
           rustup component add llvm-tools-preview
-          cargo install cargo-llvm-cov
+          cargo install cargo-llvm-cov llvmenv
 
       - name: Checkout the project
         uses: actions/checkout@v4
 
       - name: Test & Build
         run: |
-          cargo llvm-cov --lcov --output-path coverage.lcov
           cargo build
+          cargo llvm-cov --lcov --output-path coverage.lcov
 
       - name: Send coverage to coveralls
         uses: coverallsapp/github-action@master
