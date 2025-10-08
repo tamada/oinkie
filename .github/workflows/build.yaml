@@ -16,19 +16,13 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Install LLVM and Clang (Ubuntu)
-        if: ${{ matrix.os }} == ubuntu-latest
-        run:
-            bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
-            apt-get install -y llvm-19 libpolly-19-dev
-
       - name: Install LLVM and Clang (Windows)
-        if: ${{ matrix.os }} == windows-latest
+        if: matrix.os == 'windows-latest'
         run:
             choco install llvm --version=19.1.5
 
       - name: Install LLVM and Clang (macOS)
-        if: ${{ matrix.os }} == macos-latest
+        if: matrix.os == 'macos-latest'
         run:
             brew install llvm@19
 
@@ -40,14 +34,20 @@ jobs:
       - name: Checkout the project
         uses: actions/checkout@v4
 
-      - name: Test & Build
+      - name: Test & Build (Windows and macOS)
+        if: matrix.os != 'ubuntu-latest'
         run: |
           cargo build
           cargo llvm-cov --lcov --output-path coverage.lcov
 
+      - name: Test & Build (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run:
+            docker build . --target builder -t tamada/oinkie:builder
+
       - name: Send coverage to coveralls
         uses: coverallsapp/github-action@master
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'macos-latest'
         with:
           github-token: ${{ secrets.github_token }}
           path-to-lcov: coverage.lcov
