@@ -1,0 +1,74 @@
+name: build
+on:
+  push:
+    branches:
+      - "**"
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+        #   - windows-latest
+
+    steps:
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+    
+    #   - name: Setup LLVM
+    #     uses: KyleMayes/install-llvm-action@v2
+    #     with:
+    #         version: "19.1.7"
+
+    #   - name: Install LLVM and Clang (Windows)
+    #     if: matrix.os == 'windows-latest'
+    #     shell: bash
+    #     env:
+    #         ACTIONS_STEP_DEBUG: true
+    #         ACTIONS_RUNNER_DEBUG: true
+    #     run: |
+    #         choco install llvm --allow-downgrade --version=19.1.5
+    #         echo "LLVM_SYS_191_PREFIX=C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
+    #         echo $LLVM_SYS_191_PREFIX
+    #         ls "C:\\Program Files\\LLVM"
+
+      - name: Install LLVM and Clang (macOS)
+        if: matrix.os == 'macos-latest'
+        run:
+            brew install llvm@19
+
+      - name: Setup Rust LLVM coverage tools
+        run: |
+            rustup component add llvm-tools-preview
+            cargo install cargo-llvm-cov
+
+      - name: Checkout the project
+        uses: actions/checkout@v4
+
+      - name: Test & Build (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+            cargo build
+            cargo llvm-cov --lcov --output-path coverage.lcov
+
+    #   - name: Test & Build (Windows)
+    #     if: matrix.os == 'windows-latest'
+    #     env:
+    #         LLVM_SYS_191_PREFIX: "${{ env.LLVM_SYS_191_PREFIX }}"
+    #     run: |
+    #         cargo build
+    #         cargo llvm-cov --lcov --output-path coverage.lcov
+
+      - name: Test & Build (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run:
+            docker build . --target builder -t tamada/oinkie:builder
+
+      - name: Send coverage to coveralls
+        uses: coverallsapp/github-action@master
+        if: matrix.os == 'macos-latest'
+        with:
+            github-token: ${{ secrets.github_token }}
+            path-to-lcov: coverage.lcov

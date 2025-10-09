@@ -1,24 +1,127 @@
+use std::collections::HashMap;
+
 use llvm_ir::{Constant, Name};
 use either::Either;
 
 use crate::birthmarks::Element;
+use crate::extractors::Extractor;
 use crate::Result;
 
-pub(super) fn extract_names(module: &llvm_ir::Module) -> Result<Vec<Element>> {
-    let mut names = Vec::new();
-    for func in &module.functions {
-        for bb in &func.basic_blocks {
-            for inst in &bb.instrs {
-                if let llvm_ir::Instruction::Call(call) = inst {
-                    if let Some(fname) = extract_called_name(&call) {
-                        names.push(Element::Str(fname));
-                    }
-                }
-            }
-        }
-        names.push(Element::Str(func.name.clone()));
+pub(super) struct SeqNames {
+    names: Vec<Element>,
+}
+
+impl SeqNames {
+    pub fn new() -> Self {
+        Self { names: vec![] }
     }
-    Ok(names)
+}
+
+impl Extractor for SeqNames {
+    fn btype(&self) -> crate::birthmarks::BirthmarkType {
+        crate::birthmarks::BirthmarkType::Sfc
+    }
+
+    fn visit(&mut self, _module: &llvm_ir::Module, _path: &std::path::PathBuf) {
+    }
+
+    fn visit_func(&mut self, _func: &llvm_ir::Function) {
+    }
+
+    fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
+    }
+
+    fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
+        if let llvm_ir::Instruction::Call(call) = instr {
+            if let Some(fname) = extract_called_name(&call) {
+                let r = Element::Str(fname.clone());
+                self.names.push(r.clone());
+                Ok(Some(r))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn visit_bb_end(&mut self, _term: &llvm_ir::terminator::Terminator) -> Result<Vec<Element>> {
+        Ok(self.names.clone())
+    }
+
+    fn visit_func_end(&mut self, _func: &llvm_ir::Function) -> Result<Vec<Element>> {
+        Ok(self.names.clone())
+    }
+
+    fn visit_end(&mut self, _module: &llvm_ir::Module) -> Result<Vec<Element>> {
+        Ok(self.names.clone())
+    }
+
+    fn finish(&self) -> Result<Vec<crate::birthmarks::Birthmark>> {
+        Ok(vec![])
+    }
+
+    fn clear(&mut self) {
+        self.names.clear();
+    }
+}
+
+pub(super) struct FreqNames {
+    freq: HashMap<String, usize>,
+}
+
+impl FreqNames {
+    pub fn new() -> Self {
+        Self { freq: HashMap::new() }
+    }
+}
+
+impl Extractor for FreqNames {
+    fn btype(&self) -> crate::birthmarks::BirthmarkType {
+        crate::birthmarks::BirthmarkType::Ffc
+    }
+
+    fn visit(&mut self, _module: &llvm_ir::Module, _path: &std::path::PathBuf) {
+    }
+
+    fn visit_func(&mut self, _func: &llvm_ir::Function) {
+    }
+
+    fn visit_bb(&mut self, _bb: &llvm_ir::basicblock::BasicBlock) {
+    }
+
+    fn visit_inst(&mut self, instr: &llvm_ir::Instruction) -> Result<Option<Element>> {
+        if let llvm_ir::Instruction::Call(call) = instr {
+            if let Some(fname) = extract_called_name(&call) {
+                *self.freq.entry(fname.clone()).or_insert(0) += 1;
+                Ok(Some(Element::Freq(*self.freq.get(&fname).unwrap(), fname.clone())))
+            } else {
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn visit_bb_end(&mut self, _term: &llvm_ir::terminator::Terminator) -> Result<Vec<Element>> {
+        Ok(self.freq.clone().into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+    }
+
+    fn visit_func_end(&mut self, _func: &llvm_ir::Function) -> Result<Vec<Element>> {
+        Ok(self.freq.clone().into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+    }
+
+    fn visit_end(&mut self, _module: &llvm_ir::Module) -> Result<Vec<Element>> {
+        Ok(self.freq.clone().into_iter().map(|(e, i)| Element::Freq(i, e)).collect())
+    }
+
+    fn finish(&self) -> Result<Vec<crate::birthmarks::Birthmark>> {
+        Ok(vec![])
+    }
+
+    fn clear(&mut self) {
+        self.freq.clear();
+    }
 }
 
 fn extract_called_name(call: &llvm_ir::instruction::Call) -> Option<String> {

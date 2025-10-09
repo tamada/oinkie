@@ -1,11 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::iter::zip;
-use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
 use serde::{Serialize, Deserialize};
 
-use crate::birthmarks::{Birthmark, BirthmarkType, Element};
+use crate::birthmarks::{Birthmark, BirthmarkType, Element, Info};
 use crate::Result;
 
 #[derive(Serialize, Deserialize, Parser, Debug, Clone, PartialEq, Eq, Hash, ValueEnum)]
@@ -44,8 +43,8 @@ pub fn comparator(t: &Type) -> Box<dyn Comparator> {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Similarity {
     pub btype: BirthmarkType,
-    pub a_path: PathBuf,
-    pub b_path: PathBuf,
+    pub a_info: Info,
+    pub b_info: Info,
     pub ctype: Type,
     pub score: f64,
     pub elapsed_ms: Option<f64>,
@@ -67,9 +66,9 @@ pub trait Comparator {
         };
         let elapsed = start.elapsed();
         s.map(|score| Similarity {
-            btype: a.btype.clone(),
-            a_path: a.path.clone(),
-            b_path: b.path.clone(),
+            btype: a.info.btype.clone(),
+            a_info: a.info.clone(),
+            b_info: b.info.clone(),
             ctype: self.ctype(),
             score,
             elapsed_ms: Some(elapsed.as_secs_f64() * 1000.0),
@@ -112,7 +111,7 @@ impl Comparator for Simpson {
 
 impl Comparator for Jaccard {
     fn ctype(&self) -> Type {
-         Type::Jaccard
+        Type::Jaccard
     }
 
     fn compare_impl(&self, a: &Birthmark, b: &Birthmark) -> Result<f64> {

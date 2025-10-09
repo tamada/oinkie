@@ -1,6 +1,7 @@
 use crate::birthmarks::Element;
 use crate::Result;
 
+#[allow(dead_code)]
 pub(super) fn extract(module: &llvm_ir::Module) -> Result<Vec<Element>> {
     let mut operands = Vec::new();
     for func in &module.functions {
