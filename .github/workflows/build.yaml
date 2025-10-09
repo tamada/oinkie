@@ -18,8 +18,12 @@ jobs:
 
       - name: Install LLVM and Clang (Windows)
         if: matrix.os == 'windows-latest'
-        run:
+        shell: bash
+        run: |
             choco install llvm --allow-downgrade --version=19.1.5 
+            echo "LLVM_SYS_191_PREFIX=C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
+            echo "LLVM_SYS_191_PREFIX=$env:LLVM_SYS_191_PREFIX"
+            ls "$env:LLVM_SYS_191_PREFIX"
 
       - name: Install LLVM and Clang (macOS)
         if: matrix.os == 'macos-latest'
@@ -28,9 +32,8 @@ jobs:
 
       - name: Setup Rust LLVM coverage tools
         run: |
-          rustup component add llvm-tools-preview
-          cargo install cargo-llvm-cov llvmenv
-          llvmenv init
+            rustup component add llvm-tools-preview
+            cargo install cargo-llvm-cov
 
       - name: Checkout the project
         uses: actions/checkout@v4
