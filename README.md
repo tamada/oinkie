@@ -303,26 +303,26 @@ JSON schema of the birthmark object is as follows.
 
 ### By myself
 
-1. Haruaki Tamada, Masahide Nakamura, Akito Monden, and Kenichi Matsumoto, ''Design and Evaluation of Birthmarks for Detecting Theft of Java Programs,'' Proc. IASTED International Conference on Software Engineering (IASTED SE 2004), pp. 569--575, February 2004 (Innsbruck, Austria). [![Link](https://img.shields.io/badge/Link-IASTE_SE_2004-orange)](https://cir.nii.ac.jp/crid/1572824500637007232)
-    - proposed a concept of software birthmarks, and the birthmark type of CVFV, UC, SMC, IS.
-
-2. Haruaki Tamada, Keiji Okamoto, Masahide Nakamura, Akito Monden, and Kenichi Matsumoto, ''Dynamic Software Birthmarks to Detect the Theft of Windows Applications,'' Proc. International Symposium on Future Software Technology 2004 (ISFST 2004), October 2004 (Xi'an, China).[![Link](https://img.shields.io/badge/Link-ISFST_2004-orange)](https://cir.nii.ac.jp/crid/1570291225759950720)
-    - proposed a concept of dynamic software birthmarks, and the birthmark type of EXESEQ, and EXEFREQ.
-
-3. Haruaki Tamada, Masahide Nakamura, Akito Monden, and Ken-ichi Matsumoto, ''Java Birthmarks --Detecting the Software Theft--,'' IEICE Transactions on Information and Systems, Vol. E88-D, No. 9, pp. 2148--2158, September 2005. [![Link](https://img.shields.io/badge/Link-IEICE_2005-orange)](https://cir.nii.ac.jp/crid/1570854177800875008)
-    - proposed a concept of static software birthmarks, and the birthmark type of CVFV, UC, and SMC.
-
-4. Takehiro Tsuzaki, Teruaki Yamamoto, Haruaki Tamada, and Akito Monden, ''A Fuzzy Hashing Technique for Large Scale Software Birthmarks,'' Proc. 15th IEEE/ACIS International Conference on Computer and Information Science ([ICIS 2016](http://www.acisinternational.org/icis2016/)), pp. 867--872, July 2016 (Oakayama, Japan). [![Link](https://img.shields.io/badge/Link-ISIS_2016-orange)](http://ieeexplore.ieee.org/document/7550868/)
-    - introduce fuzzy hash technique for comapring the birtmarks for more fast comparison.
-
-5. Jun Nakamura, and Haruaki Tamada, ''Fast Comparison of Software Birthmarks for Detecting the Theft with the Search Engine,'' Proc. of the 4th International Conference on Applied Computing & Information Technology (ACIT 2016), pp. 152--157, December 2016 (UNLV, Las Vegas, NV, USA). [![Link](https://img.shields.io/badge/Link-ACIT_2016-orange)](http://ieeexplore.ieee.org/document/7916974/)
-    - introduce search engine for more fast comparison.
-
-6. Takehiro Tsuzaki, Teruaki Yamamoto, Haruaki Tamada, and Akito Monden, ''Scaling Up Software Birthmarks Using Fuzzy Hashing,', International Journal of Software Innovation (IJSI), Vol. 5, Issue 3, pp. 89--102, June 2017. [![Link](https://img.shields.io/badge/Link-IJSI_2017-orange)](http://www.igi-global.com/article/scaling-up-software-birthmarks-using-fuzzy-hashing/182539)
-
-7. Jun Nakamura, and Haruaki Tamada, ''mituba: Scaling up Software Theft Detection with the Search Engine,'' Proc. International Conference on Software Engineering and Information Management ([ICSIM 2018](http://www.icsim.org/icsim2018.html)), pp. 6--10, January 2018 (Casablanca, Morocco). [![Link](https://img.shields.io/badge/Link-ICSIM_2018-orange)](https://dl.acm.org/citation.cfm?id=3178475)
-
-8. Nikolay Fedorov, Hiroki Inayoshi, Haruaki Tamada, Akito Monden, ''Comparison of Similarity Functions for n-gram Software Birthmarks,'' The 6th World Symposium on Software Engineering ([WSSE 2024](https://wsse.org/)), pp. 169--176, September 2024 (Kyoto, Japan). [![Link](https://img.shields.io/badge/Link-WSSE_2024-orange)](https://dl.acm.org/doi/10.1145/3698062.3698087)
+1. Haruaki Tamada, Masahide Nakamura, Akito Monden, and Kenichi Matsumoto, ''Design and Evaluation of Birthmarks for Detecting Theft of Java Programs,'' Proc. IASTED International Conference on Software Engineering (IASTED SE 2004), pp. 569--575, February 2004 (Innsbruck, Austria). [![Link](https://img.shields.io/badge/Link-cir.nii.ac.jp-orange)](https://cir.nii.ac.jp/crid/1572824500637007232)
+    - proposed a concept of software birthmarks, and the birthmark type of CVFV, UC, SMC, and IS.
+2. Haruaki Tamada, Keiji Okamoto, Masahide Nakamura, Akito Monden, and Kenichi Matsumoto, ''Dynamic Software Birthmarks to Detect the Theft of Windows Applications,'' Proc. International Symposium on Future Software Technology 2004 (ISFST 2004), October 2004 (Xi'an, China).[![Link](https://img.shields.io/badge/Link-cir.nii.ac.jp-orange)](https://cir.nii.ac.jp/crid/1570291225759950720)
+    - proposed a concept of dynamic software birthmarks, and the birthmark types of EXESEQ and EXEFREQ.
+3. Haruaki Tamada, Masahide Nakamura, Akito Monden, and Ken-ichi Matsumoto, ''Java Birthmarks --Detecting the Software Theft--,'' IEICE Transactions on Information and Systems, Vol. E88-D, No. 9, pp. 2148--2158, September 2005. [![Link](https://img.shields.io/badge/Link-cir.nii.ac.jp-orange)](https://cir.nii.ac.jp/crid/1570854177800875008)
+    - proposed a concept of static software birthmarks, and the birthmark types of CVFV, UC, and SMC.
+4. Takehiro Tsuzaki, Teruaki Yamamoto, Haruaki Tamada, and Akito Monden, ''A Fuzzy Hashing Technique for Large Scale Software Birthmarks,'' Proc. 15th IEEE/ACIS International Conference on Computer and Information Science ([ICIS 2016](http://www.acisinternational.org/icis2016/)), pp. 867--872, July 2016 (Oakayama, Japan). [![Link](https://img.shields.io/badge/Link-ieeexplore.ieee.org-orange)](http://ieeexplore.ieee.org/document/7550868/)
+    - Introduce the fuzzy hash technique for comparing birthmarks for faster comparison.
+5. Jun Nakamura, and Haruaki Tamada, ''Fast Comparison of Software Birthmarks for Detecting the Theft with the Search Engine,'' Proc. of the 4th International Conference on Applied Computing & Information Technology (ACIT 2016), pp. 152--157, December 2016 (UNLV, Las Vegas, NV, USA). [![Link](https://img.shields.io/badge/Link-ieeexplore.ieee.org-orange)](http://ieeexplore.ieee.org/document/7916974/)
+    - Introduce a search engine for faster comparison.
+6. Jun Nakamura and Haruaki Tamada, ''mituba: Scaling up Software Theft Detection with the Search Engine,'' Proc. International Conference on Software Engineering and Information Management ([ICSIM 2018](http://www.icsim.org/icsim2018.html)), pp. 6--10, January 2018 (Casablanca, Morocco). [![Link](https://img.shields.io/badge/Link-dl.acm.org-orange)](https://dl.acm.org/citation.cfm?id=3178475)
+    - Upgrading the method of ACIT 2016.
+7. Nikolay Fedorov, Hiroki Inayoshi, Haruaki Tamada, Akito Monden, ''Comparison of Similarity Functions for n-gram Software Birthmarks,'' The 6th World Symposium on Software Engineering ([WSSE 2024](https://wsse.org/)), pp. 169--176, September 2024 (Kyoto, Japan). [![Link](https://img.shields.io/badge/Link-dl.acm.org-orange)](https://dl.acm.org/doi/10.1145/3698062.3698087)
 
 ### Popular papers on software birthmarks
 
+#### $k$-gram-based birthmarks
+
+- Ginger Myles and Christian Collberg, "$k$-gram-based software birthmarks," In Proc. the 2005 ACM Symposium on Applied Computing, pp.314--318, March 2005. [![Link](https://img.shields.io/badge/Link-dl.acm.org-orange)](https://dl.acm.org/doi/10.1145/1066677.1066753)
+
+#### Whole Program Path (Dynamic Software Birthmarks)
+
+- Ginger Myles and Christian Collberg, "Detecting Software Theft via Whole Program Path Birthmarks," In Proc. International Conference on Information Security 2004, pp.404–-415, 2004. [![Link](https://img.shields.io/badge/Link-link.shpringer.com-orange)](https://link.springer.com/chapter/10.1007/978-3-540-30144-8_34)
