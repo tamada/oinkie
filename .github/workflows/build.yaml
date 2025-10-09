@@ -18,10 +18,11 @@ jobs:
 
       - name: Install LLVM and Clang (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
-        run:
+        run: |
             wget -LO https://apt.llvm.org/llvm.sh)
             sudo bash -c llvm.sh 19
-            apt-get install -y llvm-19 libpolly-19-dev
+            sudo apt-get update 
+            sudo apt-get install -y llvm-19 libpolly-19-dev
 
       - name: Install LLVM and Clang (Windows)
         if: matrix.os == 'windows-latest'
