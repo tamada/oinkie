@@ -24,9 +24,12 @@ jobs:
       - name: Install LLVM and Clang (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
+        env:
+            ACTIONS_STEP_DEBUG: true
+            ACTIONS_RUNNER_DEBUG: true
         run: |
-            choco install llvm --allow-downgrade --version=19.1.5 
-            echo "LLVM_SYS_191_PREFIX="C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
+            choco install llvm --allow-downgrade --version=19.1.5
+            echo LLVM_SYS_191_PREFIX="C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
             echo $LLVM_SYS_191_PREFIX
             ls "C:\\Program Files\\LLVM"
 
@@ -52,10 +55,10 @@ jobs:
             cargo build
             cargo llvm-cov --lcov --output-path coverage.lcov
 
-    #   - name: Test & Build (Ubuntu)
-    #     if: matrix.os == 'ubuntu-latest'
-    #     run:
-    #         docker build . --target builder -t tamada/oinkie:builder
+      - name: Test & Build (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run:
+            docker build . --target builder -t tamada/oinkie:builder
 
       - name: Send coverage to coveralls
         uses: coverallsapp/github-action@master
