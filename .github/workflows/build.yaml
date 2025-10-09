@@ -16,10 +16,16 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
+      - name: Install LLVM and Clang (Ubuntu)
+        if: matrix.os == 'windows-latest'
+        run:
+            sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
+            apt-get install -y llvm-19 libpolly-19-dev
+
       - name: Install LLVM and Clang (Windows)
         if: matrix.os == 'windows-latest'
         run:
-            choco install llvm --version=19.1.5
+            choco install llvm --allow-downgrade --version=19.1.5 
 
       - name: Install LLVM and Clang (macOS)
         if: matrix.os == 'macos-latest'
