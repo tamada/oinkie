@@ -30,6 +30,7 @@ jobs:
         run: |
           rustup component add llvm-tools-preview
           cargo install cargo-llvm-cov llvmenv
+          llvmenv init
 
       - name: Checkout the project
         uses: actions/checkout@v4
