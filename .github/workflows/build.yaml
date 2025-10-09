@@ -21,9 +21,9 @@ jobs:
         shell: bash
         run: |
             choco install llvm --allow-downgrade --version=19.1.5 
-            echo "LLVM_SYS_191_PREFIX=C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
-            echo "LLVM_SYS_191_PREFIX=$env:LLVM_SYS_191_PREFIX"
-            ls "$env:LLVM_SYS_191_PREFIX"
+            echo "LLVM_SYS_191_PREFIX="C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
+            echo $LLVM_SYS_191_PREFIX
+            ls "C:\\Program Files\\LLVM"
 
       - name: Install LLVM and Clang (macOS)
         if: matrix.os == 'macos-latest'
