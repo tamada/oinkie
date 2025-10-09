@@ -29,7 +29,7 @@ jobs:
             ACTIONS_RUNNER_DEBUG: true
         run: |
             choco install llvm --allow-downgrade --version=19.1.5
-            echo LLVM_SYS_191_PREFIX="C:\\Program Files\\LLVM" >> $env:GITHUB_ENV
+            echo "LLVM_SYS_191_PREFIX=\"C:\\Program Files\\LLVM\"" >> $env:GITHUB_ENV
             echo $LLVM_SYS_191_PREFIX
             ls "C:\\Program Files\\LLVM"
 
@@ -51,7 +51,6 @@ jobs:
         # env:
         #     LLVM_SYS_191_PREFIX: "${{ env.LLVM_PATH }}"
         run: |
-            echo ${{ env.LLVM_PATH }}
             cargo build
             cargo llvm-cov --lcov --output-path coverage.lcov
 
