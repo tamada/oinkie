@@ -370,7 +370,7 @@ mod tests {
 
     #[test]
     fn test_set() {
-        let path = PathBuf::from("../testdata/hello.ll");
+        let path = PathBuf::from("../testdata/src2ll/hello.ll");
         let module = llvm_ir::Module::from_ir_path(&path).unwrap();
         let birthmarks = extract(&module, &path, &BirthmarkType::OpSet, &Mode::File).unwrap();
         assert_eq!(birthmarks.len(), 1);
