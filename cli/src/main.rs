@@ -191,7 +191,7 @@ fn run(opts: RunOpts) -> oinkie::Result<()> {
 }
 
 fn execute(_opts: ExecuteOpts) -> oinkie::Result<()> {
-    Ok(())
+    todo!();
 }
 
 fn info() -> oinkie::Result<()> {

@@ -1,4 +1,4 @@
-# :pig2: oinkie :pig_nose:
+# :pig_nose: oinkie :pig2: 
 
 [![Version](https://shields.io/badge/Version-0.1.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.1.0)
 [![License-MIT](https://shields.io/badge/License-MIT-blue)](https://github.com/tamada/oinkie/blob/main/LICENSE)
@@ -11,7 +11,7 @@ Detecting software theft, the birthmark toolkit for LLVM IR and BC.
 
 Software theft is difficult to detect because it is conducted stealthily, and the source code of the stolen software remains private.
 Compilers and their options sensitively alter the binary formats (including executables) of software.
-The problem is more complicated by the vast amount of software in the whole world.
+The problem is further complicated by the vast amount of software worldwide.
 Therefore, we need a method to detect software theft targeting binary formats from large software repositories.
 
 For this, Tamada et al. proposed the concept of software birthmarking in 2004.
@@ -54,6 +54,8 @@ OPTIONS
 
 ### Formats
 
+## :walking: Example
+
 #### Original (C language)
 
 ```c
@@ -66,7 +68,7 @@ int parse_max(int argc, char *argv[]) {
 
 #### LLVM IR
 
-The following IR codes obtained by compiling the source code including the above code snippet by `clang -emit-llvm -S`.
+The following IR codes were obtained by compiling the source code, including the above code snippet, with `clang -emit-llvm -S`.
 
 ```llvmir
 ; Function Attrs: noinline nounwind optnone ssp uwtable(sync)
@@ -298,10 +300,21 @@ JSON schema of the birthmark object is as follows.
 ```
 
 
+## :info: About
 
-## Academic Papers
+### The origin of the tool name `oinkie`
 
-### By myself
+The previous version of this tool is [`pochi`](https://github.com/tamada/pochi), which is the birthmark toolkit for the JVM platform. The `pochi` is a dog that said "dig dig, here" and finds the treasures in the Japanese old tale "The old man who made flowers bloom." The tool finds clues of piracy from the binary code, as illustrated by the example of the dog above.
+
+The purpose of `oinkie` is the same as `pochi` for the other platform, LLVM IR/BC. Hence, another tool name is wanted, such as an animal, a concept, or a famous person. From this background, I came up with an idea for a pig that finds a truffle. However, truffle is already used in [GraalVM](https://www.graalvm.org/latest/graalvm-as-a-platform/language-implementation-framework/). Then, I asked Microsoft Copilot, What is the famous name of the truffle pig? The name `oinkie` is one answer to the question.
+
+### :jack_o_lantern: Logo
+
+
+
+### :scroll: Academic Papers
+
+#### By myself
 
 1. Haruaki Tamada, Masahide Nakamura, Akito Monden, and Kenichi Matsumoto, ''Design and Evaluation of Birthmarks for Detecting Theft of Java Programs,'' Proc. IASTED International Conference on Software Engineering (IASTED SE 2004), pp. 569--575, February 2004 (Innsbruck, Austria). [![Link](https://img.shields.io/badge/Link-cir.nii.ac.jp-orange)](https://cir.nii.ac.jp/crid/1572824500637007232)
     - proposed a concept of software birthmarks, and the birthmark type of CVFV, UC, SMC, and IS.
@@ -317,12 +330,12 @@ JSON schema of the birthmark object is as follows.
     - Upgrading the method of ACIT 2016.
 7. Nikolay Fedorov, Hiroki Inayoshi, Haruaki Tamada, Akito Monden, ''Comparison of Similarity Functions for n-gram Software Birthmarks,'' The 6th World Symposium on Software Engineering ([WSSE 2024](https://wsse.org/)), pp. 169--176, September 2024 (Kyoto, Japan). [![Link](https://img.shields.io/badge/Link-dl.acm.org-orange)](https://dl.acm.org/doi/10.1145/3698062.3698087)
 
-### Popular papers on software birthmarks
+#### Popular papers on software birthmarks
 
-#### $k$-gram-based birthmarks
+##### $k$-gram-based birthmarks
 
 - Ginger Myles and Christian Collberg, "$k$-gram-based software birthmarks," In Proc. the 2005 ACM Symposium on Applied Computing, pp.314--318, March 2005. [![Link](https://img.shields.io/badge/Link-dl.acm.org-orange)](https://dl.acm.org/doi/10.1145/1066677.1066753)
 
-#### Whole Program Path (Dynamic Software Birthmarks)
+##### Whole Program Path (Dynamic Software Birthmarks)
 
 - Ginger Myles and Christian Collberg, "Detecting Software Theft via Whole Program Path Birthmarks," In Proc. International Conference on Information Security 2004, pp.404–-415, 2004. [![Link](https://img.shields.io/badge/Link-link.shpringer.com-orange)](https://link.springer.com/chapter/10.1007/978-3-540-30144-8_34)
