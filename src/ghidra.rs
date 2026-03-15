@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn parse_pcode_json() {
-        let file = std::fs::File::open("testdata/arm64-linux_gcc_O3.json")
+        let file = std::fs::File::open("testdata/bzip2/arm64-linux_gcc_O3.json")
             .expect("Failed to open JSON file");
         let r: Program<super::Op> = serde_json::from_reader(file)
             .expect("Failed to parse JSON");
@@ -186,5 +186,14 @@ mod tests {
         assert_eq!(op1.mnemonic(), "SUBPIECE");
         assert_eq!(op1.inputs().len(), 2);
         assert_eq!(op1.ret(), Some("(register, 0x4000, 4)".into()));
+    }
+
+
+    #[test]
+    fn parse_pcode_json2() {
+        let file = std::fs::File::open("testdata/factorize/factorize_clang.json")
+            .expect("Failed to open JSON file");
+        let r: Program<super::Op> = serde_json::from_reader(file)
+            .expect("Failed to parse JSON");
     }
 }

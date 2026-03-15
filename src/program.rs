@@ -25,12 +25,20 @@ impl<T> Program<T> {
         self.functions.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.functions.is_empty()
+    }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Function<T>> {
         self.functions.iter()
+    }
+
+    pub fn symbols(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.symbols.iter().map(|(k, v)| (k.as_str(), v.as_str()))
     }
 
     pub fn symbol(&self, addr: &str) -> Option<&String> {
@@ -49,12 +57,20 @@ impl<T: crate::Op> Function<T> {
         &self.name
     }
 
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.ops.iter()
+    }
+
     pub fn get(&self, index: usize) -> Option<&T> {
         self.ops.get(index)
     }
 
     pub fn ops(&self) -> impl Iterator<Item = &str> {
         self.ops.iter().map(|op| op.mnemonic())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.ops.is_empty()
     }
 
     pub fn len(&self) -> usize {

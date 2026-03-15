@@ -123,6 +123,14 @@ pub struct RunOpts {
 #[derive(ValueEnum, Clone, Debug)]
 #[clap(rename_all = "kebab-case")]
 pub(crate) enum Analysis {
+    FcFreqCosine,
+    FcSetDice,
+    FcFreqEuclidean,
+    FcSetJaccard,
+    FcSeqLevenshtein,
+    FcSetSimpson,
+    FcFreqWeightedjaccard,
+
     OpFreqCosine,
     OpSetDice,
     OpFreqEuclidean,
@@ -185,6 +193,14 @@ impl TryFrom<Analysis> for AnalysisType {
 
     fn try_from(value: Analysis) -> Result<Self> {
         match value {
+            Analysis::FcFreqCosine => Ok(AnalysisType::new(BirthmarkType::FcFreq, Algorithm::Cosine)),
+            Analysis::FcSetDice => Ok(AnalysisType::new(BirthmarkType::FcSet, Algorithm::Dice)),
+            Analysis::FcFreqEuclidean => Ok(AnalysisType::new(BirthmarkType::FcFreq, Algorithm::Euclidean)),
+            Analysis::FcSetJaccard => Ok(AnalysisType::new(BirthmarkType::FcSet, Algorithm::Jaccard)),
+            Analysis::FcSeqLevenshtein => Ok(AnalysisType::new(BirthmarkType::FcSeq, Algorithm::Levenshtein)),
+            Analysis::FcSetSimpson => Ok(AnalysisType::new(BirthmarkType::FcSet, Algorithm::Simpson)),
+            Analysis::FcFreqWeightedjaccard => Ok(AnalysisType::new(BirthmarkType::FcFreq, Algorithm::WeightedJaccard)),
+
             Analysis::OpFreqCosine => Ok(AnalysisType::new(BirthmarkType::OpFreq, Algorithm::Cosine)),
             Analysis::OpSetDice => Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Dice)),
             Analysis::OpFreqEuclidean => Ok(AnalysisType::new(BirthmarkType::OpFreq, Algorithm::Euclidean)),

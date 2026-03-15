@@ -146,7 +146,7 @@ pub enum Algorithm {
     /// Levenshtein distance. Available: seq.
     Levenshtein,
     /// Longest Common Subsequence (LCS). Available: seq.
-    LCS,
+    Lcs,
     /// Simpson's coefficient. Available: seq, set and freq.
     Simpson,
     /// Weighted Jaccard index based on term frequency vectors. Available: seq and freq.
@@ -161,7 +161,7 @@ impl std::fmt::Display for Algorithm {
             Algorithm::Euclidean => write!(f, "Euclidean Distance"),
             Algorithm::Jaccard => write!(f, "Jaccard Index"),
             Algorithm::Levenshtein => write!(f, "Levenshtein Distance"),
-            Algorithm::LCS => write!(f, "Longest Common Subsequence"),
+            Algorithm::Lcs => write!(f, "Longest Common Subsequence"),
             Algorithm::Simpson => write!(f, "Simpson's Coefficient"),
             Algorithm::WeightedJaccard => write!(f, "Weighted Jaccard Index"),
         }
@@ -174,7 +174,7 @@ pub enum Comparator {
     Euclidean(Euclidean),
     Jaccard(Jaccard),
     Levenshtein(Levenshtein),
-    LCS(LCS),
+    Lcs(Lcs),
     Simpson(Simpson),
     WeightedJaccard(WeightedJaccard),
 }
@@ -187,7 +187,7 @@ impl Comparator {
             Comparator::Euclidean(e) => e.compare(p1, p2, index, context),
             Comparator::Jaccard(j) => j.compare(p1, p2, index, context),
             Comparator::Levenshtein(l) => l.compare(p1, p2, index, context),
-            Comparator::LCS(lcs) => lcs.compare(p1, p2, index, context),
+            Comparator::Lcs(lcs) => lcs.compare(p1, p2, index, context),
             Comparator::Simpson(s) => s.compare(p1, p2, index, context),
             Comparator::WeightedJaccard(wj) => wj.compare(p1, p2, index, context),
         }
@@ -202,7 +202,7 @@ impl Algorithm {
             Algorithm::Euclidean => Comparator::Euclidean(Euclidean{}),
             Algorithm::Jaccard => Comparator::Jaccard(Jaccard{}),
             Algorithm::Levenshtein => Comparator::Levenshtein(Levenshtein{}),
-            Algorithm::LCS => Comparator::LCS(LCS{}),
+            Algorithm::Lcs => Comparator::Lcs(Lcs{}),
             Algorithm::Simpson => Comparator::Simpson(Simpson{}),
             Algorithm::WeightedJaccard => Comparator::WeightedJaccard(WeightedJaccard{}),
         }
@@ -216,7 +216,7 @@ pub struct Levenshtein;
 pub struct Cosine;
 pub struct Euclidean;
 pub struct WeightedJaccard;
-pub struct LCS;
+pub struct Lcs;
 
 impl<T: crate::Op> ComparatorTrait<T> for Jaccard {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
@@ -283,7 +283,7 @@ impl<T: crate::Op> ComparatorTrait<T> for Levenshtein {
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for LCS {
+impl<T: crate::Op> ComparatorTrait<T> for Lcs {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
         let ops1: Vec<&str> = f1.ops().collect();
         let ops2: Vec<&str> = f2.ops().collect();

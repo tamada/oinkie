@@ -48,11 +48,11 @@ fn perform_run(opts: cli::RunOpts) -> Result<()> {
     Ok(())
 }
 
-fn perform_compare(opts: cli::CompareOpts) -> Result<()> {
+fn perform_compare(_opts: cli::CompareOpts) -> Result<()> {
     todo!()
 }
 
-fn perform_extract(opts: cli::ExtractOpts) -> Result<()> {
+fn perform_extract(_opts: cli::ExtractOpts) -> Result<()> {
     todo!()
 }
 

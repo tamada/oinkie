@@ -24,9 +24,9 @@ fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Res
     let elements = p.iter().map(|f| {
         let name = f.name().to_string();
         let data = match bt {
-            BirthmarkType::FcFreq => Data::Freq(extract_function_calls_freq(f)),
-            BirthmarkType::FcSet => Data::Set(extract_function_calls_freq(f).into_keys().collect()),
-            BirthmarkType::FcSeq => Data::Seq(extract_function_calls(f)),
+            BirthmarkType::FcFreq => Data::Freq(extract_function_calls_freq(f, p)),
+            BirthmarkType::FcSet => Data::Set(extract_function_calls_freq(f, p).into_keys().collect()),
+            BirthmarkType::FcSeq => Data::Seq(extract_function_calls(f, p)),
             BirthmarkType::OpFreq => Data::Freq(f.ops_freq()),
             BirthmarkType::OpSet => Data::Set(f.ops_freq().into_keys().collect()),
             BirthmarkType::OpSeq => Data::Seq(f.ops().map(|s| s.into()).collect()),
@@ -67,12 +67,15 @@ where
         })
 }
 
-fn extract_function_calls<T: crate::Op>(f: &Function<T>) -> Vec<String> {
-    todo!()
+fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<String> {
+    f.iter().filter(|op| op.mnemonic() == "CALL")
+        .filter_map(|op| op.inputs().first().and_then(|addr| p.symbol(addr)))
+        .map(|s| s.to_string())
+        .collect()
 }
 
-fn extract_function_calls_freq<T: crate::Op>(f: &Function<T>) -> FxHashMap<String, usize> {
-    extract_function_calls(f).into_iter()
+fn extract_function_calls_freq<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> FxHashMap<String, usize> {
+    extract_function_calls(f, p).into_iter()
         .fold(FxHashMap::default(), |mut acc, call| {
             *acc.entry(call).or_insert(0) += 1;
             acc

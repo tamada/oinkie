@@ -38,6 +38,10 @@ impl Birthmark {
         self.elements.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.elements.is_empty()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &Elements> {
         self.elements.iter()
     }
@@ -60,6 +64,53 @@ impl Elements {
 
     pub fn len(&self) -> usize {
         self.data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.data.len() == 0
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum Data {
+    Freq(FxHashMap<String, usize>),
+    Seq(Vec<String>),
+    Set(FxHashSet<String>),
+    KgramSeq(Vec<Kgram>),
+    KgramFreq(FxHashMap<Kgram, usize>),
+    KgramSet(FxHashSet<Kgram>),
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+pub struct Kgram(Vec<String>);
+
+impl Kgram {
+    pub fn new(seq: Vec<String>) -> Self {
+        Self(seq)
+    }
+}
+
+impl Data {
+    fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
+        match self {
+            Data::Freq(freq) => Box::new(freq.keys().map(|s| s.as_str())),
+            Data::Seq(seq) => Box::new(seq.iter().map(|s| s.as_str())),
+            Data::Set(set) => Box::new(set.iter().map(|s| s.as_str())),
+            Data::KgramSeq(seq) => Box::new(seq.iter().flat_map(|k| k.0.iter().map(|s| s.as_str()))),
+            Data::KgramFreq(freq) => Box::new(freq.keys().flat_map(|k| k.0.iter().map(|s| s.as_str()))),
+            Data::KgramSet(set) => Box::new(set.iter().flat_map(|k| k.0.iter().map(|s| s.as_str()))),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Data::Freq(freq) => freq.len(),
+            Data::Seq(seq) => seq.len(),
+            Data::Set(set) => set.len(),
+            Data::KgramSeq(seq) => seq.len(),
+            Data::KgramFreq(freq) => freq.len(),
+            Data::KgramSet(set) => set.len(),
+        }
     }
 }
 
