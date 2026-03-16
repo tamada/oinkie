@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use std::{io::Write, time::Instant};
+use std::{io::Write, path::Path, time::Instant};
 use clap::ValueEnum;
 use pathfinding::matrix::Matrix;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 use itertools::Itertools;
 
 #[cfg_attr(doc, katexit::katexit)]
@@ -58,66 +58,101 @@ impl PairingStrategy {
     }
 }
 
-trait ComparatorTrait<T: crate::Op> {
-    fn compare(&self, p1: &Program<T>, p2: &Program<T>, index: usize, context: &Context) -> f64 {
+pub struct Comparison<'a, S> {
+    columns: &'a S,
+    rows: &'a S,
+    matrix: Matrix<i32>,
+    duration: std::time::Duration,
+    similarities: f64,
+}
+
+impl<'a, S: CsvInfo> Comparison<'a, S> {
+    pub fn new(columns: &'a S, rows: &'a S, matrix: Matrix<i32>, similarities: f64, duration: std::time::Duration) -> Comparison<'a, S> {
+        Comparison { columns, rows, matrix, similarities, duration }
+    }
+
+    pub fn store<P: AsRef<Path>>(&self, dest: P) -> Result<()> {
+        let mut file = std::fs::File::create(dest.as_ref())
+            .map_err(|e| Error::Io(dest.as_ref().to_path_buf(), e))?;
+        let mut out = std::io::BufWriter::new(&mut file);
+        let _ = writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarities);
+        let _ = writeln!(out, "left,{}", self.rows.csv_info());
+        let _ = writeln!(out, "right,{}", self.columns.csv_info());
+        let _ = writeln!(out, "matrix,,{}", self.columns.names().join(","));
+        let row_names = self.rows.names();
+        for ((row_idx, label), values) in row_names.iter().enumerate().zip(self.matrix.iter()) {
+            let _ = writeln!(out, "{row_idx},{label},{}", values.iter().join(","));
+        }
+        Ok(())
+    }
+
+    pub fn similarity(&self) -> f64 {
+        self.similarities
+    }
+
+    pub fn duration(&self) -> std::time::Duration {
+        self.duration
+    }
+}
+
+trait BirthmarkComparator {
+    fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Comparison<'a, Birthmark> {
+        if !b1.comparable_with(b2) {
+            return Comparison::new(b1, b2, Matrix::new(0, 0, 0), 0.0, std::time::Duration::from_millis(0));
+        }
+        let p1_len = b1.elements.len();
+        let p2_len = b2.elements.len();
+        if p1_len == 0 && p2_len == 0 {
+            Comparison::new(b1, b2, Matrix::new(0, 0, 0), 1.0, std::time::Duration::from_millis(0))
+        } else if p1_len == 0 || p2_len == 0 {
+            Comparison::new(b1, b2, Matrix::new(0, 0, 0), 0.0, std::time::Duration::from_millis(0))
+        } else {
+            let start = Instant::now();
+            let r = build_birthmark_matrix(b1, b2, |e1, e2| {
+                self.compare_elements(e1, e2)
+            });
+            let (total, matches) = if p1_len > p2_len {
+                let transposed = r.transposed();
+                pathfinding::kuhn_munkres::kuhn_munkres(&transposed)
+            } else {
+                pathfinding::kuhn_munkres::kuhn_munkres(&r)
+            };
+            let similarity = (total as f64 / 1000.0) / matches.len() as f64;
+            Comparison::new(b1, b2, r, similarity, start.elapsed())
+        }
+    }
+
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64;
+}
+
+trait ProgramComparator<T: crate::Op> {
+    fn compare_programs<'a>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Comparison<'a, Program<T>> {
         let p1_len = p1.len();
         let p2_len = p2.len();
         if p1_len == 0 && p2_len == 0 {
-            1.0
+            Comparison::new(p1, p2, Matrix::new(0, 0, 0), 1.0, std::time::Duration::from_millis(0))
         } else if p1_len == 0 || p2_len == 0 {
-            0.0
+            Comparison::new(p1, p2, Matrix::new(0, 0, 0), 0.0, std::time::Duration::from_millis(0))
         } else {
-            let (pp1, pp2) = if p1_len > p2_len {
-                (p2, p1)
-            } else {
-                (p1, p2)
-            };
             let start = Instant::now();
-            let progress = context.sub_progressor("Comparing...", (p1_len * p2_len) as u64);
-            let r = build_matrix(pp1, pp2, |f1, f2| {
-                progress.inc();
+            let r = build_program_matrix(p1, p2, |f1, f2| {
                 self.compare_func(f1, f2)
             });
-            let duration = start.elapsed();
-            output_matrix(&r, pp1, pp2, index, context, duration);
-            let (total, matches) = pathfinding::kuhn_munkres::kuhn_munkres(&r);
-            context.remove_progress(progress);
-            total as f64 / matches.len() as f64
+            let (total, matches) = if p1_len > p2_len {
+                let transposed = r.transposed();
+                pathfinding::kuhn_munkres::kuhn_munkres(&transposed)
+            } else {
+                pathfinding::kuhn_munkres::kuhn_munkres(&r)
+            };
+            let similarity = (total as f64 / 1000.0) / matches.len() as f64;
+            Comparison::new(p1, p2, r, similarity, start.elapsed())
         }
     }
 
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64;
 }
 
-fn output_matrix<T: crate::Op>(matrix: &Matrix<i32>, p1: &Program<T>, p2: &Program<T>, index: usize, context: &Context, duration: std::time::Duration) {
-    if let Ok(mut file) = context.open_dest(index) {
-        let mut out = std::io::BufWriter::new(&mut file);
-        for col_idx in 0..matrix.columns {
-            let _ = write!(out, ",{col_idx}");
-        }
-        let _ = writeln!(out);
-        for f in p1.iter() {
-            let _ = write!(out, ",{}", f.name());
-        }
-        let _ = writeln!(out);
-        for f in p1.iter() {
-            let _ = write!(out, ",{}", f.len());
-        }
-        let _ = writeln!(out);
-        let row_labels = p2.iter().map(|f| f.name()).collect::<Vec<_>>();
-        let col_labels = p1.iter().map(|f| f.name()).collect::<Vec<_>>();
-        for (row_idx, row) in matrix.iter().enumerate() {
-            let _ = write!(out, "{row_idx},{},{}", row_labels[row_idx], col_labels[row_idx]);
-            for col in row.iter() {
-                let _ = write!(out, ",{}", *col);
-            }
-            let _ = writeln!(out);
-        }
-        let _ = writeln!(out, "Duration,{}", duration.as_nanos());
-    }
-}
-
-fn build_matrix<F, T>(p1: &Program<T>, p2: &Program<T>, compare_func: F) -> Matrix<i32>
+fn build_program_matrix<F, T>(p1: &Program<T>, p2: &Program<T>, compare_func: F) -> Matrix<i32>
 where
     F: Fn(&Function<T>, &Function<T>) -> f64,
 {
@@ -127,7 +162,23 @@ where
 
     p1.iter().enumerate().for_each(|(i, f1)| {
         p2.iter().enumerate().for_each(|(j, f2)| {
-            matrix[(i, j)] = (compare_func(f1, f2) * 100.0) as i32;
+            matrix[(i, j)] = (compare_func(f1, f2) * 1000.0) as i32;
+        })
+    });
+    matrix
+}
+
+fn build_birthmark_matrix<F>(b1: &Birthmark, b2: &Birthmark, compare_func: F) -> Matrix<i32>
+where
+    F: Fn(&Elements, &Elements) -> f64,
+{
+    let m = b1.elements.len();
+    let n = b2.elements.len();
+    let mut matrix = Matrix::new(m, n, 0);
+
+    b1.elements.iter().enumerate().for_each(|(i, e1)| {
+        b2.elements.iter().enumerate().for_each(|(j, e2)| {
+            matrix[(i, j)] = (compare_func(e1, e2) * 1000.0) as i32;
         })
     });
     matrix
@@ -168,6 +219,12 @@ impl std::fmt::Display for Algorithm {
     }
 }
 
+impl Algorithm {
+    pub fn comparator(&self) -> Comparator {
+        self.into()
+    }
+}
+
 pub enum Comparator {
     Cosine(Cosine),
     Dice(Dice),
@@ -179,24 +236,9 @@ pub enum Comparator {
     WeightedJaccard(WeightedJaccard),
 }
 
-impl Comparator {
-    pub fn compare<T: crate::Op>(&self, p1: &Program<T>, p2: &Program<T>, index: usize, context: &Context) -> f64 {
-        match self {
-            Comparator::Cosine(c) => c.compare(p1, p2, index, context),
-            Comparator::Dice(d) => d.compare(p1, p2, index, context),
-            Comparator::Euclidean(e) => e.compare(p1, p2, index, context),
-            Comparator::Jaccard(j) => j.compare(p1, p2, index, context),
-            Comparator::Levenshtein(l) => l.compare(p1, p2, index, context),
-            Comparator::Lcs(lcs) => lcs.compare(p1, p2, index, context),
-            Comparator::Simpson(s) => s.compare(p1, p2, index, context),
-            Comparator::WeightedJaccard(wj) => wj.compare(p1, p2, index, context),
-        }
-    }
-}
-
-impl Algorithm {
-    pub fn comparator(&self) -> Comparator {
-        match self {
+impl From<&Algorithm> for Comparator {
+    fn from(algorithm: &Algorithm) -> Self {
+        match algorithm {
             Algorithm::Cosine => Comparator::Cosine(Cosine{}),
             Algorithm::Dice => Comparator::Dice(Dice{}),
             Algorithm::Euclidean => Comparator::Euclidean(Euclidean{}),
@@ -205,6 +247,34 @@ impl Algorithm {
             Algorithm::Lcs => Comparator::Lcs(Lcs{}),
             Algorithm::Simpson => Comparator::Simpson(Simpson{}),
             Algorithm::WeightedJaccard => Comparator::WeightedJaccard(WeightedJaccard{}),
+        }
+    }
+}
+
+impl Comparator {
+    pub fn compare_programs<'a, T: crate::Op>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Comparison<'a, Program<T>> {
+        match self {
+            Comparator::Cosine(c) => c.compare_programs(p1, p2),
+            Comparator::Dice(d) => d.compare_programs(p1, p2),
+            Comparator::Euclidean(e) => e.compare_programs(p1, p2),
+            Comparator::Jaccard(j) => j.compare_programs(p1, p2),
+            Comparator::Levenshtein(l) => l.compare_programs(p1, p2),
+            Comparator::Lcs(lcs) => lcs.compare_programs(p1, p2),
+            Comparator::Simpson(s) => s.compare_programs(p1, p2),
+            Comparator::WeightedJaccard(wj) => wj.compare_programs(p1, p2),
+        }
+    }
+
+    pub fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Comparison<'a, Birthmark> {
+        match self {
+            Comparator::Cosine(c) => c.compare_birthmarks(b1, b2),
+            Comparator::Dice(d) => d.compare_birthmarks(b1, b2),
+            Comparator::Euclidean(e) => e.compare_birthmarks(b1, b2),
+            Comparator::Jaccard(j) => j.compare_birthmarks(b1, b2),
+            Comparator::Levenshtein(l) => l.compare_birthmarks(b1, b2),
+            Comparator::Lcs(lcs) => lcs.compare_birthmarks(b1, b2),
+            Comparator::Simpson(s) => s.compare_birthmarks(b1, b2),
+            Comparator::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2),
         }
     }
 }
@@ -218,144 +288,267 @@ pub struct Euclidean;
 pub struct WeightedJaccard;
 pub struct Lcs;
 
-impl<T: crate::Op> ComparatorTrait<T> for Jaccard {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
-        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
-        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
-        let intersection = set1.intersection(&set2).count() as f64;
-        let union = set1.union(&set2).count() as f64;
-        if union == 0.0 {
-            1.0
+impl BirthmarkComparator for Jaccard {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
+            jaccard_index(s1, s2)
+        } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
+            jaccard_index(k1, k2)
         } else {
-            intersection / union
+            0.0
         }
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for Dice {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
-        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
-        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
-        let intersection = set1.intersection(&set2).count() as f64;
-        let total = (set1.len() + set2.len()) as f64;
-        if total == 0.0 {
-            1.0
+impl BirthmarkComparator for Dice {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
+            dice_index(s1, s2)
+        } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
+            dice_index(k1, k2)
         } else {
-            (2.0 * intersection) / total
+            0.0
         }
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for Simpson {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
-        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
-        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
-        let intersection = set1.intersection(&set2).count() as f64;
-        let smaller = set1.len().min(set2.len()) as f64;
-        if smaller == 0.0 {
-            1.0
+impl BirthmarkComparator for Simpson {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
+            simpson_index(s1, s2)
+        } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
+            simpson_index(k1, k2)
         } else {
-            intersection / smaller
+            0.0
         }
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for Levenshtein {
+impl BirthmarkComparator for Levenshtein {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
+            levenshtein_distance(s1, s2)
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            levenshtein_distance(k1, k2)
+        } else {
+            0.0
+        }
+    }
+}
+
+impl BirthmarkComparator for Cosine {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
+            cosine_similarity(f1, f2)
+        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
+            cosine_similarity(k1, k2)
+        } else {
+            0.0
+        }
+    }
+}
+
+impl BirthmarkComparator for Euclidean {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
+            euclidean_distance(f1, f2)
+        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
+            euclidean_distance(k1, k2)
+        } else {
+            0.0
+        }
+    }
+}
+
+impl BirthmarkComparator for WeightedJaccard {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
+            weighted_jaccard(f1, f2)
+        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
+            weighted_jaccard(k1, k2)
+        } else {
+            0.0
+        }
+    }
+}
+
+impl BirthmarkComparator for Lcs {
+    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+        if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
+            longest_common_subsequence(s1, s2)
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            longest_common_subsequence(k1, k2)
+        } else {
+            0.0
+        }
+    }
+}
+
+impl<T: crate::Op> ProgramComparator<T> for Jaccard {
+    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
+        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
+        jaccard_index(&set1, &set2)
+    }
+}
+
+impl<T: crate::Op> ProgramComparator<T> for Dice {
+    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
+        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
+        dice_index(&set1, &set2)
+    }
+}
+
+impl<T: crate::Op> ProgramComparator<T> for Simpson {
+    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
+        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
+        simpson_index(&set1, &set2)
+    }
+}
+
+impl<T: crate::Op> ProgramComparator<T> for Levenshtein {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
         let ops1: Vec<&str> = f1.ops().collect();
         let ops2: Vec<&str> = f2.ops().collect();
-        let mut matrix = pathfinding::matrix::Matrix::new(ops1.len() + 1, ops2.len() + 1, 0);
-        for i in 0..=ops1.len() {
-            matrix[(i, 0)] = i as i32;
-        }
-        for j in 0..=ops2.len() {
-            matrix[(0, j)] = j as i32;
-        }
-        for i in 1..=ops1.len() {
-            for j in 1..=ops2.len() {
-                let cost = if ops1[i - 1] == ops2[j - 1] { 0 } else { 1 };
-                matrix[(i, j)] = (matrix[(i - 1, j)] + 1)
-                    .min(matrix[(i, j - 1)] + 1)
-                    .min(matrix[(i - 1, j - 1)] + cost);
-            }
-        }
-        1.0 - (matrix[(ops1.len(), ops2.len())] as f64 / (ops1.len().max(ops2.len()) as f64))
+        levenshtein_distance(&ops1, &ops2)
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for Lcs {
+impl<T: crate::Op> ProgramComparator<T> for Lcs {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
         let ops1: Vec<&str> = f1.ops().collect();
         let ops2: Vec<&str> = f2.ops().collect();
-        let mut matrix = pathfinding::matrix::Matrix::new(ops1.len() + 1, ops2.len() + 1, 0);
-        for i in 1..=ops1.len() {
-            for j in 1..=ops2.len() {
-                if ops1[i - 1] == ops2[j - 1] {
-                    matrix[(i, j)] = matrix[(i - 1, j - 1)] + 1;
-                } else {
-                    matrix[(i, j)] = matrix[(i - 1, j)].max(matrix[(i, j - 1)]);
-                }
-            }
-        }
-        (matrix[(ops1.len(), ops2.len())] as f64) / (ops1.len().max(ops2.len()) as f64)
+        longest_common_subsequence(&ops1, &ops2)
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for Cosine {
+impl<T: crate::Op> ProgramComparator<T> for Cosine {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
         let map1 = f1.ops_freq();
         let map2 = f2.ops_freq();
-        let keys = map1.keys().chain(map2.keys()).collect::<FxHashSet<_>>();
-        let dot_product = keys.iter().map(|k| {
-            let v1 = *map1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *map2.get(*k).unwrap_or(&0) as f64;
-            v1 * v2
-        }).sum::<f64>();
-        let magnitude1 = map1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
-        let magnitude2 = map2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
-        if magnitude1 == 0.0 || magnitude2 == 0.0 {
-            1.0
-        } else {
-            dot_product / (magnitude1 * magnitude2)
-        }
+        cosine_similarity(&map1, &map2)
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for Euclidean {
+impl<T: crate::Op> ProgramComparator<T> for Euclidean {
     /// Computes the Euclidean distance between two functions and converts it to a similarity score.
     /// The similarity is calculated as `exp(-distance)`, which maps a distance of 0 to a similarity of 1, and larger distances to values approaching 0.
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
         let map1 = f1.ops_freq();
         let map2 = f2.ops_freq();
-        let keys = map1.keys().chain(map2.keys()).collect::<FxHashSet<_>>();
-        let distance = keys.iter().map(|k| {
-            let v1 = *map1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *map2.get(*k).unwrap_or(&0) as f64;
-            (v1 - v2).powi(2)
-        }).sum::<f64>().sqrt();
-        (-distance).exp()
+        euclidean_distance(&map1, &map2)
     }
 }
 
-impl<T: crate::Op> ComparatorTrait<T> for WeightedJaccard {
+impl<T: crate::Op> ProgramComparator<T> for WeightedJaccard {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
         let map1 = f1.ops_freq();
         let map2 = f2.ops_freq();
-        let keys = map1.keys().chain(map2.keys()).collect::<FxHashSet<_>>();
-        let intersection = keys.iter().map(|k| {
-            let v1 = *map1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *map2.get(*k).unwrap_or(&0) as f64;
-            v1.min(v2)
-        }).sum::<f64>();
-        let union = keys.iter().map(|k| {
-            let v1 = *map1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *map2.get(*k).unwrap_or(&0) as f64;
-            v1.max(v2)
-        }).sum::<f64>();
-        if union == 0.0 {
-            1.0
-        } else {
-            intersection / union
-        }
+        weighted_jaccard(&map1, &map2)
     }
 }
+
+fn jaccard_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+    if !s1.is_empty() && !s2.is_empty() {
+        s1.intersection(s2).count() as f64 / s1.union(s2).count() as f64
+    } else {
+        1.0
+    }
+}
+
+fn dice_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+    if !s1.is_empty() && !s2.is_empty() {
+        (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64
+    } else {
+        1.0
+    }
+}
+
+fn simpson_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+    if !s1.is_empty() && !s2.is_empty() {
+        s1.intersection(s2).count() as f64 / s1.len().min(s2.len()) as f64
+    } else {
+        1.0
+    }
+}
+
+fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+    let mut matrix = pathfinding::matrix::Matrix::new(s1.len() + 1, s2.len() + 1, 0);
+    for i in 0..=s1.len() {
+        matrix[(i, 0)] = i as i32;
+    }
+    for j in 0..=s2.len() {
+        matrix[(0, j)] = j as i32;
+    }
+    for i in 1..=s1.len() {
+        for j in 1..=s2.len() {
+            let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
+            matrix[(i, j)] = (matrix[(i - 1, j)] + 1)
+                .min(matrix[(i, j - 1)] + 1)
+                .min(matrix[(i - 1, j - 1)] + cost);
+        }
+    }
+    1.0 - (matrix[(s1.len(), s2.len())] as f64 / (s1.len().max(s2.len()) as f64))
+}
+
+fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
+    let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+    let dot_product = keys.iter().map(|k| {
+        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+        v1 * v2
+    }).sum::<f64>();
+    let magnitude1 = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
+    let magnitude2 = f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
+    if magnitude1 > 0.0 && magnitude2 > 0.0 {
+        dot_product / (magnitude1 * magnitude2)
+    } else {
+        1.0
+    }
+}
+
+fn euclidean_distance<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
+    let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+    let sum_of_squares = keys.iter().map(|k| {
+        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+        (v1 - v2).powi(2)
+    }).sum::<f64>();
+    1.0 - (sum_of_squares.sqrt() / (f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt() + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()))
+}
+
+fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
+    let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+    let min_sum = keys.iter().map(|k| {
+        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+        v1.min(v2)
+    }).sum::<f64>();
+    let max_sum = keys.iter().map(|k| {
+        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+        v1.max(v2)
+    }).sum::<f64>();
+    if max_sum > 0.0 {
+        min_sum / max_sum
+    } else {
+        1.0
+    }
+}
+
+fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+    let mut matrix = pathfinding::matrix::Matrix::new(s1.len() + 1, s2.len() + 1, 0);
+    for i in 1..=s1.len() {
+        for j in 1..=s2.len() {
+            if s1[i - 1] == s2[j - 1] {
+                matrix[(i, j)] = matrix[(i - 1, j - 1)] + 1;
+            } else {
+                matrix[(i, j)] = matrix[(i - 1, j)].max(matrix[(i, j - 1)]);
+            }
+        }
+    }
+    (matrix[(s1.len(), s2.len())] as f64) / (s1.len().max(s2.len()) as f64)
+}
+

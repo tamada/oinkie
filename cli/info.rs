@@ -1,13 +1,15 @@
 use clap::ValueEnum;
-use oinkie2::prelude::BirthmarkType;
+use oinkie::prelude::BirthmarkType;
 
 #[derive(Debug, clap::Parser, ValueEnum, Clone)]
 #[clap(rename_all = "kebab-case")]
 pub enum BType {
     /// the sequence of method calls in a program.
-    Smc,
+    FcSeq,
     /// the frequency of method calls in a program.
-    Fmc,
+    FcFreq,
+    /// the Set of method calls in a program.
+    FcSet,
     /// the sequence of operations in a program.
     OpSeq,
     /// the set of operations in a program.
@@ -67,8 +69,9 @@ pub enum BType {
 impl std::fmt::Display for BType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BType::Smc => write!(f, "smc"),
-            BType::Fmc => write!(f, "fmc"),
+            BType::FcSeq => write!(f, "fc-seq"),
+            BType::FcFreq => write!(f, "fc-freq"),
+            BType::FcSet => write!(f, "fc-set"),
             BType::OpSeq => write!(f, "op-seq"),
             BType::OpSet => write!(f, "op-set"),
             BType::OpFreq => write!(f, "op-freq"),
@@ -103,8 +106,9 @@ impl std::fmt::Display for BType {
 impl From<BType> for BirthmarkType {
     fn from(value: BType) -> Self {
         match value {
-            BType::Smc => BirthmarkType::FcSeq,
-            BType::Fmc => BirthmarkType::FcFreq,
+            BType::FcSeq => BirthmarkType::FcSeq,
+            BType::FcFreq => BirthmarkType::FcFreq,
+            BType::FcSet => BirthmarkType::FcSet,
             BType::OpSeq => BirthmarkType::OpSeq,
             BType::OpSet => BirthmarkType::OpSet,
             BType::OpFreq => BirthmarkType::OpFreq,

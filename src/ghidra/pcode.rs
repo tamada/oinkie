@@ -60,6 +60,7 @@ pub enum PcodeOp {
 	/// TRUE if borrow in signed subtraction of 2 ops 
     IntSborrow = 23,
 	/// Twos complement (for subtracting) of operand 
+    #[serde(alias = "INT_2COMP")]
     Int2comp = 24,
 	IntNegate = 25,
 	/// Exclusive OR of two operands of same size 
@@ -130,6 +131,7 @@ pub enum PcodeOp {
     #[serde(alias = "FLOAT2FLOAT")]
     FloatFloat2float = 55,
 	/// round towards zero
+    #[serde(alias = "TRUNC")]
     FloatTrunc = 56,
 	/// round towards +infinity
     FloatCeil = 57,

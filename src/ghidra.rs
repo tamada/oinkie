@@ -1,8 +1,9 @@
 use std::{path::{Path, PathBuf}, str::FromStr};
 
 use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned};
-use crate::{Error, ghidra::pcode::PcodeOp};
-use crate::prelude::*;
+use crate::{Result, Error};
+use crate::ghidra::pcode::PcodeOp;
+use crate::program::Program;
 
 mod pcode;
 
@@ -13,8 +14,8 @@ where
     type Error = Error;
 
     fn try_from(path: PathBuf) -> Result<Self> {
-        std::fs::File::open(path)
-            .map_err(Error::Io)
+        std::fs::File::open(&path)
+            .map_err(|e| Error::Io(path, e))
             .and_then(|f| serde_json::from_reader(f)
                 .map_err(Error::Json))
     }

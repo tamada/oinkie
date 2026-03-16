@@ -12,6 +12,16 @@ pub struct Program<T> {
     functions: Vec<Function<T>>,
 }
 
+impl<T> crate::prelude::CsvInfo for Program<T> {
+    fn csv_info(&self) -> String {
+        format!("program,{},{},{},{}", self.name, self.path.display(), self.symbols.len(), self.functions.len())
+    }
+    
+    fn names(&self) -> Vec<String> {
+        self.functions.iter().map(|f| f.name.clone()).collect()
+    }
+}
+
 impl<T> Program<T> {
     pub fn new(name: String, path: PathBuf, symbols: FxHashMap<String, String>, functions: Vec<Function<T>>) -> Self {
         Self { name, path, symbols, functions }

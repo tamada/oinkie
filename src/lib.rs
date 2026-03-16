@@ -1,7 +1,8 @@
+use std::path::PathBuf;
+
 pub mod ghidra;
 pub mod prelude;
-pub(crate) mod extractor;
-mod context;
+pub mod extractor;
 mod compare;
 mod birthmarks;
 mod program;
@@ -16,7 +17,7 @@ pub enum Error {
     BirthmarkType(String),
     Clap(clap::Error),
     InvalidPcode(u32),
-    Io(std::io::Error),
+    Io(PathBuf, std::io::Error),
     Json(serde_json::Error),
     Parse(String),
     ParseInt(std::num::ParseIntError),
@@ -34,7 +35,7 @@ impl std::fmt::Display for Error {
             },
             Error::BirthmarkType(t) => write!(f, "{t}: unknown birthmark type"),
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),
-            Error::Io(e) => write!(f, "IO error: {}", e),
+            Error::Io(path, e) => write!(f, "IO error for {}: {}", path.display(), e),
             Error::Json(e) => write!(f, "JSON error: {}", e),
             Error::Parse(s) => write!(f, "Parse error: {}", s),
             Error::ParseInt(e) => write!(f, "Parse int error: {}", e),
@@ -70,6 +71,7 @@ impl Error {
 pub trait Op {
     /// returns the mnemonic of the operation, e.g., "ADD", "SUB", etc.
     fn mnemonic(&self) -> &str;
+
     /// returns the unique code of the operation, e.g., the pcode opcode.
     fn code(&self) -> u32;
 

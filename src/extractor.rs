@@ -1,26 +1,70 @@
+use std::path::Path;
+
 use rustc_hash::FxHashMap;
 
-use crate::prelude::*;
+use crate::{Result, Error};
+use crate::birthmarks::{Birthmark, BirthmarkType, Data, Elements, Metadata, Kgram};
+use crate::program::{Program, Function};
 
-pub struct Extractor<T> {
-    bt: BirthmarkType,
-    args: Vec<Program<T>>,
+/// Generates the file name for the extracted birthmark JSON file.
+/// The format of resultant file name is `{original_file_stem}_{hash}.json`, 
+/// where `original_file_stem` is the stem of the input source file and
+/// `hash` is a hash value generated from the content of the source file
+/// to ensure uniqueness and avoid overwriting files with the same name.
+pub fn dest_file_name(program_path: &Path) -> Result<String> {
+    let file_name = program_path.file_stem().unwrap().to_string_lossy();
+    let hash = get_hash(program_path);
+    let new_filename = format!("{file_name}_{}.json", hash?);
+    Ok(new_filename)
 }
 
-impl<T: crate::Op> Extractor<T> {
-    pub fn new(bt: BirthmarkType, args: Vec<Program<T>>) -> Self {
-        Self { bt, args }
+fn get_hash(path: &Path) -> Result<String> {
+    use std::io::{Read, Seek};
+    use sha2::Digest;
+    let pbuf = path.to_path_buf();
+
+    let mut file = std::fs::File::open(path).map_err(|e| Error::Io(pbuf.clone(), e))?;
+    let len = file.metadata().map_err(|e| Error::Io(pbuf.clone(), e))?.len();
+    let mut buffer = Vec::new();
+
+    // Read the first 4KB of the file for hashing
+    let mut head = vec![0; 4096.min(len as usize)];
+    file.read_exact(&mut head).map_err(|e| Error::Io(pbuf.clone(), e))?;
+    buffer.extend(head);
+
+    if len > 4096 {
+        let mut tail = vec![0; 4096.min(len as usize - 4096)];
+        file.seek(std::io::SeekFrom::End(-4096)).map_err(|e| Error::Io(pbuf.clone(), e))?;
+        file.read_exact(&mut tail).map_err(|e| Error::Io(pbuf.clone(), e))?;
+        buffer.extend(tail);
+    }
+    let hash = sha2::Sha256::digest(&buffer);
+    Ok(format!("{:x}", hash)[..8].to_string())
+}
+
+pub struct Extractor {
+    bt: BirthmarkType,
+}
+
+impl Extractor {
+    pub fn new(bt: BirthmarkType) -> Self {
+        Self { bt }
     }
 
-    pub fn extract(&self) -> Result<Vec<Birthmark>> {
-        let result = self.args.iter()
+    pub fn extract<T: crate::Op>(&self, args: Vec<&Program<T>>) -> Result<Vec<Birthmark>> {
+        let result = args.iter()
             .map(|p| extract_birthmark_op(p, &self.bt))
             .collect::<Vec<_>>();
         Error::vec_result_to_result_vec(result)
     }
+
+    pub fn extract_each<T: crate::Op>(&self, p: &Program<T>) -> Result<Birthmark> {
+        extract_birthmark_op(p, &self.bt)
+    }
 }
 
 fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Result<Birthmark> {
+    let now = std::time::Instant::now();
     let elements = p.iter().map(|f| {
         let name = f.name().to_string();
         let data = match bt {
@@ -37,12 +81,25 @@ fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Res
         };
         Elements { name, data }
     }).collect::<Vec<_>>();
+    let metadata = build_metadata(p, bt.clone(), now);
     Ok(Birthmark {
-        name: p.name().to_string(),
-        path: p.path().to_path_buf(),
-        birthmark_type: bt.clone(),
+        metadata,
         elements,
     })
+}
+
+fn build_metadata<T>(p: &Program<T>, bt: BirthmarkType, start_time: std::time::Instant) -> Metadata {
+    let extracted_at = chrono::Utc::now();
+    let duration = start_time.elapsed();
+    let path = p.path().to_path_buf();
+    let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    Metadata {
+        file_name: name,
+        path,
+        extracted_at,
+        duration,
+        birthmark_type: bt,
+    }
 }
 
 fn extract_op_kgram_seq<T: crate::Op>(f: &Function<T>, k: usize) -> Vec<Kgram> {
