@@ -28,12 +28,14 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(comparing_count * 3);
+    std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     let results = opts.iter().enumerate().par_bridge()
             .map(|(i, (path1, path2))| {
         let dest_file = dest.join(format!("{i:05}.csv"));
         if dest_file.exists() && opts.is_skip() {
             log::info!("Similarity file for {:?} and {:?} already exists. Skipping comparison.", path1, path2);
+            pbar.inc(3);
             read_result_file(&dest_file, i, path1, path2)
         } else {
             pbar.set_message(format!("Loading program from {:?}", path1.display()));
@@ -45,7 +47,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
             pbar.set_message(format!("Comparing two programs ({}/{})", i + 1, comparing_count));
             let result = atype.comparator().compare_programs(&p1, &p2);
             pbar.inc(1);
-            result.store(dest.join(format!("{i:05}.csv")))?;
+            result.store(&dest_file)?;
             Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
         }
     }).collect::<Vec<_>>();
@@ -68,7 +70,7 @@ fn read_result_file<'a>(dest_path: &Path, index: usize, path1: &'a Path, path2: 
         return Err(Error::Parse(format!("Invalid result line format in {}", dest_path.display())));
     }
     let duration_nanos: u64 = parts[1].parse()
-        .map_err(|e| Error::ParseInt(e))?;
+        .map_err(Error::ParseInt)?;
     let similarity: f64 = parts[2].parse()
         .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
     Ok(CompareResult::new(index, similarity, path1, path2, Duration::from_nanos(duration_nanos)))
@@ -111,10 +113,12 @@ fn store_and_get_durations(results: Vec<CompareResult>, dest: &Path, start: Inst
 
 fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool) -> CompareResult<'a> {
     let (i, (path1, path2)) = tuple;
-    let dest = dest.join(format!("{i:05}.csv"));
-    if dest.exists() && skip {
+    let dest_file = dest.join(format!("{i:05}.csv"));
+    log::info!("compare_impl(dest: {} (exists: {}), skip: {skip})", dest_file.display(), dest_file.exists());
+    if dest_file.exists() && skip {
         log::info!("Similarity file for {:?} and {:?} already exists. Skipping comparison.", path1, path2);
-        read_result_file(&dest, i, path1, path2).unwrap()
+        pbar.inc(3);
+        read_result_file(&dest_file, i, path1, path2).unwrap()
     } else {
         pbar.set_message(format!("Loading birthmark from {:?}", path1.display()));
         let b1 = load(path1.to_path_buf()).unwrap();
@@ -125,7 +129,7 @@ fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparato
         pbar.set_message(format!("Comparing two birthmarks ({}/{})", i + 1, comparing_count));
         let result = comparator.compare_birthmarks(&b1, &b2);
         pbar.inc(1);
-        let _ = result.store(dest.join(format!("{i:05}.csv")));
+        result.store(&dest_file).unwrap();
         CompareResult::new(i, result.similarity(), path1, path2, result.duration())
     }
 }
@@ -136,13 +140,13 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
     let pb = ProgressBar::new(opts.len() as u64)
             .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}").unwrap())
             .with_message("Extracting birthmarks...");
-    std::fs::create_dir_all(&dest)
+    std::fs::create_dir_all(dest)
         .map_err(|e| Error::Io(dest.to_path_buf(), e))?;
     let extractor = opts.extractor();
     let start = Instant::now();
     let r = opts.iter().par_bridge().map(|path| {
         let e1 = Instant::now();
-        let r = match extract_impl(&path, &dest, &extractor, opts.is_skip()) {
+        let r = match extract_impl(path, dest, &extractor, opts.is_skip()) {
             Ok(_) => Ok(e1.elapsed()),
             Err(e) => Err(e),
         };
@@ -198,13 +202,21 @@ Oinkie extracts birthmarks from given codes and compares them to calculate the s
     Ok(vec![now.elapsed()])
 }
 
+fn validate_extract_opts(opts: cli::ExtractOpts) -> Result<cli::ExtractOpts> {
+    if opts.is_empty() {
+        return Err(Error::Parse("No valid files to extract birthmarks from.".to_string()));
+    }
+    Ok(opts)
+}
+
 fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
     opts.init()?;
     use cli::OinkieCommand::*;
     match opts.command {
         Run(opts) => perform_run(opts),
         Compare(opts) => perform_compare(opts),
-        Extract(opts) => perform_extract(opts),
+        Extract(opts) => validate_extract_opts(opts)
+            .and_then(perform_extract),
         Info => perform_info(),
     }
 }
