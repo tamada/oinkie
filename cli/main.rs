@@ -45,7 +45,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
             let p2: Program<Op> = load(path2.to_path_buf())?;
             pbar.inc(1);
             pbar.set_message(format!("Comparing two programs ({}/{})", i + 1, comparing_count));
-            let result = atype.comparator().compare_programs(&p1, &p2);
+            let result = atype.comparator().compare_programs(&p1, &p2)?;
             pbar.inc(1);
             result.store(&dest_file)?;
             Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
@@ -92,7 +92,9 @@ fn perform_compare(opts: cli::CompareOpts) -> Result<Vec<Duration>> {
         .map(|(i, (path1, path2))| compare_impl((i, (path1, path2)), &comparator, dest, &pbar, comparing_count, opts.is_skip()))
         .collect::<Vec<_>>();
     pbar.finish();
-    store_and_get_durations(r, dest, start)
+    Error::vec_result_to_result_vec(r)
+        .and_then(|r| store_and_get_durations(r, dest, start))
+    
 }
 
 fn store_and_get_durations(results: Vec<CompareResult>, dest: &Path, start: Instant) -> Result<Vec<Duration>> {
@@ -111,26 +113,29 @@ fn store_and_get_durations(results: Vec<CompareResult>, dest: &Path, start: Inst
     Error::vec_result_to_result_vec(ritems)
 }
 
-fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool) -> CompareResult<'a> {
+fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool) -> Result<CompareResult<'a>> {
     let (i, (path1, path2)) = tuple;
     let dest_file = dest.join(format!("{i:05}.csv"));
     log::info!("compare_impl(dest: {} (exists: {}), skip: {skip})", dest_file.display(), dest_file.exists());
     if dest_file.exists() && skip {
         log::info!("Similarity file for {:?} and {:?} already exists. Skipping comparison.", path1, path2);
         pbar.inc(3);
-        read_result_file(&dest_file, i, path1, path2).unwrap()
+        read_result_file(&dest_file, i, path1, path2)
     } else {
+        log::info!("Loading birthmark from {:?}", path2.display());
         pbar.set_message(format!("Loading birthmark from {:?}", path1.display()));
-        let b1 = load(path1.to_path_buf()).unwrap();
+        let b1: Birthmark = load(path1.to_path_buf()).unwrap();
         pbar.inc(1);
+        log::info!("Loading birthmark from {:?}", path2.display());
         pbar.set_message(format!("Loading birthmark from {:?}", path2.display()));
-        let b2 = load(path2.to_path_buf()).unwrap();
+        let b2: Birthmark = load(path2.to_path_buf()).unwrap();
         pbar.inc(1);
-        pbar.set_message(format!("Comparing two birthmarks ({}/{})", i + 1, comparing_count));
-        let result = comparator.compare_birthmarks(&b1, &b2);
+        log::info!("Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}", b1.len(), b2.len(), i + 1);
+        pbar.set_message(format!("Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}", b1.len(), b2.len(), i + 1));
+        let result = comparator.compare_birthmarks(&b1, &b2)?;
         pbar.inc(1);
         result.store(&dest_file).unwrap();
-        CompareResult::new(i, result.similarity(), path1, path2, result.duration())
+        Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
     }
 }
 

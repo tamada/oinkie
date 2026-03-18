@@ -146,7 +146,7 @@ impl Serialize for Value {
 #[cfg(test)]
 mod tests {
     use crate::program::Program;
-    use crate::Op;
+    use crate::{Op, Iterable};
 
     use super::*;
 
@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(r.path(), std::path::Path::new("/Users/tamada/researches/2026snpd_tamada/build/arm64-linux/gcc_O3/bzip2"));
         assert_eq!(r.len(), 85);
 
-        let f1 = &r.iter().nth(0).unwrap();
+        let f1 = r.iter().nth(0).unwrap();
         assert_eq!(f1.name(), "_init");
         let op1 = f1.get(0).unwrap();
         assert_eq!(op1.mnemonic(), "SUBPIECE");
@@ -194,7 +194,7 @@ mod tests {
     fn parse_pcode_json2() {
         let file = std::fs::File::open("testdata/factorize/factorize_clang.json")
             .expect("Failed to open JSON file");
-        let r: Program<super::Op> = serde_json::from_reader(file)
+        let _r: Program<super::Op> = serde_json::from_reader(file)
             .expect("Failed to parse JSON");
     }
 }

@@ -1,4 +1,4 @@
-pub use crate::{Error, Result, Op};
+pub use crate::{Error, Result, Op, Iterable};
 pub use crate::compare::{Algorithm, Comparator, Comparison, PairingStrategy};
 pub use crate::birthmarks::{BirthmarkType, AnalysisType, Data, Kgram, Metadata};
 pub use crate::program::{Program, Function};

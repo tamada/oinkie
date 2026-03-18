@@ -1,9 +1,9 @@
-use crate::prelude::*;
+use crate::{Iterable, prelude::*};
 use std::{io::Write, path::Path, time::Instant};
 use clap::ValueEnum;
-use pathfinding::matrix::Matrix;
 use rustc_hash::{FxHashMap, FxHashSet};
 use itertools::Itertools;
+use ndarray::Array2;
 
 #[cfg_attr(doc, katexit::katexit)]
 #[derive(Debug, Clone, ValueEnum)]
@@ -61,33 +61,44 @@ impl PairingStrategy {
 pub struct Comparison<'a, S> {
     columns: &'a S,
     rows: &'a S,
-    matrix: Matrix<i32>,
+    matrix: Array2<f64>,
     duration: std::time::Duration,
-    similarities: f64,
+    similarities: Vec<f64>,
 }
 
 impl<'a, S: CsvInfo> Comparison<'a, S> {
-    pub fn new(columns: &'a S, rows: &'a S, matrix: Matrix<i32>, similarities: f64, duration: std::time::Duration) -> Comparison<'a, S> {
-        Comparison { columns, rows, matrix, similarities, duration }
+    pub fn new(columns: &'a S, rows: &'a S, matrix: Array2<f64>, similarities: Vec<f64>, duration: std::time::Duration) -> Comparison<'a, S> {
+        Self { columns, rows, matrix, similarities, duration }
     }
 
     pub fn store<P: AsRef<Path>>(&self, dest: P) -> Result<()> {
         let mut file = std::fs::File::create(dest.as_ref())
             .map_err(|e| Error::Io(dest.as_ref().to_path_buf(), e))?;
         let mut out = std::io::BufWriter::new(&mut file);
-        let _ = writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarities);
+        let _ = writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarity());
         let _ = writeln!(out, "left,{}", self.rows.csv_info());
         let _ = writeln!(out, "right,{}", self.columns.csv_info());
-        let _ = writeln!(out, "matrix,,{}", self.columns.names().join(","));
+        let col_names = self.columns.names();
         let row_names = self.rows.names();
-        for ((row_idx, label), values) in row_names.iter().enumerate().zip(self.matrix.iter()) {
-            let _ = writeln!(out, "{row_idx},{label},{}", values.iter().join(","));
+        let column_size = col_names.len();
+        let _ = write!(out, "matrix,,{}", col_names.join(","));
+        for ((row, col), value) in self.matrix.indexed_iter() {
+            if row >= row_names.len() {
+                break;
+            }
+            if col == 0 {
+                let _ = writeln!(out);
+                let _ = write!(out, "{row},{}", row_names[row]);
+            } else if col >= column_size {
+                continue;
+            }
+            let _ = write!(out, ",{value}");
         }
         Ok(())
     }
 
     pub fn similarity(&self) -> f64 {
-        self.similarities
+        self.similarities.iter().sum::<f64>() / self.similarities.len() as f64
     }
 
     pub fn duration(&self) -> std::time::Duration {
@@ -96,92 +107,86 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
 }
 
 trait BirthmarkComparator {
-    fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Comparison<'a, Birthmark> {
+    fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Result<Comparison<'a, Birthmark>> {
         if !b1.comparable_with(b2) {
-            return Comparison::new(b1, b2, Matrix::new(0, 0, 0), 0.0, std::time::Duration::from_millis(0));
+            return Err(Error::Mismatch(b1.metadata.birthmark_type.clone(), b2.metadata.birthmark_type.clone()));
         }
         let p1_len = b1.elements.len();
         let p2_len = b2.elements.len();
+        let size = std::cmp::max(p1_len, p2_len);
         if p1_len == 0 && p2_len == 0 {
-            Comparison::new(b1, b2, Matrix::new(0, 0, 0), 1.0, std::time::Duration::from_millis(0))
+            Ok(Comparison::new(b1, b2, Array2::<f64>::zeros((0, 0)), vec![1.0], std::time::Duration::from_millis(0)))
         } else if p1_len == 0 || p2_len == 0 {
-            Comparison::new(b1, b2, Matrix::new(0, 0, 0), 0.0, std::time::Duration::from_millis(0))
+            Ok(Comparison::new(b1, b2, Array2::<f64>::zeros((0, 0)), vec![0.0], std::time::Duration::from_millis(0)))
         } else {
             let start = Instant::now();
-            let r = build_birthmark_matrix(b1, b2, |e1, e2| {
+            let r = build_matrix(b1, b2, size, |e1, e2| {
                 self.compare_elements(e1, e2)
-            });
-            let (total, matches) = if p1_len > p2_len {
-                let transposed = r.transposed();
-                pathfinding::kuhn_munkres::kuhn_munkres(&transposed)
-            } else {
-                pathfinding::kuhn_munkres::kuhn_munkres(&r)
-            };
-            let similarity = (total as f64 / 1000.0) / matches.len() as f64;
-            Comparison::new(b1, b2, r, similarity, start.elapsed())
+            })?;
+            hungarian_algorithm(&r)
+                .map(|(sim, _matchs )| {
+                    Comparison::new(b1, b2, r, sim, start.elapsed())
+                })
         }
     }
 
     fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64;
 }
 
+fn build_matrix<F, T>(p1: impl Iterable<Item = T>, p2: impl Iterable<Item = T>, size: usize, compare_func: F) -> Result<Array2<f64>>
+where 
+    F: Fn(&T, &T) -> f64,
+{
+    let mut flat_costs = vec![1.0; size * size];
+    for (i, item1) in p1.iter().enumerate() {
+        for (j, item2) in p2.iter().enumerate() {
+            // lapjv expects a cost matrix where lower values indicate better matches.
+            // so we convert similarity to cost by using (1.0 - similarity).
+            flat_costs[i * size + j] = 1.0 - compare_func(item1, item2);
+        }
+    }
+    Array2::from_shape_vec((size, size), flat_costs)
+        .map_err(Error::ShapeError)
+}
+
+fn hungarian_algorithm(array2d: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> {
+    match lapjv::lapjv(array2d) {
+        Ok((rows, _cols)) => {
+            let mut similarities = vec![];
+            for (i, &j) in rows.iter().enumerate() {
+                if i < array2d.nrows() && j < array2d.ncols() {
+                    // Convert cost back to similarity by using (1.0 - cost).
+                    similarities.push(1.0 - array2d[(i, j)]); 
+                }
+            }
+            Ok((similarities, rows))
+        },
+        Err(e) => Err(Error::LapJV(e)),
+    }
+}
+
 trait ProgramComparator<T: crate::Op> {
-    fn compare_programs<'a>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Comparison<'a, Program<T>> {
+    fn compare_programs<'a>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Result<Comparison<'a, Program<T>>> {
         let p1_len = p1.len();
         let p2_len = p2.len();
+        let size = std::cmp::max(p1_len, p2_len);
         if p1_len == 0 && p2_len == 0 {
-            Comparison::new(p1, p2, Matrix::new(0, 0, 0), 1.0, std::time::Duration::from_millis(0))
+            Ok(Comparison::new(p1, p2, Array2::<f64>::zeros((0, 0)), vec![1.0], std::time::Duration::from_millis(0)))
         } else if p1_len == 0 || p2_len == 0 {
-            Comparison::new(p1, p2, Matrix::new(0, 0, 0), 0.0, std::time::Duration::from_millis(0))
+            Ok(Comparison::new(p1, p2, Array2::<f64>::zeros((0, 0)), vec![0.0], std::time::Duration::from_millis(0)))
         } else {
             let start = Instant::now();
-            let r = build_program_matrix(p1, p2, |f1, f2| {
+            let r = build_matrix(p1, p2, size, |f1, f2| {
                 self.compare_func(f1, f2)
-            });
-            let (total, matches) = if p1_len > p2_len {
-                let transposed = r.transposed();
-                pathfinding::kuhn_munkres::kuhn_munkres(&transposed)
-            } else {
-                pathfinding::kuhn_munkres::kuhn_munkres(&r)
-            };
-            let similarity = (total as f64 / 1000.0) / matches.len() as f64;
-            Comparison::new(p1, p2, r, similarity, start.elapsed())
+            })?;
+            hungarian_algorithm(&r)
+                .map(|(sim, _matches)| {
+                    Comparison::new(p1, p2, r, sim, start.elapsed())
+                })
         }
     }
 
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64;
-}
-
-fn build_program_matrix<F, T>(p1: &Program<T>, p2: &Program<T>, compare_func: F) -> Matrix<i32>
-where
-    F: Fn(&Function<T>, &Function<T>) -> f64,
-{
-    let m = p1.len();
-    let n = p2.len();
-    let mut matrix = Matrix::new(m, n, 0);
-
-    p1.iter().enumerate().for_each(|(i, f1)| {
-        p2.iter().enumerate().for_each(|(j, f2)| {
-            matrix[(i, j)] = (compare_func(f1, f2) * 1000.0) as i32;
-        })
-    });
-    matrix
-}
-
-fn build_birthmark_matrix<F>(b1: &Birthmark, b2: &Birthmark, compare_func: F) -> Matrix<i32>
-where
-    F: Fn(&Elements, &Elements) -> f64,
-{
-    let m = b1.elements.len();
-    let n = b2.elements.len();
-    let mut matrix = Matrix::new(m, n, 0);
-
-    b1.elements.iter().enumerate().for_each(|(i, e1)| {
-        b2.elements.iter().enumerate().for_each(|(j, e2)| {
-            matrix[(i, j)] = (compare_func(e1, e2) * 1000.0) as i32;
-        })
-    });
-    matrix
 }
 
 #[derive(Debug, Clone, ValueEnum)]
@@ -225,7 +230,14 @@ impl Algorithm {
     }
 }
 
-pub enum Comparator {
+/// This struct holds the specific algorithm instance and dispatches the comparison calls to it.
+pub struct Comparator {
+    inner: ComparatorImpl
+}
+
+/// The implementation of Comparator, which holds the specific algorithm instance and dispatches the comparison calls to it.
+/// However, the specific algorithm does not appear in the public API of Comparator, so that the internal implementation can be changed without affecting the users of Comparator.
+enum ComparatorImpl {
     Cosine(Cosine),
     Dice(Dice),
     Euclidean(Euclidean),
@@ -239,54 +251,54 @@ pub enum Comparator {
 impl From<&Algorithm> for Comparator {
     fn from(algorithm: &Algorithm) -> Self {
         match algorithm {
-            Algorithm::Cosine => Comparator::Cosine(Cosine{}),
-            Algorithm::Dice => Comparator::Dice(Dice{}),
-            Algorithm::Euclidean => Comparator::Euclidean(Euclidean{}),
-            Algorithm::Jaccard => Comparator::Jaccard(Jaccard{}),
-            Algorithm::Levenshtein => Comparator::Levenshtein(Levenshtein{}),
-            Algorithm::Lcs => Comparator::Lcs(Lcs{}),
-            Algorithm::Simpson => Comparator::Simpson(Simpson{}),
-            Algorithm::WeightedJaccard => Comparator::WeightedJaccard(WeightedJaccard{}),
+            Algorithm::Cosine => Comparator{ inner: ComparatorImpl::Cosine(Cosine{}) },
+            Algorithm::Dice => Comparator{ inner: ComparatorImpl::Dice(Dice{}) },
+            Algorithm::Euclidean => Comparator{ inner: ComparatorImpl::Euclidean(Euclidean{}) },
+            Algorithm::Jaccard => Comparator{ inner: ComparatorImpl::Jaccard(Jaccard{}) },
+            Algorithm::Levenshtein => Comparator{ inner: ComparatorImpl::Levenshtein(Levenshtein{}) },
+            Algorithm::Lcs => Comparator{ inner: ComparatorImpl::Lcs(Lcs{}) },
+            Algorithm::Simpson => Comparator{ inner: ComparatorImpl::Simpson(Simpson{}) },
+            Algorithm::WeightedJaccard => Comparator{ inner: ComparatorImpl::WeightedJaccard(WeightedJaccard{}) },
         }
     }
 }
 
 impl Comparator {
-    pub fn compare_programs<'a, T: crate::Op>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Comparison<'a, Program<T>> {
-        match self {
-            Comparator::Cosine(c) => c.compare_programs(p1, p2),
-            Comparator::Dice(d) => d.compare_programs(p1, p2),
-            Comparator::Euclidean(e) => e.compare_programs(p1, p2),
-            Comparator::Jaccard(j) => j.compare_programs(p1, p2),
-            Comparator::Levenshtein(l) => l.compare_programs(p1, p2),
-            Comparator::Lcs(lcs) => lcs.compare_programs(p1, p2),
-            Comparator::Simpson(s) => s.compare_programs(p1, p2),
-            Comparator::WeightedJaccard(wj) => wj.compare_programs(p1, p2),
+    pub fn compare_programs<'a, T: crate::Op>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Result<Comparison<'a, Program<T>>> {
+        match &self.inner {
+            ComparatorImpl::Cosine(c) => c.compare_programs(p1, p2),
+            ComparatorImpl::Dice(d) => d.compare_programs(p1, p2),
+            ComparatorImpl::Euclidean(e) => e.compare_programs(p1, p2),
+            ComparatorImpl::Jaccard(j) => j.compare_programs(p1, p2),
+            ComparatorImpl::Levenshtein(l) => l.compare_programs(p1, p2),
+            ComparatorImpl::Lcs(lcs) => lcs.compare_programs(p1, p2),
+            ComparatorImpl::Simpson(s) => s.compare_programs(p1, p2),
+            ComparatorImpl::WeightedJaccard(wj) => wj.compare_programs(p1, p2),
         }
     }
 
-    pub fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Comparison<'a, Birthmark> {
-        match self {
-            Comparator::Cosine(c) => c.compare_birthmarks(b1, b2),
-            Comparator::Dice(d) => d.compare_birthmarks(b1, b2),
-            Comparator::Euclidean(e) => e.compare_birthmarks(b1, b2),
-            Comparator::Jaccard(j) => j.compare_birthmarks(b1, b2),
-            Comparator::Levenshtein(l) => l.compare_birthmarks(b1, b2),
-            Comparator::Lcs(lcs) => lcs.compare_birthmarks(b1, b2),
-            Comparator::Simpson(s) => s.compare_birthmarks(b1, b2),
-            Comparator::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2),
+    pub fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Result<Comparison<'a, Birthmark>> {
+        match &self.inner {
+            ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2),
+            ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2),
+            ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2),
+            ComparatorImpl::Jaccard(j) => j.compare_birthmarks(b1, b2),
+            ComparatorImpl::Levenshtein(l) => l.compare_birthmarks(b1, b2),
+            ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2),
+            ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2),
+            ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2),
         }
     }
 }
 
-pub struct Jaccard;
-pub struct Dice;
-pub struct Simpson;
-pub struct Levenshtein;
-pub struct Cosine;
-pub struct Euclidean;
-pub struct WeightedJaccard;
-pub struct Lcs;
+struct Jaccard;
+struct Dice;
+struct Simpson;
+struct Levenshtein;
+struct Cosine;
+struct Euclidean;
+struct WeightedJaccard;
+struct Lcs;
 
 impl BirthmarkComparator for Jaccard {
     fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
@@ -294,6 +306,14 @@ impl BirthmarkComparator for Jaccard {
             jaccard_index(s1, s2)
         } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
             jaccard_index(k1, k2)
+        } else if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
+            jaccard_index(&seq2set(s1), &seq2set(s2))
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            jaccard_index(&seq2set(k1), &seq2set(k2))
+        } else if let (Data::Freq(s1), Data::Freq(s2)) = (&e1.data, &e2.data) {
+            jaccard_index(&freq2set(s1), &freq2set(s2))
+        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
+            jaccard_index(&freq2set(k1), &freq2set(k2))
         } else {
             0.0
         }
@@ -306,6 +326,14 @@ impl BirthmarkComparator for Dice {
             dice_index(s1, s2)
         } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
             dice_index(k1, k2)
+        } else if let (Data::Seq(k1), Data::Seq(k2)) = (&e1.data, &e2.data) {
+            dice_index(&seq2set(k1), &seq2set(k2))
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            dice_index(&seq2set(k1), &seq2set(k2))
+        } else if let (Data::Freq(k1), Data::Freq(k2)) = (&e1.data, &e2.data) {
+            dice_index(&freq2set(k1), &freq2set(k2))
+        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
+            dice_index(&freq2set(k1), &freq2set(k2))
         } else {
             0.0
         }
@@ -318,6 +346,14 @@ impl BirthmarkComparator for Simpson {
             simpson_index(s1, s2)
         } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
             simpson_index(k1, k2)
+        } else if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
+            simpson_index(&seq2set(s1), &seq2set(s2))
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            simpson_index(&seq2set(k1), &seq2set(k2))
+        } else if let (Data::Freq(s1), Data::Freq(s2)) = (&e1.data, &e2.data) {
+            simpson_index(&freq2set(s1), &freq2set(s2))
+        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
+            simpson_index(&freq2set(k1), &freq2set(k2))
         } else {
             0.0
         }
@@ -342,6 +378,10 @@ impl BirthmarkComparator for Cosine {
             cosine_similarity(f1, f2)
         } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
             cosine_similarity(k1, k2)
+        } else if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
+            cosine_similarity(&seq2freq(s1), &seq2freq(s2))
+        } else if let (Data::KgramSeq(s1), Data::KgramSeq(s2)) = (&e1.data, &e2.data) {
+            cosine_similarity(&seq2freq(s1), &seq2freq(s2))
         } else {
             0.0
         }
@@ -354,6 +394,10 @@ impl BirthmarkComparator for Euclidean {
             euclidean_distance(f1, f2)
         } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
             euclidean_distance(k1, k2)
+        } else if let (Data::Seq(f1), Data::Seq(f2)) = (&e1.data, &e2.data) {
+            euclidean_distance(&seq2freq(f1), &seq2freq(f2))
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            euclidean_distance(&seq2freq(k1), &seq2freq(k2))
         } else {
             0.0
         }
@@ -366,6 +410,10 @@ impl BirthmarkComparator for WeightedJaccard {
             weighted_jaccard(f1, f2)
         } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
             weighted_jaccard(k1, k2)
+        } else if let (Data::Seq(f1), Data::Seq(f2)) = (&e1.data, &e2.data) {
+            weighted_jaccard(&seq2freq(f1), &seq2freq(f2))
+        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
+            weighted_jaccard(&seq2freq(k1), &seq2freq(k2))
         } else {
             0.0
         }
@@ -450,47 +498,79 @@ impl<T: crate::Op> ProgramComparator<T> for WeightedJaccard {
     }
 }
 
+fn seq2set<T>(seq: &[T]) -> FxHashSet<&T>
+where
+    T: std::hash::Hash + Eq,
+{
+    seq.iter().collect()
+}
+
+fn freq2set<T>(freq: &FxHashMap<T, usize>) -> FxHashSet<&T>
+where
+    T: std::hash::Hash + Eq,
+{
+    freq.keys().collect()
+}
+
+fn seq2freq<T>(seq: &[T]) -> FxHashMap<&T, usize>
+where
+    T: std::hash::Hash + Eq,
+{
+    let mut freq = FxHashMap::default();
+    for item in seq {
+        *freq.entry(item).or_insert(0) += 1;
+    }
+    freq
+}
+
 fn jaccard_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
-    if !s1.is_empty() && !s2.is_empty() {
-        s1.intersection(s2).count() as f64 / s1.union(s2).count() as f64
-    } else {
+    if s1.is_empty() && s2.is_empty() {
         1.0
+    } else if s1.is_empty() || s2.is_empty() {
+        0.0
+    } else {
+        s1.intersection(s2).count() as f64 / s1.union(s2).count() as f64
     }
 }
 
 fn dice_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
-    if !s1.is_empty() && !s2.is_empty() {
-        (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64
-    } else {
+    if s1.is_empty() && s2.is_empty() {
         1.0
+    } else if s1.is_empty() || s2.is_empty() {
+        0.0
+    } else {
+        (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64
     }
 }
 
 fn simpson_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
-    if !s1.is_empty() && !s2.is_empty() {
-        s1.intersection(s2).count() as f64 / s1.len().min(s2.len()) as f64
-    } else {
+    if s1.is_empty() && s2.is_empty() {
         1.0
+    } else if s1.is_empty() || s2.is_empty() {
+        0.0
+    } else {
+        s1.intersection(s2).count() as f64 / s1.len().min(s2.len()) as f64
     }
 }
 
 fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
-    let mut matrix = pathfinding::matrix::Matrix::new(s1.len() + 1, s2.len() + 1, 0);
+    let mut dp = Array2::zeros((s1.len() + 1, s2.len() + 1));
     for i in 0..=s1.len() {
-        matrix[(i, 0)] = i as i32;
+        dp[[i, 0]] = i;
     }
     for j in 0..=s2.len() {
-        matrix[(0, j)] = j as i32;
+        dp[[0, j]] = j;
     }
     for i in 1..=s1.len() {
         for j in 1..=s2.len() {
             let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
-            matrix[(i, j)] = (matrix[(i - 1, j)] + 1)
-                .min(matrix[(i, j - 1)] + 1)
-                .min(matrix[(i - 1, j - 1)] + cost);
+            let substitution = dp[[i - 1, j - 1]] + cost;
+            let insertion = dp[[i, j - 1]] + 1;
+            let deletion = dp[[i - 1, j]] + 1;
+            dp[[i, j]] = substitution.min(insertion).min(deletion);
         }
     }
-    1.0 - (matrix[(s1.len(), s2.len())] as f64 / (s1.len().max(s2.len()) as f64))
+    1.0 - (dp[[s1.len(), s2.len()]] as f64 / (s1.len().max(s2.len()) as f64))
 }
 
 fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
@@ -539,16 +619,17 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>,
 }
 
 fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
-    let mut matrix = pathfinding::matrix::Matrix::new(s1.len() + 1, s2.len() + 1, 0);
+    let mut dp = Array2::<usize>::zeros((s1.len() + 1, s2.len() + 1));
     for i in 1..=s1.len() {
         for j in 1..=s2.len() {
             if s1[i - 1] == s2[j - 1] {
-                matrix[(i, j)] = matrix[(i - 1, j - 1)] + 1;
+                dp[[i, j]] = dp[[i - 1, j - 1]] + 1;
             } else {
-                matrix[(i, j)] = matrix[(i - 1, j)].max(matrix[(i, j - 1)]);
+                dp[[i, j]] = dp[[i - 1, j]].max(dp[[i, j - 1]]);
             }
         }
     }
-    (matrix[(s1.len(), s2.len())] as f64) / (s1.len().max(s2.len()) as f64)
+    let lcs_length = dp[[s1.len(), s2.len()]];
+    2.0 * lcs_length as f64 / (s1.len() + s2.len()) as f64
 }
 

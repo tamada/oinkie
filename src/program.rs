@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
+use crate::Iterable;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Program<T> {
     #[serde(rename = "program")]
@@ -43,9 +45,9 @@ impl<T> Program<T> {
         &self.path
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Function<T>> {
-        self.functions.iter()
-    }
+    // pub fn iter(&self) -> impl Iterator<Item = &Function<T>> {
+    //     self.functions.iter()
+    // }
 
     pub fn symbols(&self) -> impl Iterator<Item = (&str, &str)> {
         self.symbols.iter().map(|(k, v)| (k.as_str(), v.as_str()))
@@ -53,6 +55,20 @@ impl<T> Program<T> {
 
     pub fn symbol(&self, addr: &str) -> Option<&String> {
         self.symbols.get(addr)
+    }
+}
+
+impl<T> Iterable for &Program<T> {
+    type Item = Function<T>;
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.functions.iter())
+    }
+}
+
+impl<T> Iterable for Program<T> {
+    type Item = Function<T>;
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.functions.iter())
     }
 }
 

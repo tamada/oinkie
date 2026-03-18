@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rustc_hash::FxHashMap;
 
-use crate::{Result, Error};
+use crate::{Result, Error, Iterable};
 use crate::birthmarks::{Birthmark, BirthmarkType, Data, Elements, Metadata, Kgram};
 use crate::program::{Program, Function};
 

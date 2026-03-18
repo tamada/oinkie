@@ -43,9 +43,9 @@ pub enum LogLevel {
 
 #[derive(Debug, clap::Parser)]
 pub enum OinkieCommand {
-    #[command(name="compare", about = "Compare two JSON files and output the similarity score")]
+    #[command(name="compare", about = "Compare birthmarks and output the similarity score")]
     Compare(CompareOpts),
-    #[command(name="extract", about = "Extract birthmarks from JSON files")]
+    #[command(name="extract", about = "Extract birthmarks from a lifted binary file (JSON format)")]
     Extract(ExtractOpts),
     // #[command(name="execute", about = "Execute a command on the JSON files")]
     // Execute(ExecuteOpts),

@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+use ndarray::ShapeError;
+
+use crate::prelude::BirthmarkType;
+
 pub mod ghidra;
 pub mod prelude;
 pub mod extractor;
@@ -19,8 +23,11 @@ pub enum Error {
     InvalidPcode(u32),
     Io(PathBuf, std::io::Error),
     Json(serde_json::Error),
+    LapJV(lapjv::LapJVError),
+    Mismatch(BirthmarkType, BirthmarkType),
     Parse(String),
     ParseInt(std::num::ParseIntError),
+    ShapeError(ShapeError),
 }
 
 impl std::fmt::Display for Error {
@@ -37,9 +44,12 @@ impl std::fmt::Display for Error {
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),
             Error::Io(path, e) => write!(f, "IO error for {}: {}", path.display(), e),
             Error::Json(e) => write!(f, "JSON error: {}", e),
+            Error::LapJV(e) => write!(f, "LapJV error: {}", e),
+            Error::Mismatch(t1, t2) => write!(f, "Mismatched birthmark types: {} and {}", t1, t2),
             Error::Parse(s) => write!(f, "Parse error: {}", s),
             Error::ParseInt(e) => write!(f, "Parse int error: {}", e),
             Error::Clap(e) => write!(f, "Clap error: {}", e),
+            Error::ShapeError(e) => write!(f, "Shape error: {}", e),
         }
     }
 }
@@ -80,4 +90,9 @@ pub trait Op {
 
     /// returns the output of the operation, e.g., the destination register or memory location.
     fn ret(&self) -> Option<String>;
+}
+
+pub trait Iterable {
+    type Item;
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
 }

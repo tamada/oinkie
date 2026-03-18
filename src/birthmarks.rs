@@ -136,8 +136,22 @@ impl Birthmark {
         self.elements.is_empty()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Elements> {
-        self.elements.iter()
+    // pub fn iter(&self) -> impl Iterator<Item = &Elements> {
+    //     self.elements.iter()
+    // }
+}
+
+impl crate::Iterable for &Birthmark {
+    type Item = Elements;
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.elements.iter())
+    }
+}
+
+impl crate::Iterable for Birthmark {
+    type Item = Elements;
+    fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
+        Box::new(self.elements.iter())
     }
 }
 

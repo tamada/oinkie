@@ -1,6 +1,6 @@
 [package]
 name = "oinkie"
-version = "0.1.0"
+version = "0.2.0"
 description = "Birthmarking toolkit for Ghidra P-Code"
 edition = "2024"
 
@@ -11,10 +11,11 @@ env_logger = "0.11.9"
 indicatif = "0.18.4"
 itertools = "0.14.0"
 katexit = "0.1.5"
+lapjv = "0.3.0"
 log = "0.4.29"
+ndarray = "0.16"
 num-derive = "0.4.2"
 num-traits = "0.2.19"
-pathfinding = "4.15.0"
 rayon = "1.11.0"
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = [ "derive" ] }
@@ -22,5 +23,5 @@ serde_json = "1.0.149"
 sha2 = "0.10.9"
 
 [[bin]]
-name = "oinkie2"
+name = "oinkie"
 path = "cli/main.rs"
