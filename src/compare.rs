@@ -554,6 +554,44 @@ fn simpson_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHa
 }
 
 fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+    let n = s1.len();
+    let m = s2.len();
+
+    if n == 0 && m == 0 { return 1.0; }
+    if n == 0 || m == 0 { return 0.0; }
+
+    // shorter sequence is s2, longer sequence is s1 for minimizing memory usage.
+    let (s1, s2) = if n < m { (s2, s1) } else { (s1, s2) };
+    let m = s2.len();
+
+    // allocate two rows of data (previous and current) to save memory
+    let mut prev = (0..=m).collect::<Vec<usize>>();
+    let mut curr = vec![0usize; m + 1];
+
+    for i in 1..=s1.len() {
+        curr[0] = i;
+        for j in 1..=m {
+            let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
+            
+            // 3つの操作の最小値をとる
+            let substitution = prev[j - 1] + cost;
+            let insertion = curr[j - 1] + 1;
+            let deletion = prev[j] + 1;
+
+            curr[j] = substitution.min(insertion).min(deletion);
+        }
+        // swap prev and curr for the next iteration
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    let distance = prev[m];
+    let max_len = n.max(m);
+
+    // change distance to similarity in the range of 0.0 to 1.0
+    1.0 - (distance as f64 / max_len as f64)
+}
+
+fn levenshtein_distance_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let mut dp = Array2::zeros((s1.len() + 1, s2.len() + 1));
     for i in 0..=s1.len() {
         dp[[i, 0]] = i;
@@ -619,6 +657,37 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>,
 }
 
 fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+    let n = s1.len();
+    let m = s2.len();
+    if n == 0 || m == 0 { return 0.0; }
+
+    // shorter sequence is s2, longer sequence is s1 for minimizing memory usage.
+    let (s1, s2) = if n < m { (s2, s1) } else { (s1, s2) };
+    let n = s1.len();
+    let m = s2.len();
+
+    // allocate two rows of data (previous and current) to save memory
+    let mut prev = vec![0usize; m + 1];
+    let mut curr = vec![0usize; m + 1];
+
+    for i in 1..=n {
+        for j in 1..=m {
+            if s1[i - 1] == s2[j - 1] {
+                curr[j] = prev[j - 1] + 1;
+            } else {
+                curr[j] = prev[j].max(curr[j - 1]);
+            }
+        }
+        // swap prev and curr for the next iteration
+        std::mem::swap(&mut prev, &mut curr);
+    }
+
+    // the previous row contains the final results since the last swap
+    let lcs_length = prev[m]; 
+    2.0 * lcs_length as f64 / (n + m) as f64
+}
+
+fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let mut dp = Array2::<usize>::zeros((s1.len() + 1, s2.len() + 1));
     for i in 1..=s1.len() {
         for j in 1..=s2.len() {

@@ -15,9 +15,9 @@ where
 
     fn try_from(path: PathBuf) -> Result<Self> {
         std::fs::File::open(&path)
-            .map_err(|e| Error::Io(path, e))
+            .map_err(|e| Error::Io(path.clone(), e))
             .and_then(|f| serde_json::from_reader(f)
-                .map_err(Error::Json))
+                .map_err(|e| Error::Json(path, e)))
     }
 }
 

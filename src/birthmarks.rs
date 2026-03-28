@@ -38,8 +38,10 @@ impl TryFrom<PathBuf> for Birthmark {
     type Error = Error;
 
     fn try_from(path: PathBuf) -> Result<Self> {
-        let file = std::fs::File::open(&path).map_err(|e| Error::Io(path, e))?;
-        serde_json::from_reader(file).map_err(Error::Json)
+        let file = std::fs::File::open(&path)
+            .map_err(|e| Error::Io(path.clone(), e))?;
+        serde_json::from_reader(file)
+            .map_err(|e| Error::Json(path, e))
     }
 }
 

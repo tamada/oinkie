@@ -173,7 +173,7 @@ fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> 
     let p: Program<Op> = path.try_into()?;
     let birthmarks = extractor.extract_each(&p)?;
     let json = serde_json::to_string_pretty(&birthmarks)
-        .map_err(Error::Json)?;
+        .map_err(|e| Error::Json(dest_path.clone(), e))?;
     std::fs::write(&dest_path, json)
         .map_err(|e| Error::Io(dest_path.clone(), e))?;
     Ok(())
