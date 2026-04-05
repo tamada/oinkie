@@ -106,8 +106,57 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum Size {
+    Num(usize),
+    All,
+}
+
+#[derive(Debug, Clone, Default)]
+pub enum Aggregator {
+    TopN(Size),
+    #[default]
+    Hungarian,
+}
+
+impl std::str::FromStr for Aggregator {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self> {
+        let s = s.to_lowercase();
+        if s == "hungarian" {
+            log::info!("Using Hungarian algorithm for aggregation");
+            Ok(Aggregator::Hungarian)
+        } else if s == "topn" || s == "topn:all" {
+            log::info!("Using TopN(all) algorithm for aggregation");
+            Ok(Aggregator::TopN(Size::All))
+        } else if let Some(n) = s.strip_prefix("topn:") {
+            match n.parse::<usize>().map(Size::Num) {
+                Ok(n) => {
+                    log::info!("Using TopN({:?}) algorithm for aggregation", n);
+                    Ok(Aggregator::TopN(n))
+                },
+                Err(e) => Err(Error::ParseInt(s, e)),
+            }
+        } else {
+            Err(Error::Parse(format!("{s}: Invalid aggregator")))
+        }
+    }
+}
+
+impl Aggregator {
+    pub fn aggregate(&self, array: &Array2<f64>) -> Result<Vec<f64>> {
+        match self {
+            Aggregator::Hungarian => 
+                hungarian_algorithm(array)
+                    .map(|(sim, _matches)| sim),
+            Aggregator::TopN(n) => 
+                top_n_selection(array, n)
+        }
+    }
+}
+
 trait BirthmarkComparator {
-    fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Result<Comparison<'a, Birthmark>> {
+    fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark, aggregator: &Aggregator) -> Result<Comparison<'a, Birthmark>> {
         if !b1.comparable_with(b2) {
             return Err(Error::Mismatch(b1.metadata.birthmark_type.clone(), b2.metadata.birthmark_type.clone()));
         }
@@ -123,10 +172,8 @@ trait BirthmarkComparator {
             let r = build_matrix(b1, b2, size, |e1, e2| {
                 self.compare_elements(e1, e2)
             })?;
-            hungarian_algorithm(&r)
-                .map(|(sim, _matchs )| {
-                    Comparison::new(b1, b2, r, sim, start.elapsed())
-                })
+            aggregator.aggregate(&r)
+                .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
         }
     }
 
@@ -149,6 +196,22 @@ where
         .map_err(Error::ShapeError)
 }
 
+fn top_n_selection(array2d: &Array2<f64>, n: &Size) -> Result<Vec<f64>> {
+    let rows = array2d.axis_iter(ndarray::Axis(0))
+        .map(|col| col.fold(0.0f64, |acc, &v| acc.max(v)))
+        .sorted_by(|a, b| b.total_cmp(a))
+        .collect::<Vec<_>>();
+    let cols = array2d.axis_iter(ndarray::Axis(1))
+        .map(|col| col.fold(0.0f64, |acc, &v| acc.max(v)))
+        .sorted_by(|a, b| b.total_cmp(a))
+        .collect::<Vec<_>>();
+    match n {
+        Size::Num(k) => 
+            Ok(rows.into_iter().take(*k).chain(cols.into_iter().take(*k)).collect()),
+        Size::All => Ok(rows.into_iter().chain(cols).collect()),
+    }
+}
+
 fn hungarian_algorithm(array2d: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> {
     match lapjv::lapjv(array2d) {
         Ok((rows, _cols)) => {
@@ -166,7 +229,7 @@ fn hungarian_algorithm(array2d: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> 
 }
 
 trait ProgramComparator<T: crate::Op> {
-    fn compare_programs<'a>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Result<Comparison<'a, Program<T>>> {
+    fn compare_programs<'a>(&self, p1: &'a Program<T>, p2: &'a Program<T>, aggregator: &Aggregator) -> Result<Comparison<'a, Program<T>>> {
         let p1_len = p1.len();
         let p2_len = p2.len();
         let size = std::cmp::max(p1_len, p2_len);
@@ -179,10 +242,8 @@ trait ProgramComparator<T: crate::Op> {
             let r = build_matrix(p1, p2, size, |f1, f2| {
                 self.compare_func(f1, f2)
             })?;
-            hungarian_algorithm(&r)
-                .map(|(sim, _matches)| {
-                    Comparison::new(p1, p2, r, sim, start.elapsed())
-                })
+            aggregator.aggregate(&r)
+                .map(|sim| Comparison::new(p1, p2, r, sim, start.elapsed()))
         }
     }
 
@@ -264,29 +325,29 @@ impl From<&Algorithm> for Comparator {
 }
 
 impl Comparator {
-    pub fn compare_programs<'a, T: crate::Op>(&self, p1: &'a Program<T>, p2: &'a Program<T>) -> Result<Comparison<'a, Program<T>>> {
+    pub fn compare_programs<'a, T: crate::Op>(&self, p1: &'a Program<T>, p2: &'a Program<T>, aggregator: &Aggregator) -> Result<Comparison<'a, Program<T>>> {
         match &self.inner {
-            ComparatorImpl::Cosine(c) => c.compare_programs(p1, p2),
-            ComparatorImpl::Dice(d) => d.compare_programs(p1, p2),
-            ComparatorImpl::Euclidean(e) => e.compare_programs(p1, p2),
-            ComparatorImpl::Jaccard(j) => j.compare_programs(p1, p2),
-            ComparatorImpl::Levenshtein(l) => l.compare_programs(p1, p2),
-            ComparatorImpl::Lcs(lcs) => lcs.compare_programs(p1, p2),
-            ComparatorImpl::Simpson(s) => s.compare_programs(p1, p2),
-            ComparatorImpl::WeightedJaccard(wj) => wj.compare_programs(p1, p2),
+            ComparatorImpl::Cosine(c) => c.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::Dice(d) => d.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::Euclidean(e) => e.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::Jaccard(j) => j.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::Levenshtein(l) => l.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::Lcs(lcs) => lcs.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::Simpson(s) => s.compare_programs(p1, p2, aggregator),
+            ComparatorImpl::WeightedJaccard(wj) => wj.compare_programs(p1, p2, aggregator),
         }
     }
 
-    pub fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark) -> Result<Comparison<'a, Birthmark>> {
+    pub fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark, aggregator: &Aggregator) -> Result<Comparison<'a, Birthmark>> {
         match &self.inner {
-            ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2),
-            ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2),
-            ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2),
-            ComparatorImpl::Jaccard(j) => j.compare_birthmarks(b1, b2),
-            ComparatorImpl::Levenshtein(l) => l.compare_birthmarks(b1, b2),
-            ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2),
-            ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2),
-            ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2),
+            ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Jaccard(j) => j.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Levenshtein(l) => l.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2, aggregator),
         }
     }
 }
@@ -591,6 +652,7 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     1.0 - (distance as f64 / max_len as f64)
 }
 
+#[allow(dead_code)]
 fn levenshtein_distance_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let mut dp = Array2::zeros((s1.len() + 1, s2.len() + 1));
     for i in 0..=s1.len() {
@@ -687,6 +749,7 @@ fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     2.0 * lcs_length as f64 / (n + m) as f64
 }
 
+#[allow(dead_code)]
 fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let mut dp = Array2::<usize>::zeros((s1.len() + 1, s2.len() + 1));
     for i in 1..=s1.len() {

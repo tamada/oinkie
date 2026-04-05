@@ -134,10 +134,13 @@ pub enum PcodeOp {
     #[serde(alias = "TRUNC")]
     FloatTrunc = 56,
 	/// round towards +infinity
+    #[serde(alias = "CEIL")]
     FloatCeil = 57,
 	/// round towards -infinity
+    #[serde(alias = "FLOOR")]
     FloatFloor = 58,
 	/// round towards nearest
+    #[serde(alias = "ROUND")]
     FloatRound = 59,
 
 	// Internal opcodes for simplification.  Not typically generated in direct

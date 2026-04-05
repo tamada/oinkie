@@ -57,24 +57,35 @@ Options:
 ```sh
 Compare birthmarks and output the similarity score
 
-Usage: oinkie compare [OPTIONS] [FILES]...
+Usage: oinkie compare [OPTIONS] [JSON_FILES]...
 
 Arguments:
-  [FILES]...  Path to the birthmark JSON files to compare
+  [JSON_FILES]...  Path to the birthmark JSON files to compare
 
 Options:
   -a, --algorithm <ALGORITHM>
-          Specify the similarity calculation algorithm. [default: jaccard]
-          [possible values: cosine, dice, euclidean, jaccard, levenshtein, lcs, simpson, weighted-jaccard]
+      Specify the similarity calculation algorithm. [default: jaccard]
+      [possible values: cosine, dice, euclidean, jaccard, levenshtein, lcs, simpson, weighted-jaccard]
+  -A, --aggregator <METHOD>
+      Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+      Available:
+      - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
+                   maximizing the total similarity score.
+      - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
+                   second birthmark when calculating the overall similarity score. This can reduce noise from less
+                   relevant matches and focus on the most significant similarities. [default: hungarian]
+  -A, --aggregator <METHOD>
+      Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. 
+      [default: hungarian] [possible values: hungarian, topn:N]
   -s, --strategy <STRATEGY>
-          Specify the pairing strategy for comparing files. [default: all-and-self]
-          [possible values: all-and-self, all, self-coverage, adjacent, first-vs-others]
-  -d, --dest <DEST>
-          Specify the destination directory for the comparing results [default: similarities]
+      Specify the pairing strategy for comparing files. [default: all-and-self]
+      [possible values: all-and-self, all, self-coverage, adjacent, first-vs-others]
+  -d, --dest <DIRECTORY>
+      Specify the destination directory for the comparing results [default: similarities]
   -S, --skip
-          Skip if the similarity file already exists for the pair of birthmarks
+      Skip if the similarity file already exists for the pair of birthmarks
   -h, --help
-          Print help (see more with '--help')
+      Print help (see more with '--help')
 ```
 
 ### `run` command

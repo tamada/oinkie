@@ -115,10 +115,10 @@ impl FromStr for Value {
             u64::from_str_radix(&parts[1][2..], 16)
         } else {
             parts[1].parse()
-        }.map_err(Error::ParseInt)?;
+        }.map_err(|e| Error::ParseInt(parts[1].to_string(), e))?;
 
         let size = parts[2].parse()
-            .map_err(Error::ParseInt)?;
+            .map_err(|e| Error::ParseInt(parts[2].to_string(), e))?;
 
         Ok(Value { storage, address, size })
     }
@@ -178,7 +178,7 @@ mod tests {
         let r: Program<super::Op> = serde_json::from_reader(file)
             .expect("Failed to parse JSON");
         assert_eq!(r.name(), "bzip2");
-        assert_eq!(r.path(), std::path::Path::new("/Users/tamada/researches/2026snpd_tamada/build/arm64-linux/gcc_O3/bzip2"));
+        assert_eq!(r.path(), std::path::Path::new("/Users/tamada/researches/2026snpd_tamada/executables/arm64-linux/gcc_O3/bzip2"));
         assert_eq!(r.len(), 85);
 
         let f1 = r.iter().nth(0).unwrap();

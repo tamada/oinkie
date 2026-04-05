@@ -65,10 +65,10 @@ pub enum BinaryType {
 
 #[derive(Debug, clap::Parser)]
 pub struct ExtractOpts {
-    #[clap(short, long, default_value = "birthmarks", help = "Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: './birthmarks' directory)")]
+    #[clap(short, long, default_value = "birthmarks", value_name = "DIRECTORY", help = "Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: './birthmarks' directory)")]
     dest: PathBuf,
 
-    #[clap(short, long, value_enum, default_value_t = BType::OpSeq, hide_possible_values = true, ignore_case = true, help = "Type of birthmark to extract.
+    #[clap(short, long, value_enum, value_name = "BIRTHMARK_TYPE", default_value_t = BType::OpSeq, hide_possible_values = true, ignore_case = true, help = "Type of birthmark to extract.
 fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported.
 For example, 'op-seq' extracts the sequence of operations as a birthmark,
 while 'fc-freq' extracts the frequency of function calls.
@@ -78,10 +78,10 @@ The full birthmark types cann be found by running 'oinkie info'.")]
     #[clap(short = 'S', long, default_value_t = false, help = "Skip the resultant birthmark file is already exists")]
     skip: bool,
 
-    #[clap(short = 'B', long, value_enum, default_value_t = BinaryType::Ghidra, ignore_case = true, help = "Type of binary. Current version only supports Ghidra JSON format")]
+    #[clap(short = 'B', long, value_enum, value_name = "BINARY_TYPE", default_value_t = BinaryType::Ghidra, ignore_case = true, help = "Type of binary. Current version only supports Ghidra JSON format")]
     binary_type: BinaryType,
 
-    #[clap(index = 1, help = "Path to the JSON files to extract birthmarks from")]
+    #[clap(index = 1, value_name = "JSON_FILES", help = "Path to the JSON files to extract birthmarks from")]
     files: Vec<PathBuf>,
 }
 
@@ -113,19 +113,31 @@ impl ExtractOpts {
 
 #[derive(Debug, clap::Parser)]
 pub struct CompareOpts {
-    #[clap(short, long, value_enum, default_value_t = Algorithm::Jaccard, ignore_case = true, help = "Specify the similarity calculation algorithm.")]
+    #[clap(short, long, value_enum, default_value_t = Algorithm::Jaccard, value_name = "ALGORITHM", ignore_case = true, help = "Specify the similarity calculation algorithm.")]
     algorithm: Algorithm,    
 
-    #[clap(short, long, value_enum, default_value_t = PairingStrategy::AllAndSelf, ignore_case = true, help = "Specify the pairing strategy for comparing files.")]
+    #[clap(
+        short = 'A', long, default_value = "hungarian", value_name = "METHOD", ignore_case = true, 
+        help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+Available: 
+- hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
+             maximizing the total similarity score.
+- topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
+             second birthmark when calculating the overall similarity score. This can reduce noise from less
+             relevant matches and focus on the most significant similarities."
+    )]
+    aggregator: Aggregator,
+
+    #[clap(short, long, value_enum, default_value_t = PairingStrategy::AllAndSelf, value_name = "STRATEGY", ignore_case = true, help = "Specify the pairing strategy for comparing files.")]
     strategy: PairingStrategy,
 
-    #[clap(short, long, help = "Specify the destination directory for the comparing results", default_value = "similarities")]
+    #[clap(short, long, value_name = "DIRECTORY", help = "Specify the destination directory for the comparing results", default_value = "similarities")]
     dest: PathBuf,
 
     #[clap(short = 'S', long, default_value_t = false, help = "Skip if the similarity file already exists for the pair of birthmarks")]
     skip: bool,
 
-    #[clap(index = 1, help = "Path to the birthmark JSON files to compare")]
+    #[clap(index = 1, value_name = "JSON_FILES", help = "Path to the birthmark JSON files to compare")]
     files: Vec<PathBuf>,
 }
 
@@ -140,6 +152,11 @@ impl CompareOpts {
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = (&PathBuf, &PathBuf)> + Send + '_> {
         self.strategy.pairs(&self.files)
+    }
+
+    pub fn aggregator(&self) -> &Aggregator {
+        log::info!("Using {:?} as the aggregator for combining element-wise similarity scores", self.aggregator);
+        &self.aggregator
     }
 
     pub fn compare_count(&self) -> usize {
@@ -161,6 +178,18 @@ pub struct RunOpts {
 
     #[clap(short, long, default_value = "similarities", help = "Destination path for the output CSV file (default: 'similarities' directory")]
     pub(crate) dest: PathBuf,
+
+    #[clap(
+        short = 'A', long, default_value = "hungarian", value_name = "METHOD", ignore_case = true,
+        help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+Available: 
+- hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
+             maximizing the total similarity score.
+- topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
+             second birthmark when calculating the overall similarity score. This can reduce noise from less
+             relevant matches and focus on the most significant similarities."
+    )]
+    aggregator: Aggregator,
 
     #[clap(short = 'S', long, default_value_t = false, help = "Skip if the similarity file already exists for the pair of birthmarks")]
     pub(crate) skip: bool,
@@ -188,6 +217,11 @@ impl RunOpts {
 
     pub fn is_skip(&self) -> bool {
         self.skip
+    }
+
+    pub fn aggregator(&self) -> &Aggregator {
+        log::info!("Using {:?} as the aggregator for combining element-wise similarity scores", self.aggregator);
+        &self.aggregator
     }
 }
 

@@ -15,6 +15,8 @@ mod ninja;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+impl std::error::Error for Error {}
+
 #[derive(Debug)]
 pub enum Error {
     Array(Vec<Self>),
@@ -26,7 +28,7 @@ pub enum Error {
     LapJV(lapjv::LapJVError),
     Mismatch(BirthmarkType, BirthmarkType),
     Parse(String),
-    ParseInt(std::num::ParseIntError),
+    ParseInt(String, std::num::ParseIntError),
     ShapeError(ShapeError),
 }
 
@@ -47,7 +49,7 @@ impl std::fmt::Display for Error {
             Error::LapJV(e) => write!(f, "LapJV error: {}", e),
             Error::Mismatch(t1, t2) => write!(f, "Mismatched birthmark types: {} and {}", t1, t2),
             Error::Parse(s) => write!(f, "Parse error: {}", s),
-            Error::ParseInt(e) => write!(f, "Parse int error: {}", e),
+            Error::ParseInt(s, e) => write!(f, "{s}: Parse int error {e}"),
             Error::Clap(e) => write!(f, "Clap error: {}", e),
             Error::ShapeError(e) => write!(f, "Shape error: {}", e),
         }

@@ -28,6 +28,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(comparing_count * 3);
+    let aggregator = opts.aggregator();
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     let results = opts.iter().enumerate().par_bridge()
@@ -45,7 +46,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
             let p2: Program<Op> = load(path2.to_path_buf())?;
             pbar.inc(1);
             pbar.set_message(format!("Comparing two programs ({}/{})", i + 1, comparing_count));
-            let result = atype.comparator().compare_programs(&p1, &p2)?;
+            let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
             pbar.inc(1);
             result.store(&dest_file)?;
             Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
@@ -70,7 +71,7 @@ fn read_result_file<'a>(dest_path: &Path, index: usize, path1: &'a Path, path2: 
         return Err(Error::Parse(format!("Invalid result line format in {}", dest_path.display())));
     }
     let duration_nanos: u64 = parts[1].parse()
-        .map_err(Error::ParseInt)?;
+        .map_err(|e| Error::ParseInt(parts[1].to_string(), e))?;
     let similarity: f64 = parts[2].parse()
         .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
     Ok(CompareResult::new(index, similarity, path1, path2, Duration::from_nanos(duration_nanos)))
@@ -87,9 +88,10 @@ fn perform_compare(opts: cli::CompareOpts) -> Result<Vec<Duration>> {
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(comparing_count * 3);
+    let aggregator = opts.aggregator();
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
     let r = opts.iter().enumerate().par_bridge()
-        .map(|(i, (path1, path2))| compare_impl((i, (path1, path2)), &comparator, dest, &pbar, comparing_count, opts.is_skip()))
+        .map(|(i, (path1, path2))| compare_impl((i, (path1, path2)), &comparator, dest, &pbar, comparing_count, opts.is_skip(), aggregator))
         .collect::<Vec<_>>();
     pbar.finish();
     Error::vec_result_to_result_vec(r)
@@ -113,7 +115,7 @@ fn store_and_get_durations(results: Vec<CompareResult>, dest: &Path, start: Inst
     Error::vec_result_to_result_vec(ritems)
 }
 
-fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool) -> Result<CompareResult<'a>> {
+fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool, aggregator: &Aggregator) -> Result<CompareResult<'a>> {
     let (i, (path1, path2)) = tuple;
     let dest_file = dest.join(format!("{i:05}.csv"));
     log::info!("compare_impl(dest: {} (exists: {}), skip: {skip})", dest_file.display(), dest_file.exists());
@@ -132,7 +134,7 @@ fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparato
         pbar.inc(1);
         log::info!("Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}", b1.len(), b2.len(), i + 1);
         pbar.set_message(format!("Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}", b1.len(), b2.len(), i + 1));
-        let result = comparator.compare_birthmarks(&b1, &b2)?;
+        let result = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
         pbar.inc(1);
         result.store(&dest_file).unwrap();
         Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
