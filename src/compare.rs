@@ -27,6 +27,10 @@ pub enum PairingStrategy {
     /// Compares a specific reference file against all other files ($n-1$).
     /// Compares first item and all other items. Useful for comparing a baseline version against multiple variants.
     FirstVsOthers,
+
+    /// Compares a specific reference file against all other files ($n-1$).
+    /// Compares the last item and all other items. Useful for comparing a baseline version against multiple variants.
+    LastVsOthers,
 }
 
 impl PairingStrategy {
@@ -35,7 +39,7 @@ impl PairingStrategy {
             PairingStrategy::All => targets.len() * (targets.len() - 1) / 2,
             PairingStrategy::SelfCoverage => targets.len(),
             PairingStrategy::Adjacent => targets.len().saturating_sub(1),
-            PairingStrategy::FirstVsOthers => targets.len().saturating_sub(1),
+            PairingStrategy::FirstVsOthers | PairingStrategy::LastVsOthers => targets.len().saturating_sub(1),
             PairingStrategy::AllAndSelf => targets.len() * (targets.len() + 1) / 2,
         }
     }
@@ -50,6 +54,14 @@ impl PairingStrategy {
                 let mut it = targets.iter();
                 if let Some(first) = it.next() {
                     Box::new(it.map(move |other| (first, other))) // move the refs into the closure
+                } else {
+                    Box::new(std::iter::empty())
+                }
+            },
+            PairingStrategy::LastVsOthers => {
+                let mut it = targets.iter().rev();
+                if let Some(last) = it.next() {
+                    Box::new(it.map(move |other| (last, other))) // move the refs into the closure
                 } else {
                     Box::new(std::iter::empty())
                 }
@@ -189,7 +201,7 @@ where
         for (j, item2) in p2.iter().enumerate() {
             // lapjv expects a cost matrix where lower values indicate better matches.
             // so we convert similarity to cost by using (1.0 - similarity).
-            flat_costs[i * size + j] = 1.0 - compare_func(item1, item2);
+            flat_costs[i * size + j] = compare_func(item1, item2);
         }
     }
     Array2::from_shape_vec((size, size), flat_costs)
@@ -212,14 +224,15 @@ fn top_n_selection(array2d: &Array2<f64>, n: &Size) -> Result<Vec<f64>> {
     }
 }
 
-fn hungarian_algorithm(array2d: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> {
-    match lapjv::lapjv(array2d) {
+fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> {
+    let cost_matrix = 1.0 - similarity_matrix;    
+    match lapjv::lapjv(&cost_matrix) {
         Ok((rows, _cols)) => {
             let mut similarities = vec![];
             for (i, &j) in rows.iter().enumerate() {
-                if i < array2d.nrows() && j < array2d.ncols() {
+                if i < cost_matrix.nrows() && j < cost_matrix.ncols() {
                     // Convert cost back to similarity by using (1.0 - cost).
-                    similarities.push(1.0 - array2d[(i, j)]); 
+                    similarities.push(1.0 - cost_matrix[(i, j)]); 
                 }
             }
             Ok((similarities, rows))
@@ -559,57 +572,61 @@ impl<T: crate::Op> ProgramComparator<T> for WeightedJaccard {
     }
 }
 
-fn seq2set<T>(seq: &[T]) -> FxHashSet<&T>
+fn seq2set<T>(seq: &[T]) -> FxHashSet<T>
 where
-    T: std::hash::Hash + Eq,
+    T: std::hash::Hash + Eq + Clone,
 {
-    seq.iter().collect()
+    seq.iter().cloned().collect()
 }
 
-fn freq2set<T>(freq: &FxHashMap<T, usize>) -> FxHashSet<&T>
+fn freq2set<T>(freq: &FxHashMap<T, usize>) -> FxHashSet<T>
 where
-    T: std::hash::Hash + Eq,
+    T: std::hash::Hash + Eq + Clone,
 {
-    freq.keys().collect()
+    freq.keys().cloned().collect()
 }
 
-fn seq2freq<T>(seq: &[T]) -> FxHashMap<&T, usize>
+fn seq2freq<T>(seq: &[T]) -> FxHashMap<T, usize>
 where
-    T: std::hash::Hash + Eq,
+    T: std::hash::Hash + Eq + Clone,
 {
     let mut freq = FxHashMap::default();
     for item in seq {
-        *freq.entry(item).or_insert(0) += 1;
+        *freq.entry(item.clone()).or_insert(0) += 1;
     }
     freq
 }
 
-fn jaccard_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+fn jaccard_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
     if s1.is_empty() && s2.is_empty() {
         1.0
     } else if s1.is_empty() || s2.is_empty() {
         0.0
     } else {
+        log::debug!("s1: {:?}, s2: {:?}", s1, s2);
         s1.intersection(s2).count() as f64 / s1.union(s2).count() as f64
     }
 }
 
-fn dice_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+fn dice_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
     if s1.is_empty() && s2.is_empty() {
         1.0
     } else if s1.is_empty() || s2.is_empty() {
         0.0
     } else {
+        log::debug!("2.0 * {} / ({} + {}) = {}", 2.0 * s1.intersection(s2).count() as f64, s1.len(), s2.len(), (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64);
+        log::debug!("s1: {:?}, s2: {:?}, intersection: {:?}", s1, s2, s1.intersection(s2).collect::<Vec<_>>());
         (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64
     }
 }
 
-fn simpson_index<T: std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+fn simpson_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
     if s1.is_empty() && s2.is_empty() {
         1.0
     } else if s1.is_empty() || s2.is_empty() {
         0.0
     } else {
+        log::debug!("s1: {:?}, s2: {:?}", s1, s2);
         s1.intersection(s2).count() as f64 / s1.len().min(s2.len()) as f64
     }
 }
@@ -620,6 +637,7 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
 
     if n == 0 && m == 0 { return 1.0; }
     if n == 0 || m == 0 { return 0.0; }
+    let max_len = n.max(m);
 
     // shorter sequence is s2, longer sequence is s1 for minimizing memory usage.
     let (s1, s2) = if n < m { (s2, s1) } else { (s1, s2) };
@@ -646,7 +664,6 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     }
 
     let distance = prev[m];
-    let max_len = n.max(m);
 
     // change distance to similarity in the range of 0.0 to 1.0
     1.0 - (distance as f64 / max_len as f64)
@@ -764,4 +781,3 @@ fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f
     let lcs_length = dp[[s1.len(), s2.len()]];
     2.0 * lcs_length as f64 / (s1.len() + s2.len()) as f64
 }
-

@@ -181,7 +181,7 @@ impl Elements {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
     Freq(FxHashMap<String, usize>),
     Seq(Vec<String>),
@@ -191,7 +191,7 @@ pub enum Data {
     KgramSet(FxHashSet<Kgram>),
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Kgram(Vec<String>);
 
 impl Kgram {

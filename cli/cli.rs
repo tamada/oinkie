@@ -187,7 +187,7 @@ Available:
              maximizing the total similarity score.
 - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
              second birthmark when calculating the overall similarity score. This can reduce noise from less
-             relevant matches and focus on the most significant similarities."
+             relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn)."
     )]
     aggregator: Aggregator,
 
