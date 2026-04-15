@@ -196,7 +196,7 @@ fn build_matrix<F, T>(p1: impl Iterable<Item = T>, p2: impl Iterable<Item = T>, 
 where 
     F: Fn(&T, &T) -> f64,
 {
-    let mut flat_costs = vec![1.0; size * size];
+    let mut flat_costs = vec![0.0; size * size];
     for (i, item1) in p1.iter().enumerate() {
         for (j, item2) in p2.iter().enumerate() {
             // lapjv expects a cost matrix where lower values indicate better matches.
@@ -225,7 +225,7 @@ fn top_n_selection(array2d: &Array2<f64>, n: &Size) -> Result<Vec<f64>> {
 }
 
 fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> {
-    let cost_matrix = 1.0 - similarity_matrix;    
+    let cost_matrix = 1.0 - similarity_matrix;
     match lapjv::lapjv(&cost_matrix) {
         Ok((rows, _cols)) => {
             let mut similarities = vec![];
@@ -603,7 +603,6 @@ fn jaccard_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHas
     } else if s1.is_empty() || s2.is_empty() {
         0.0
     } else {
-        log::debug!("s1: {:?}, s2: {:?}", s1, s2);
         s1.intersection(s2).count() as f64 / s1.union(s2).count() as f64
     }
 }
@@ -614,8 +613,6 @@ fn dice_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSe
     } else if s1.is_empty() || s2.is_empty() {
         0.0
     } else {
-        log::debug!("2.0 * {} / ({} + {}) = {}", 2.0 * s1.intersection(s2).count() as f64, s1.len(), s2.len(), (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64);
-        log::debug!("s1: {:?}, s2: {:?}, intersection: {:?}", s1, s2, s1.intersection(s2).collect::<Vec<_>>());
         (2.0 * s1.intersection(s2).count() as f64) / (s1.len() + s2.len()) as f64
     }
 }
@@ -626,7 +623,6 @@ fn simpson_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHas
     } else if s1.is_empty() || s2.is_empty() {
         0.0
     } else {
-        log::debug!("s1: {:?}, s2: {:?}", s1, s2);
         s1.intersection(s2).count() as f64 / s1.len().min(s2.len()) as f64
     }
 }
