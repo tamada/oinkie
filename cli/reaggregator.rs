@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::io::{BufRead, BufReader};
 
@@ -21,28 +21,57 @@ pub(crate) fn perform(opts: cli::ReaggregateOpts) -> Result<Vec<Duration>> {
 }
 
 fn reaggregate(cr: &CompareResult, score_dir: &Path, aggregator: &Aggregator) -> Result<(CompareResult, Duration)> {
+    let start = std::time::Instant::now();
     match load_comparison_file(cr.index, score_dir) {
-        Ok(matrix) => {
+        Ok((matrix, p1, p2, duration)) => {
             let (rows, cols) = matrix.dim();
             let size = std::cmp::max(rows, cols);
             let mut square_matrix = Array2::zeros((size, size));
             square_matrix.slice_mut(ndarray::s![0..rows, 0..cols]).assign(&matrix);
             let similarities = aggregator.aggregate(&square_matrix)?;
             let similarity = similarities.iter().sum::<f64>() / similarities.len() as f64;
-            Ok((CompareResult::new(cr.index, similarity, cr.path1.clone(), cr.path2.clone(), cr.duration), cr.duration))
+            Ok((CompareResult::new(cr.index, similarity, p1, p2, duration), start.elapsed()))
         },
         Err(e) => Err(e),
     }
 }
 
 fn load_results(score_dir: &Path) -> Result<Vec<CompareResult>> {
+    if score_dir.join("results.csv").exists() {
+        load_results_impl(score_dir)
+    } else {
+        scan_directory_for_results(score_dir)
+    }
+}
+
+fn scan_directory_for_results(score_dir: &Path) -> Result<Vec<CompareResult>> {
+    let mut results = Vec::new();
+    for entry in std::fs::read_dir(score_dir)
+                .map_err(|e| Error::Io(score_dir.to_path_buf(), e))? {
+        let entry = entry.map_err(|e| Error::Io(score_dir.to_path_buf(), e))?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("csv") {
+            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if stem.chars().all(|c| c.is_numeric()) {
+                    let index = stem.parse::<usize>().map_err(|e| Error::ParseInt(stem.to_string(), e))?;
+                    let cr = CompareResult::new(index, 0.0, PathBuf::new(), PathBuf::new(), Duration::from_secs(0));
+                    results.push(cr);
+                }
+            }
+        }
+    }
+    Ok(results)
+}
+
+fn load_results_impl(score_dir: &Path) -> Result<Vec<CompareResult>> {
     let result_file = score_dir.join("results.csv");
     let mut reader = std::fs::File::open(result_file.clone())
         .map_err(|e| Error::Io(result_file.clone(), e))?;
     let mut results = Vec::new();
     let bufr = BufReader::new(&mut reader);
     for line in bufr.lines().map_while(|r| r.ok()) {
-        if line.strip_prefix("total duration,").is_some() {
+        let lower = line.to_lowercase();
+        if lower.strip_prefix("total duration,").is_some() {
             break;
         } else {
             let cr = CompareResult::parse(&line)?;
@@ -52,7 +81,7 @@ fn load_results(score_dir: &Path) -> Result<Vec<CompareResult>> {
     Ok(results)
 }
 
-fn load_comparison_file(index: usize, score_dir: &Path) -> Result<Array2<f64>> {
+fn load_comparison_file(index: usize, score_dir: &Path) -> Result<(Array2<f64>, PathBuf, PathBuf, Duration)> {
     let file_name = format!("{index:05}.csv");
     let path = score_dir.join(file_name);
     let r = load_comparison(&path);
@@ -60,35 +89,51 @@ fn load_comparison_file(index: usize, score_dir: &Path) -> Result<Array2<f64>> {
     r
 }
 
-fn load_comparison<P: AsRef<Path>>(path: P) -> Result<Array2<f64>> {
+fn load_comparison<P: AsRef<Path>>(path: P) -> Result<(Array2<f64>, PathBuf, PathBuf, Duration)> {
     let mut file = std::fs::File::open(path.as_ref())
         .map_err(|e| Error::Io(path.as_ref().to_path_buf(), e))?;
-    let csv_reader = csv::ReaderBuilder::new()
+    let mut csv_reader = csv::ReaderBuilder::new()
         .flexible(true)
         .has_headers(false)
         .from_reader(&mut file);
-    let mut iter = csv_reader.into_records();
-    let _result_line = iter.next().unwrap().map_err(Error::Csv)?;
-    let _left_line = iter.next().unwrap().map_err(Error::Csv)?;
-    let _right_line = iter.next().unwrap().map_err(Error::Csv)?;
-    let col_names_line = iter.next().unwrap().map_err(Error::Csv)?;
-    let cols = col_names_line.iter().skip(2).map(|s| s.to_string()).collect::<Vec<_>>();
-    let mut items = vec![];
-    let mut rows = vec![];
-    for line in iter {
-        let line = line.map_err(Error::Csv)?;
-        let row_item = line.get(1).unwrap();
-        rows.push(row_item.to_string());
-        log::info!("load comparison file row {:?} ({}) {:?}", row_item, line.len(), line.iter().skip(2).collect::<Vec<_>>());
-        for value in line.iter().skip(2) {
-            items.push(value.parse::<f64>().map_err(|e| Error::ParseFloat(value.to_string(), e))?);
+    let mut col_names = Vec::new();
+    let mut rows = Vec::new();
+    let mut items = Vec::new();
+    let mut path1 = PathBuf::new();
+    let mut path2 = PathBuf::new();
+    let mut duration = Duration::from_nanos(0);
+
+    for results in csv_reader.records() {
+        let record = results.map_err(Error::Csv)?;
+        let prefix = record.get(0).unwrap_or("");
+        match prefix {
+            "result" => if let Some(d_str) = record.get(1) {
+                let nanos = d_str.parse::<u64>().unwrap_or(0);
+                duration = Duration::from_nanos(nanos);
+            },
+            "left" => if let Some(s) = record.get(3) {
+                path1 = PathBuf::from(s);
+            },
+            "right" => if let Some(s) = record.get(3) {
+                path2 = PathBuf::from(s);
+            },
+            "matrix" => col_names = record.iter().skip(2).map(|s| s.to_string()).collect(),
+            _ if prefix.chars().all(|c| c.is_numeric()) && !prefix.is_empty() => {
+                rows.push(record.get(1).unwrap_or("").to_string());
+                for value in record.iter().skip(2) {
+                    items.push(value.parse::<f64>().map_err(|e| Error::ParseFloat(value.to_string(), e))?);
+                }
+            },
+            _ => continue,
         }
     }
-    log::info!("reshape vector (length: {}) with {} cols and {} rows", items.len(), cols.len(), rows.len());
-    let matrix = Array2::from_shape_vec((rows.len(), cols.len()), items)
-        .map_err(Error::ShapeError)?;
-
-    Ok(matrix)
+    if col_names.is_empty() || rows.is_empty() {
+        Err(Error::Parse(format!("Valid matrix data not found in {}", path.as_ref().display())))
+    } else {
+        let matrix = Array2::from_shape_vec((rows.len(), col_names.len()), items)
+            .map_err(Error::ShapeError)?;
+        Ok((matrix, path1, path2, duration))
+    }
 }
 
 #[cfg(test)]
