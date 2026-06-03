@@ -141,11 +141,14 @@ where
 pub struct Birthmark {
     pub metadata: Metadata,
     pub elements: Vec<Elements>,
+    #[serde(skip)]
+    pub json_path: Option<PathBuf>,
 }
 
 impl CsvInfo for Birthmark {
     fn csv_info(&self) -> String {
-        self.metadata.csv_info()
+        let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+        format!("{},{}", self.metadata.csv_info(), json_path)
     }
 
     fn names(&self) -> Vec<String> {
@@ -154,6 +157,10 @@ impl CsvInfo for Birthmark {
 }
 
 impl Birthmark {
+    pub fn set_json_path(&mut self, path: PathBuf) {
+        self.json_path = Some(path);
+    }
+
     pub fn comparable_with(&self, other: &Birthmark) -> bool {
         self.metadata.birthmark_type == other.metadata.birthmark_type
     }

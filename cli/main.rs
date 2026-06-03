@@ -40,16 +40,18 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
             read_result_file(&dest_file, i, path1, path2)
         } else {
             pbar.set_message(format!("Loading program from {:?}", path1.display()));
-            let p1: Program<Op> = load(path1.to_path_buf())?;
+            let mut p1: Program<Op> = load(path1.to_path_buf())?;
+            p1.set_json_path(path1.to_path_buf());
             pbar.inc(1);
             pbar.set_message(format!("Loading program from {:?}", path2.display()));
-            let p2: Program<Op> = load(path2.to_path_buf())?;
+            let mut p2: Program<Op> = load(path2.to_path_buf())?;
+            p2.set_json_path(path2.to_path_buf());
             pbar.inc(1);
             pbar.set_message(format!("Comparing two programs ({}/{})", i + 1, comparing_count));
             let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
             pbar.inc(1);
             result.store(&dest_file)?;
-            Ok(CompareResult::new(i, result.similarity(), path1.to_path_buf(), path2.to_path_buf(), result.duration()))
+            Ok(CompareResult::new(i, result.similarity(), p1.path().to_path_buf(), p2.path().to_path_buf(), result.duration()))
         }
     }).collect::<Vec<_>>();
     pbar.finish();
@@ -61,21 +63,44 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
 /// Read the comparison result from the given CSV file and return a CompareResult struct.
 /// This function skips actual comparison and shorten the comparison time if the result file already exists.
 /// The CSV file is expected to have a line starting with "result," followed by the duration in nanoseconds and the similarity value, separated by commas.
-fn read_result_file(dest_path: &Path, index: usize, path1: &Path, path2: &Path) -> Result<CompareResult> {
+fn read_result_file(dest_path: &Path, index: usize, _path1: &Path, _path2: &Path) -> Result<CompareResult> {
     let content = std::fs::read_to_string(dest_path)
         .map_err(|e| Error::Io(dest_path.to_path_buf(), e))?;
-    let mut lines = content.lines();
-    let result_line = lines.find(|line| line.starts_with("result,"))
-        .ok_or_else(|| Error::Parse(format!("Result line not found in {}", dest_path.display())))?;
-    let parts: Vec<&str> = result_line.split(',').collect();
-    if parts.len() < 3 {
-        return Err(Error::Parse(format!("Invalid result line format in {}", dest_path.display())));
+    let lines = content.lines();
+    
+    let mut original_path1 = PathBuf::new();
+    let mut original_path2 = PathBuf::new();
+    let mut similarity = 0.0;
+    let mut duration_nanos = 0;
+
+    for line in lines {
+        if line.starts_with("result,") {
+            let parts: Vec<&str> = line.split(',').collect();
+            if parts.len() < 3 {
+                return Err(Error::Parse(format!("Invalid result line format in {}", dest_path.display())));
+            }
+            duration_nanos = parts[1].parse()
+                .map_err(|e| Error::ParseInt(parts[1].to_string(), e))?;
+            similarity = parts[2].parse()
+                .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
+        } else if line.starts_with("left,") {
+            let parts: Vec<&str> = line.split(',').collect();
+            if parts.len() >= 4 {
+                original_path1 = PathBuf::from(parts[3]);
+            }
+        } else if line.starts_with("right,") {
+            let parts: Vec<&str> = line.split(',').collect();
+            if parts.len() >= 4 {
+                original_path2 = PathBuf::from(parts[3]);
+            }
+        }
     }
-    let duration_nanos: u64 = parts[1].parse()
-        .map_err(|e| Error::ParseInt(parts[1].to_string(), e))?;
-    let similarity: f64 = parts[2].parse()
-        .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
-    Ok(CompareResult::new(index, similarity, path1.to_path_buf(), path2.to_path_buf(), Duration::from_nanos(duration_nanos)))
+
+    if original_path1.as_os_str().is_empty() || original_path2.as_os_str().is_empty() {
+        return Err(Error::Parse(format!("Birthmark paths not found in {}", dest_path.display())));
+    }
+
+    Ok(CompareResult::new(index, similarity, original_path1, original_path2, Duration::from_nanos(duration_nanos)))
 }
 
 fn new_progress_bar(len: usize) -> ProgressBar {
@@ -127,18 +152,20 @@ fn compare_impl(tuple: (usize, (&Path, &Path)), comparator: &Comparator, dest: &
     } else {
         log::info!("Loading birthmark from {:?}", path2.display());
         pbar.set_message(format!("Loading birthmark from {:?}", path1.display()));
-        let b1: Birthmark = load(path1.to_path_buf()).unwrap();
+        let mut b1: Birthmark = load(path1.to_path_buf())?;
+        b1.set_json_path(path1.to_path_buf());
         pbar.inc(1);
         log::info!("Loading birthmark from {:?}", path2.display());
         pbar.set_message(format!("Loading birthmark from {:?}", path2.display()));
-        let b2: Birthmark = load(path2.to_path_buf()).unwrap();
+        let mut b2: Birthmark = load(path2.to_path_buf())?;
+        b2.set_json_path(path2.to_path_buf());
         pbar.inc(1);
         log::info!("Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}", b1.len(), b2.len(), i + 1);
         pbar.set_message(format!("Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}", b1.len(), b2.len(), i + 1));
         let result = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
         pbar.inc(1);
-        result.store(&dest_file).unwrap();
-        Ok(CompareResult::new(i, result.similarity(), path1.to_path_buf(), path2.to_path_buf(), result.duration()))
+        result.store(&dest_file)?;
+        Ok(CompareResult::new(i, result.similarity(), b1.path().to_path_buf(), b2.path().to_path_buf(), result.duration()))
     }
 }
 

@@ -85,6 +85,7 @@ fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Res
     Ok(Birthmark {
         metadata,
         elements,
+        json_path: None,
     })
 }
 

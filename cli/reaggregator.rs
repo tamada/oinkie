@@ -101,8 +101,8 @@ fn load_comparison<P: AsRef<Path>>(path: P) -> Result<(Array2<f64>, PathBuf, Pat
     let mut path2 = PathBuf::new();
     let mut duration = Duration::from_nanos(0);
 
-    for results in csv_reader.records() {
-        let record = results.map_err(Error::Csv)?;
+    for result in csv_reader.records() {
+        let record = result.map_err(Error::Csv)?;
         let prefix = record.get(0).unwrap_or("");
         match prefix {
             "result" => if let Some(d_str) = record.get(1) {
