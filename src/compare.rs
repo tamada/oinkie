@@ -98,21 +98,16 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
         let _ = writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarity());
         let _ = writeln!(out, "left,{}", self.rows.csv_info());
         let _ = writeln!(out, "right,{}", self.columns.csv_info());
-        let col_names = self.columns.names();
-        let row_names = self.rows.names();
-        let column_size = col_names.len();
-        let _ = write!(out, "matrix,,{}", col_names.join(","));
-        for ((row, col), value) in self.matrix.indexed_iter() {
-            if row >= row_names.len() {
-                break;
+        let b1_names = self.columns.names();
+        let b2_names = self.rows.names();
+        let _ = write!(out, "matrix,,{}", b1_names.iter()
+            .map(|s| escape_csv_string(s)).join(","));
+        for (j, item) in b2_names.iter().enumerate() {
+            let _ = write!(out, "\n{}, {}", j, escape_csv_string(item));
+            for i in 0..b1_names.len() {
+                let value = self.matrix[[i, j]];
+                let _ = write!(out, ",{value}");
             }
-            if col == 0 {
-                let _ = writeln!(out);
-                let _ = write!(out, "{row},{}", escape_csv_string(&row_names[row]));
-            } else if col >= column_size {
-                continue;
-            }
-            let _ = write!(out, ",{value}");
         }
         let _ = writeln!(out);
         Ok(())

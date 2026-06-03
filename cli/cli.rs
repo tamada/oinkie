@@ -51,7 +51,7 @@ pub enum OinkieCommand {
     // Execute(ExecuteOpts),
     #[command(name="run", about = "Extract birthmarks and compare them in one command")]
     Run(RunOpts),
-    #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score", hide = true)]
+    #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score")]
     Reaggregate(ReaggregateOpts),
 
     #[command(name="info", about = "Display information about the application")]
