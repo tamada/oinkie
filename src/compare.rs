@@ -102,8 +102,8 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
         let b2_names = self.rows.names();
         let _ = write!(out, "matrix,,{}", b1_names.iter()
             .map(|s| escape_csv_string(s)).join(","));
-        for j in 0..b2_names.len() {
-            let _ = write!(out, "\n{}, {}", j, escape_csv_string(&b2_names[j]));
+        for (j, item) in b2_names.iter().enumerate() {
+            let _ = write!(out, "\n{}, {}", j, escape_csv_string(item));
             for i in 0..b1_names.len() {
                 let value = self.matrix[[i, j]];
                 let _ = write!(out, ",{value}");

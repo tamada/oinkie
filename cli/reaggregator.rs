@@ -50,14 +50,12 @@ fn scan_directory_for_results(score_dir: &Path) -> Result<Vec<CompareResult>> {
                 .map_err(|e| Error::Io(score_dir.to_path_buf(), e))? {
         let entry = entry.map_err(|e| Error::Io(score_dir.to_path_buf(), e))?;
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("csv") {
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                if stem.chars().all(|c| c.is_numeric()) {
-                    let index = stem.parse::<usize>().map_err(|e| Error::ParseInt(stem.to_string(), e))?;
-                    let cr = CompareResult::new(index, 0.0, PathBuf::new(), PathBuf::new(), Duration::from_secs(0));
-                    results.push(cr);
-                }
-            }
+        if path.extension().and_then(|s| s.to_str()) == Some("csv")
+                && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                && stem.chars().all(|c| c.is_numeric()) {
+            let index = stem.parse::<usize>().map_err(|e| Error::ParseInt(stem.to_string(), e))?;
+            let cr = CompareResult::new(index, 0.0, PathBuf::new(), PathBuf::new(), Duration::from_secs(0));
+            results.push(cr);
         }
     }
     Ok(results)
