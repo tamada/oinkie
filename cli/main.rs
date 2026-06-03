@@ -49,18 +49,19 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
             let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
             pbar.inc(1);
             result.store(&dest_file)?;
-            Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
+            Ok(CompareResult::new(i, result.similarity(), path1.to_path_buf(), path2.to_path_buf(), result.duration()))
         }
     }).collect::<Vec<_>>();
     pbar.finish();
     let results = Error::vec_result_to_result_vec(results)?;
-    store_and_get_durations(results, dest, start)
+    let dest_file = dest.join("results.csv");
+    store_and_get_durations(results, &dest_file, start)
 }
 
 /// Read the comparison result from the given CSV file and return a CompareResult struct.
 /// This function skips actual comparison and shorten the comparison time if the result file already exists.
 /// The CSV file is expected to have a line starting with "result," followed by the duration in nanoseconds and the similarity value, separated by commas.
-fn read_result_file<'a>(dest_path: &Path, index: usize, path1: &'a Path, path2: &'a Path) -> Result<CompareResult<'a>> {
+fn read_result_file(dest_path: &Path, index: usize, path1: &Path, path2: &Path) -> Result<CompareResult> {
     let content = std::fs::read_to_string(dest_path)
         .map_err(|e| Error::Io(dest_path.to_path_buf(), e))?;
     let mut lines = content.lines();
@@ -74,7 +75,7 @@ fn read_result_file<'a>(dest_path: &Path, index: usize, path1: &'a Path, path2: 
         .map_err(|e| Error::ParseInt(parts[1].to_string(), e))?;
     let similarity: f64 = parts[2].parse()
         .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
-    Ok(CompareResult::new(index, similarity, path1, path2, Duration::from_nanos(duration_nanos)))
+    Ok(CompareResult::new(index, similarity, path1.to_path_buf(), path2.to_path_buf(), Duration::from_nanos(duration_nanos)))
 }
 
 fn new_progress_bar(len: usize) -> ProgressBar {
@@ -94,20 +95,20 @@ fn perform_compare(opts: cli::CompareOpts) -> Result<Vec<Duration>> {
         .map(|(i, (path1, path2))| compare_impl((i, (path1, path2)), &comparator, dest, &pbar, comparing_count, opts.is_skip(), aggregator))
         .collect::<Vec<_>>();
     pbar.finish();
+    let result_file = dest.join("results.csv");
     Error::vec_result_to_result_vec(r)
-        .and_then(|r| store_and_get_durations(r, dest, start))
+        .and_then(|r| store_and_get_durations(r, &result_file, start))
     
 }
 
-fn store_and_get_durations(results: Vec<CompareResult>, dest: &Path, start: Instant) -> Result<Vec<Duration>> {
-    let destcsv = dest.join("results.csv");
-    let mut file = std::fs::File::create(&destcsv)
-        .map_err(|e| Error::Io(dest.to_path_buf(), e))?;
+pub(crate) fn store_and_get_durations(results: Vec<CompareResult>, destcsv: &Path, start: Instant) -> Result<Vec<Duration>> {
+    let mut file = std::fs::File::create(destcsv)
+        .map_err(|e| Error::Io(destcsv.to_path_buf(), e))?;
     let ritems = results.into_iter().map(|r| {
         let csv = r.to_csv();
         match writeln!(file, "{}", csv) {
             Ok(_) => Ok(r.duration),
-            Err(e) => Err(Error::Io(destcsv.clone(), e)),
+            Err(e) => Err(Error::Io(destcsv.to_path_buf(), e)),
         }
     }).collect::<Vec<_>>();
     let duration = start.elapsed();
@@ -115,7 +116,7 @@ fn store_and_get_durations(results: Vec<CompareResult>, dest: &Path, start: Inst
     Error::vec_result_to_result_vec(ritems)
 }
 
-fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool, aggregator: &Aggregator) -> Result<CompareResult<'a>> {
+fn compare_impl(tuple: (usize, (&Path, &Path)), comparator: &Comparator, dest: &Path, pbar: &ProgressBar, comparing_count: usize, skip: bool, aggregator: &Aggregator) -> Result<CompareResult> {
     let (i, (path1, path2)) = tuple;
     let dest_file = dest.join(format!("{i:05}.csv"));
     log::info!("compare_impl(dest: {} (exists: {}), skip: {skip})", dest_file.display(), dest_file.exists());
@@ -137,7 +138,7 @@ fn compare_impl<'a>(tuple: (usize, (&'a Path, &'a Path)), comparator: &Comparato
         let result = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
         pbar.inc(1);
         result.store(&dest_file).unwrap();
-        Ok(CompareResult::new(i, result.similarity(), path1, path2, result.duration()))
+        Ok(CompareResult::new(i, result.similarity(), path1.to_path_buf(), path2.to_path_buf(), result.duration()))
     }
 }
 
@@ -216,6 +217,8 @@ fn validate_extract_opts(opts: cli::ExtractOpts) -> Result<cli::ExtractOpts> {
     Ok(opts)
 }
 
+mod reaggregator;
+
 fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
     opts.init()?;
     use cli::OinkieCommand::*;
@@ -224,25 +227,42 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Compare(opts) => perform_compare(opts),
         Extract(opts) => validate_extract_opts(opts)
             .and_then(perform_extract),
+        Reaggregate(opts) => reaggregator::perform(opts),
         Info => perform_info(),
     }
 }
 
-pub struct CompareResult<'a> {
+pub struct CompareResult {
     pub index: usize,
     pub similarity: f64,
-    pub path1: &'a Path,
-    pub path2: &'a Path,
+    pub path1: PathBuf,
+    pub path2: PathBuf,
     pub duration: std::time::Duration,
 }
 
-impl<'a> CompareResult<'a> {
-    pub fn new(index: usize, similarity: f64, path1: &'a Path, path2: &'a Path, duration: std::time::Duration) -> Self {
+impl CompareResult {
+    pub fn new(index: usize, similarity: f64, path1: PathBuf, path2: PathBuf, duration: std::time::Duration) -> Self {
         Self { index, similarity, path1, path2, duration }
     }
 
     pub fn to_csv(&self) -> String {
         format!("{},{},{},{},{}", self.index, self.similarity, self.path1.display(), self.path2.display(), self.duration.as_nanos())
+    }
+
+    pub fn parse(line: &str) -> Result<Self> {
+        let parts: Vec<&str> = line.split(',').collect();
+        if parts.len() < 5 {
+            return Err(Error::Parse(format!("Invalid compare result line format: {}", line)));
+        }
+        let index: usize = parts[0].parse()
+            .map_err(|e| Error::ParseInt(parts[0].to_string(), e))?;
+        let similarity: f64 = parts[1].parse()
+            .map_err(|e| Error::Parse(format!("Failed to parse similarity value: {}", e)))?;
+        let path1 = PathBuf::from(parts[2]);
+        let path2 = PathBuf::from(parts[3]);
+        let duration_nanos: u64 = parts[4].parse()
+            .map_err(|e| Error::ParseInt(parts[4].to_string(), e))?;
+        Ok(Self::new(index, similarity, path1, path2, Duration::from_nanos(duration_nanos)))
     }
 }
 
@@ -271,4 +291,21 @@ fn main() {
         Ok(_) => 0,
     };
     std::process::exit(status_code);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_compare_result() {
+        let line = "21,0.9920060729565723,birthmarks/experiment0/bzip2-1.0.4_a83e5e24.json,birthmarks/experiment0/bzip2-1.0.8_981e34d2.json,515602167";
+        let cr = CompareResult::parse(line)
+            .expect("Failed to parse compare result");
+        assert_eq!(cr.index, 21);
+        assert!((cr.similarity - 0.9920060729565723).abs() < 1e-10);
+        assert_eq!(cr.path1, PathBuf::from("birthmarks/experiment0/bzip2-1.0.4_a83e5e24.json"));
+        assert_eq!(cr.path2, PathBuf::from("birthmarks/experiment0/bzip2-1.0.8_981e34d2.json"));
+        assert_eq!(cr.duration.as_nanos(), 515602167);
+    }
 }

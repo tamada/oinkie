@@ -78,6 +78,14 @@ pub struct Comparison<'a, S> {
     similarities: Vec<f64>,
 }
 
+fn escape_csv_string(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
 impl<'a, S: CsvInfo> Comparison<'a, S> {
     pub fn new(columns: &'a S, rows: &'a S, matrix: Array2<f64>, similarities: Vec<f64>, duration: std::time::Duration) -> Comparison<'a, S> {
         Self { columns, rows, matrix, similarities, duration }
@@ -100,12 +108,13 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
             }
             if col == 0 {
                 let _ = writeln!(out);
-                let _ = write!(out, "{row},{}", row_names[row]);
+                let _ = write!(out, "{row},{}", escape_csv_string(&row_names[row]));
             } else if col >= column_size {
                 continue;
             }
             let _ = write!(out, ",{value}");
         }
+        let _ = writeln!(out);
         Ok(())
     }
 

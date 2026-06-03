@@ -51,6 +51,9 @@ pub enum OinkieCommand {
     // Execute(ExecuteOpts),
     #[command(name="run", about = "Extract birthmarks and compare them in one command")]
     Run(RunOpts),
+    #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score", hide = true)]
+    Reaggregate(ReaggregateOpts),
+
     #[command(name="info", about = "Display information about the application")]
     Info,
 }
@@ -108,6 +111,42 @@ impl ExtractOpts {
 
     pub fn is_skip(&self) -> bool {
         self.skip
+    }
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct ReaggregateOpts {
+    #[clap(
+        short = 'A', long, default_value = "hungarian", value_name = "METHOD", ignore_case = true, 
+        help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+Available: 
+- hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
+             maximizing the total similarity score.
+- topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
+             second birthmark when calculating the overall similarity score. This can reduce noise from less
+             relevant matches and focus on the most significant similarities."
+    )]
+    aggregator: Aggregator,
+
+    #[clap(short, long, value_name = "RESULT.CSV", help = "Specify the result CSV file of the comparing results to reaggregate.
+The file contains the birthmark-wise similarity score list.", default_value = "reaggregate.csv")]
+    dest_file: PathBuf,
+
+    #[clap(index = 1, value_name = "SCORE_DIRECTORY", help = "Path to the directory containing the element-wise similarity scores")]
+    score_directory: PathBuf,
+}
+
+impl ReaggregateOpts {
+    pub fn aggregator(&self) -> &Aggregator {
+        &self.aggregator
+    }
+
+    pub fn score_directory(&self) -> &Path {
+        &self.score_directory
+    }
+
+    pub fn dest_file(&self) -> &PathBuf {
+        &self.dest_file
     }
 }
 
