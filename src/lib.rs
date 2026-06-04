@@ -4,6 +4,7 @@ use ndarray::ShapeError;
 
 use crate::prelude::BirthmarkType;
 
+pub mod lift;
 pub mod ghidra;
 pub mod prelude;
 pub mod extractor;
@@ -101,8 +102,4 @@ pub trait Op {
 pub trait Iterable {
     type Item;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
-}
-
-pub trait Lifter {
-    fn lift(&self, input: &std::path::Path, output: &std::path::Path) -> Result<()>;
 }

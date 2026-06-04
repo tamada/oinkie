@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
-use crate::{Result, Error, Lifter};
+use crate::{Result, Error};
+use crate::lift::Lifter;
 
 pub const DEFAULT_GHIDRA_SCRIPT: &str = include_str!("../../lifter/scripts/HighPCodeLifter.java");
 

@@ -6,7 +6,7 @@ use crate::ghidra::pcode::PcodeOp;
 use crate::program::Program;
 
 mod pcode;
-pub mod lifter;
+pub(crate) mod lifter;
 
 impl<T> TryFrom<PathBuf> for Program<T> 
 where

@@ -268,18 +268,11 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
     std::fs::create_dir_all(dest)
         .map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
-    let lifter: Box<dyn Lifter + Sync> = match opts.lifter_type() {
-        cli::LifterType::Ghidra => {
-            let home = oinkie::ghidra::lifter::find_ghidra_home(opts.home())?;
-            Box::new(oinkie::ghidra::lifter::GhidraLifter::new(
-                home,
-                opts.script().map(|p| p.to_path_buf()),
-                opts.intermediate_dir().map(|p| p.to_path_buf())
-            ))
-        },
-        cli::LifterType::Llvm => return Err(Error::Parse("LLVM lifter is not yet implemented.".to_string())),
-        cli::LifterType::BinaryNinja => return Err(Error::Parse("Binary Ninja lifter is not yet implemented.".to_string())),
-    };
+    let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.lifter_type())
+        .home(opts.home().map(|p| p.to_path_buf()))
+        .script(opts.script().map(|p| p.to_path_buf()))
+        .intermediate_dir(opts.intermediate_dir().map(|p| p.to_path_buf()))
+        .build()?;
 
     let start = Instant::now();
     let r = opts.iter().par_bridge().map(|path| {
@@ -366,7 +359,7 @@ mod tests {
     #[test]
     fn test_find_ghidra_home_from_opt() {
         let opt = PathBuf::from("/custom/path");
-        let result = oinkie::ghidra::lifter::find_ghidra_home(Some(&opt)).unwrap();
+        let result = oinkie::lift::find_ghidra_home(Some(&opt)).unwrap();
         assert_eq!(result, opt);
     }
 
@@ -375,7 +368,7 @@ mod tests {
         unsafe {
             std::env::set_var("GHIDRA_HOME", "/env/path");
         }
-        let result = oinkie::ghidra::lifter::find_ghidra_home(None).unwrap();
+        let result = oinkie::lift::find_ghidra_home(None).unwrap();
         assert_eq!(result, PathBuf::from("/env/path"));
         unsafe {
             std::env::remove_var("GHIDRA_HOME");

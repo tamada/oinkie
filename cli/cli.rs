@@ -63,14 +63,6 @@ pub enum OinkieCommand {
     Run(RunOpts),
 }
 
-#[derive(Debug, clap::Parser, ValueEnum, Clone)]
-#[clap(rename_all = "kebab-case")]
-pub enum LifterType {
-    Ghidra,
-    Llvm,
-    BinaryNinja,
-}
-
 #[derive(Debug, clap::Parser)]
 pub struct LiftOpts {
     #[clap(short, long, default_value = "pcodes", value_name = "DIRECTORY", help = "Specify the directory for putting the resultant JSON files for the lifted P-code (default: './pcodes' directory)")]
@@ -100,8 +92,8 @@ impl LiftOpts {
         &self.dest
     }
 
-    pub fn lifter_type(&self) -> &LifterType {
-        &self.lifter_type
+    pub fn lifter_type(&self) -> LifterType {
+        self.lifter_type
     }
 
     pub fn home(&self) -> Option<&Path> {
