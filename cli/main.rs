@@ -435,6 +435,42 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_find_ghidra_home_from_opt() {
+        let opt = PathBuf::from("/custom/path");
+        let result = find_ghidra_home(Some(&opt)).unwrap();
+        assert_eq!(result, opt);
+    }
+
+    #[test]
+    fn test_find_ghidra_home_from_env() {
+        unsafe {
+            std::env::set_var("GHIDRA_HOME", "/env/path");
+        }
+        let result = find_ghidra_home(None).unwrap();
+        assert_eq!(result, PathBuf::from("/env/path"));
+        unsafe {
+            std::env::remove_var("GHIDRA_HOME");
+        }
+    }
+
+    #[test]
+    fn test_parse_lift_opts() {
+        let args = vec!["oinkie", "lift", "--home", "/ghidra", "--dest", "out", "--skip", "bin1", "bin2"];
+        let opts = cli::OinkieOpts::try_parse_from(args).unwrap();
+        if let cli::OinkieCommand::Lift(lift_opts) = opts.command {
+            assert_eq!(lift_opts.home(), Some(Path::new("/ghidra")));
+            assert_eq!(lift_opts.dest(), Path::new("out"));
+            assert!(lift_opts.is_skip());
+            let files: Vec<_> = lift_opts.iter().collect();
+            assert_eq!(files.len(), 2);
+            assert_eq!(files[0], &PathBuf::from("bin1"));
+            assert_eq!(files[1], &PathBuf::from("bin2"));
+        } else {
+            panic!("Expected Lift command");
+        }
+    }
+
+    #[test]
     fn test_parse_compare_result() {
         let line = "21,0.9920060729565723,birthmarks/experiment0/bzip2-1.0.4_a83e5e24.json,birthmarks/experiment0/bzip2-1.0.8_981e34d2.json,515602167";
         let cr = CompareResult::parse(line)
