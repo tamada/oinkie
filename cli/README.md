@@ -10,12 +10,12 @@ Birthmarking toolkit for Ghidra P-Code
 Usage: oinkie [OPTIONS] <COMMAND>
 
 Commands:
-  compare      Compare birthmarks and output the similarity score
-  extract      Extract birthmarks from a lifted binary file (JSON format)
-  run          Extract birthmarks and compare them in one command
-  reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
-  lift         Lift binary files to P-code JSON files using a specified lifter
   info         Display information about the application
+  lift         Lift binary files to P-code JSON files using a specified lifter
+  extract      Extract birthmarks from a lifted binary file (JSON format)
+  compare      Compare birthmarks and output the similarity score
+  reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+  run          Extract birthmarks and compare them in one command
   help         Print this message or the help of the given subcommand(s)
 
 Options:

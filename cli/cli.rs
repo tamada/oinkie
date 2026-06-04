@@ -43,22 +43,24 @@ pub enum LogLevel {
 
 #[derive(Debug, clap::Parser)]
 pub enum OinkieCommand {
-    #[command(name="compare", about = "Compare birthmarks and output the similarity score")]
-    Compare(CompareOpts),
-    #[command(name="extract", about = "Extract birthmarks from a lifted binary file (JSON format)")]
-    Extract(ExtractOpts),
-    // #[command(name="execute", about = "Execute a command on the JSON files")]
-    // Execute(ExecuteOpts),
-    #[command(name="run", about = "Extract birthmarks and compare them in one command")]
-    Run(RunOpts),
-    #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score")]
-    Reaggregate(ReaggregateOpts),
+    #[command(name="info", about = "Display information about the application")]
+    Info,
 
     #[command(name="lift", about = "Lift binary files to P-code JSON files using a specified lifter")]
     Lift(LiftOpts),
 
-    #[command(name="info", about = "Display information about the application")]
-    Info,
+    #[command(name="extract", about = "Extract birthmarks from a lifted binary file (JSON format)")]
+    Extract(ExtractOpts),
+
+    #[command(name="compare", about = "Compare birthmarks and output the similarity score")]
+    Compare(CompareOpts),
+    // #[command(name="execute", about = "Execute a command on the JSON files")]
+    // Execute(ExecuteOpts),
+    #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score")]
+    Reaggregate(ReaggregateOpts),
+
+    #[command(name="run", about = "Extract birthmarks and compare them in one command")]
+    Run(RunOpts),
 }
 
 #[derive(Debug, clap::Parser, ValueEnum, Clone)]
