@@ -11,6 +11,8 @@ use rayon::prelude::*;
 use oinkie::prelude::*;
 use oinkie::ghidra::Op;
 
+const DEFAULT_GHIDRA_SCRIPT: &str = include_str!("../lifter/scripts/HighPCodeLifter.java");
+
 fn load<T>(path: PathBuf) -> Result<T> 
 where 
     T: TryFrom<PathBuf, Error = Error>
@@ -255,8 +257,116 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Extract(opts) => validate_extract_opts(opts)
             .and_then(perform_extract),
         Reaggregate(opts) => reaggregator::perform(opts),
+        Lift(opts) => perform_lift(opts),
         Info => perform_info(),
     }
+}
+
+fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
+    let dest = opts.dest();
+    let pb = ProgressBar::new(opts.len() as u64)
+            .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.magenta/blue} {pos:>7}/{len:7} {msg}").unwrap())
+            .with_message("Lifting binaries...");
+    std::fs::create_dir_all(dest)
+        .map_err(|e| Error::Io(dest.to_path_buf(), e))?;
+
+    let start = Instant::now();
+    let r = opts.iter().par_bridge().map(|path| {
+        let e1 = Instant::now();
+        let r = match opts.lifter_type() {
+            cli::LifterType::Ghidra => lift_ghidra_impl(path, &opts),
+            cli::LifterType::Llvm => Err(Error::Parse("LLVM lifter is not yet implemented.".to_string())),
+            cli::LifterType::BinaryNinja => Err(Error::Parse("Binary Ninja lifter is not yet implemented.".to_string())),
+        };
+        pb.inc(1);
+        r.map(|_| e1.elapsed())
+    }).collect::<Result<Vec<_>>>();
+    let duration = start.elapsed();
+    println!("Lifting completed in {} nsec ({})", duration.as_nanos(), format_duration(duration));
+    r
+}
+
+fn lift_ghidra_impl(path: &Path, opts: &cli::LiftOpts) -> Result<()> {
+    let ghidra_home = find_ghidra_home(opts.home())?;
+    let analyze_headless = ghidra_home.join("support/analyzeHeadless");
+    if !analyze_headless.exists() {
+        return Err(Error::Parse(format!("Ghidra headless analyzer not found at {:?}", analyze_headless)));
+    }
+
+    let dest_file = opts.dest().join(format!("{}.json", path.file_name().unwrap().to_str().unwrap()));
+    if dest_file.exists() && opts.is_skip() {
+        log::info!("Lifted JSON for {:?} already exists. Skipping lifting.", path);
+        return Ok(());
+    }
+
+    let (script_path, _temp_dir) = if let Some(s) = opts.script() {
+        (s.to_path_buf(), None)
+    } else {
+        let temp_dir = tempfile::Builder::new().prefix("oinkie_script").tempdir().map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
+        let script_file = temp_dir.path().join("HighPCodeLifter.java");
+        std::fs::write(&script_file, DEFAULT_GHIDRA_SCRIPT)
+            .map_err(|e| Error::Io(script_file.clone(), e))?;
+        (script_file, Some(temp_dir))
+    };
+
+    let (proj_dir, _temp_proj_dir) = if let Some(i) = opts.intermediate_dir() {
+        (i.to_path_buf(), None)
+    } else {
+        let temp_proj = tempfile::Builder::new().prefix("oinkie_proj").tempdir().map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
+        (temp_proj.path().to_path_buf(), Some(temp_proj))
+    };
+
+    let proj_name = path.file_name().unwrap().to_str().unwrap();
+    
+    let mut command = std::process::Command::new(&analyze_headless);
+    command.arg(&proj_dir)
+           .arg(proj_name)
+           .arg("-import").arg(path)
+           .arg("-scriptPath").arg(script_path.parent().unwrap())
+           .arg("-postScript").arg(script_path.file_name().unwrap());
+
+    log::info!("Executing Ghidra: {:?}", command);
+    let output = command.output().map_err(|e| Error::Io(analyze_headless, e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(Error::Parse(format!("Ghidra failed with status {}.\nSTDOUT: {}\nSTDERR: {}", output.status, stdout, stderr)));
+    }
+
+    // Move the generated JSON to the destination
+    let generated_json = std::env::current_dir().unwrap().join(format!("{}.json", proj_name));
+    if generated_json.exists() {
+        std::fs::rename(&generated_json, &dest_file)
+            .map_err(|e| Error::Io(dest_file, e))?;
+    } else {
+        return Err(Error::Parse(format!("Expected Ghidra to generate {:?}, but it was not found.", generated_json)));
+    }
+
+    Ok(())
+}
+
+fn find_ghidra_home(home_opt: Option<&Path>) -> Result<PathBuf> {
+    if let Some(h) = home_opt {
+        return Ok(h.to_path_buf());
+    }
+    if let Ok(h) = std::env::var("GHIDRA_HOME") {
+        return Ok(PathBuf::from(h));
+    }
+
+    let candidates = [
+        "/opt/homebrew/opt/ghidra/libexec",
+        "/usr/local/opt/ghidra/libexec",
+        "/opt/ghidra/libexec",
+    ];
+
+    for c in candidates {
+        let p = PathBuf::from(c);
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    Err(Error::Parse("GHIDRA_HOME not found. Please specify it via --home option or GHIDRA_HOME environment variable.".to_string()))
 }
 
 pub struct CompareResult {
