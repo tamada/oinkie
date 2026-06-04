@@ -102,3 +102,7 @@ pub trait Iterable {
     type Item;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
 }
+
+pub trait Lifter {
+    fn lift(&self, input: &std::path::Path, output: &std::path::Path) -> Result<()>;
+}
