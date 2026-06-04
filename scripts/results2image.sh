@@ -2,9 +2,9 @@ if [ -z "$1" ]; then
     echo "Usage: $0 <base>"
     exit 1
 fi
-base=$(cd $1; pwd)
+base="$(cd "$1" && pwd)"
 
-mkdir -p $base/{images,results,tables}
+mkdir -p "$base/images" "$base/results" "$base/tables"
 for i in cosine dice levenshtein lcs jaccard euclidean simpson weighted-jaccard
 do
     echo "Processing $i..."
