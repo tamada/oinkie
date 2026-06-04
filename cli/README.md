@@ -10,11 +10,13 @@ Birthmarking toolkit for Ghidra P-Code
 Usage: oinkie [OPTIONS] <COMMAND>
 
 Commands:
-  compare  Compare birthmarks and output the similarity score
-  extract  Extract birthmarks from a lifted binary file (JSON format)
-  run      Extract birthmarks and compare them in one command
-  info     Display information about the application
-  help     Print this message or the help of the given subcommand(s)
+  compare      Compare birthmarks and output the similarity score
+  extract      Extract birthmarks from a lifted binary file (JSON format)
+  run          Extract birthmarks and compare them in one command
+  reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+  lift         Lift binary files to P-code JSON files using a specified lifter
+  info         Display information about the application
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
   -l, --level <LEVEL>  Log level for the application [default: warn]
@@ -23,7 +25,44 @@ Options:
   -V, --version        Print version
 ```
 
+### `lift` command
+
+This command lifts binary files into Oinkie-IR files (P-code JSON format), which are used as inputs for the `extract` command.
+
+```sh
+Lift binary files to P-code JSON files using a specified lifter
+
+Usage: oinkie lift [OPTIONS] [FILES]...
+
+Arguments:
+  [FILES]...  Path to the binary or intermediate files to lift
+
+Options:
+  -d, --dest <DIRECTORY>
+          Specify the directory for putting the resultant JSON files for the lifted P-code
+          (default: './pcodes' directory) [default: pcodes]
+  -l, --lifter-type <LIFTER_TYPE>
+          Specify the lifter type [default: ghidra]
+          [possible values: ghidra, llvm, binary-ninja]
+  -H, --home <HOME>
+          Specify the path to the home directory of the lifter (e.g., GHIDRA_HOME for Ghidra).
+          If not specified, the environment variable (e.g., GHIDRA_HOME) or default paths are searched.
+  -i, --intermediate <DIRECTORY>
+          Directory to keep intermediate files like Ghidra project directories.
+          If not specified, a temporary directory is used and deleted.
+      --script <SCRIPT>
+          Path to a custom lifting script. Interpretation depends on the lifter type.
+          For Ghidra, it's the path to a Java script.
+  -S, --skip
+          Skip if the resultant JSON file already exists
+  -h, --help
+          Print help
+```
+
 ### `extract` command
+
+This command extracts birthmarks from the given lifted binary files.
+The lifted binary files are obtained by [`lift` command](#lift-command)
 
 ```sh
 Extract birthmarks from a lifted binary file (JSON format)
@@ -74,9 +113,6 @@ Options:
       - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
                    second birthmark when calculating the overall similarity score. This can reduce noise from less
                    relevant matches and focus on the most significant similarities. [default: hungarian]
-  -A, --aggregator <METHOD>
-      Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. 
-      [default: hungarian] [possible values: hungarian, topn:N]
   -s, --strategy <STRATEGY>
       Specify the pairing strategy for comparing files. [default: all-and-self]
       [possible values: all-and-self, all, self-coverage, adjacent, first-vs-others]
@@ -86,6 +122,34 @@ Options:
       Skip if the similarity file already exists for the pair of birthmarks
   -h, --help
       Print help (see more with '--help')
+```
+
+### `reaggregate` command
+
+Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score.
+
+```sh
+Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+
+Usage: oinkie reaggregate [OPTIONS] <SCORE_DIRECTORY>
+
+Arguments:
+  <SCORE_DIRECTORY>  Path to the directory containing the element-wise similarity scores
+
+Options:
+  -A, --aggregator <METHOD>
+          Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+          Available:
+          - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
+                       maximizing the total similarity score.
+          - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
+                       second birthmark when calculating the overall similarity score. This can reduce noise from less
+                       relevant matches and focus on the most significant similarities. [default: hungarian]
+  -d, --dest-file <RESULT.CSV>
+          Specify the result CSV file of the comparing results to reaggregate.
+          The file contains the birthmark-wise similarity score list. [default: reaggregate.csv]
+  -h, --help
+          Print help
 ```
 
 ### `run` command
