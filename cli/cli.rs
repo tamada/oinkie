@@ -125,10 +125,6 @@ impl LiftOpts {
     pub fn len(&self) -> usize {
         self.files.len()
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
-    }
 }
 
 #[derive(Debug, clap::Parser, ValueEnum, Clone)]

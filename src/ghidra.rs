@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(r.path(), std::path::Path::new("/Users/tamada/researches/2026snpd_tamada/executables/arm64-linux/gcc_O3/bzip2"));
         assert_eq!(r.len(), 85);
 
-        let f1 = r.iter().nth(0).unwrap();
+        let f1 = r.iter().next().unwrap();
         assert_eq!(f1.name(), "_init");
         let op1 = f1.get(0).unwrap();
         assert_eq!(op1.mnemonic(), "SUBPIECE");

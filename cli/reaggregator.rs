@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_load_comparison() {
-        let _ = load_comparison_file(1, &Path::new("testdata/comparison_data"))
+        let _ = load_comparison_file(1, Path::new("testdata/comparison_data"))
             .expect("failed to load comparison file");
         
     }
