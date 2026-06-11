@@ -255,8 +255,40 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Extract(opts) => validate_extract_opts(opts)
             .and_then(perform_extract),
         Reaggregate(opts) => reaggregator::perform(opts),
+        Lift(opts) => perform_lift(opts),
         Info => perform_info(),
     }
+}
+
+fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
+    let dest = opts.dest();
+    let pb = ProgressBar::new(opts.len() as u64)
+            .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.magenta/blue} {pos:>7}/{len:7} {msg}").unwrap())
+            .with_message("Lifting binaries...");
+    std::fs::create_dir_all(dest)
+        .map_err(|e| Error::Io(dest.to_path_buf(), e))?;
+
+    let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.lifter_type())
+        .home(opts.home().map(|p| p.to_path_buf()))
+        .script(opts.script().map(|p| p.to_path_buf()))
+        .intermediate_dir(opts.intermediate_dir().map(|p| p.to_path_buf()))
+        .build()?;
+
+    let start = Instant::now();
+    let r = opts.iter().par_bridge().map(|path| {
+        let e1 = Instant::now();
+        let dest_file = dest.join(format!("{}.json", path.file_name().unwrap().to_str().unwrap()));
+        if dest_file.exists() && opts.is_skip() {
+            log::info!("Lifted JSON for {:?} already exists. Skipping lifting.", path);
+            return Ok(e1.elapsed());
+        }
+        lifter.lift(path, &dest_file)?;
+        pb.inc(1);
+        Ok(e1.elapsed())
+    }).collect::<Result<Vec<_>>>();
+    let duration = start.elapsed();
+    println!("Lifting completed in {} nsec ({})", duration.as_nanos(), format_duration(duration));
+    r
 }
 
 pub struct CompareResult {
@@ -323,6 +355,42 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_find_ghidra_home_from_opt() {
+        let opt = PathBuf::from("/custom/path");
+        let result = oinkie::lift::find_ghidra_home(Some(&opt)).unwrap();
+        assert_eq!(result, opt);
+    }
+
+    #[test]
+    fn test_find_ghidra_home_from_env() {
+        unsafe {
+            std::env::set_var("GHIDRA_HOME", "/env/path");
+        }
+        let result = oinkie::lift::find_ghidra_home(None).unwrap();
+        assert_eq!(result, PathBuf::from("/env/path"));
+        unsafe {
+            std::env::remove_var("GHIDRA_HOME");
+        }
+    }
+
+    #[test]
+    fn test_parse_lift_opts() {
+        let args = vec!["oinkie", "lift", "--home", "/ghidra", "--dest", "out", "--skip", "bin1", "bin2"];
+        let opts = cli::OinkieOpts::try_parse_from(args).unwrap();
+        if let cli::OinkieCommand::Lift(lift_opts) = opts.command {
+            assert_eq!(lift_opts.home(), Some(Path::new("/ghidra")));
+            assert_eq!(lift_opts.dest(), Path::new("out"));
+            assert!(lift_opts.is_skip());
+            let files: Vec<_> = lift_opts.iter().collect();
+            assert_eq!(files.len(), 2);
+            assert_eq!(files[0], &PathBuf::from("bin1"));
+            assert_eq!(files[1], &PathBuf::from("bin2"));
+        } else {
+            panic!("Expected Lift command");
+        }
+    }
 
     #[test]
     fn test_parse_compare_result() {

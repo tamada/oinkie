@@ -4,6 +4,7 @@ use ndarray::ShapeError;
 
 use crate::prelude::BirthmarkType;
 
+pub mod lift;
 pub mod ghidra;
 pub mod prelude;
 pub mod extractor;

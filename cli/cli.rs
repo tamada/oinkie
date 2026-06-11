@@ -43,19 +43,82 @@ pub enum LogLevel {
 
 #[derive(Debug, clap::Parser)]
 pub enum OinkieCommand {
-    #[command(name="compare", about = "Compare birthmarks and output the similarity score")]
-    Compare(CompareOpts),
+    #[command(name="info", about = "Display information about the application")]
+    Info,
+
+    #[command(name="lift", about = "Lift binary files to P-code JSON files using a specified lifter")]
+    Lift(LiftOpts),
+
     #[command(name="extract", about = "Extract birthmarks from a lifted binary file (JSON format)")]
     Extract(ExtractOpts),
+
+    #[command(name="compare", about = "Compare birthmarks and output the similarity score")]
+    Compare(CompareOpts),
     // #[command(name="execute", about = "Execute a command on the JSON files")]
     // Execute(ExecuteOpts),
-    #[command(name="run", about = "Extract birthmarks and compare them in one command")]
-    Run(RunOpts),
     #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score")]
     Reaggregate(ReaggregateOpts),
 
-    #[command(name="info", about = "Display information about the application")]
-    Info,
+    #[command(name="run", about = "Extract birthmarks and compare them in one command")]
+    Run(RunOpts),
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct LiftOpts {
+    #[clap(short, long, default_value = "pcodes", value_name = "DIRECTORY", help = "Specify the directory for putting the resultant JSON files for the lifted P-code (default: './pcodes' directory)")]
+    dest: PathBuf,
+
+    #[clap(short = 'l', long, value_enum, default_value_t = LifterType::Ghidra, help = "Specify the lifter type")]
+    lifter_type: LifterType,
+
+    #[clap(short = 'H', long, value_name = "HOME", help = "Specify the path to the home directory of the lifter (e.g., GHIDRA_HOME for Ghidra). If not specified, the environment variable (e.g., GHIDRA_HOME) or default paths are searched.")]
+    home: Option<PathBuf>,
+
+    #[clap(short = 'i', long = "intermediate", value_name = "DIRECTORY", help = "Directory to keep intermediate files like Ghidra project directories. If not specified, a temporary directory is used and deleted.")]
+    intermediate_dir: Option<PathBuf>,
+
+    #[clap(long, value_name = "SCRIPT", help = "Path to a custom lifting script. Interpretation depends on the lifter type. For Ghidra, it's the path to a Java script.")]
+    script: Option<PathBuf>,
+
+    #[clap(short = 'S', long, default_value_t = false, help = "Skip if the resultant JSON file already exists")]
+    skip: bool,
+
+    #[clap(index = 1, value_name = "FILES", help = "Path to the binary or intermediate files to lift")]
+    files: Vec<PathBuf>,
+}
+
+impl LiftOpts {
+    pub fn dest(&self) -> &Path {
+        &self.dest
+    }
+
+    pub fn lifter_type(&self) -> LifterType {
+        self.lifter_type
+    }
+
+    pub fn home(&self) -> Option<&Path> {
+        self.home.as_deref()
+    }
+
+    pub fn intermediate_dir(&self) -> Option<&Path> {
+        self.intermediate_dir.as_deref()
+    }
+
+    pub fn script(&self) -> Option<&Path> {
+        self.script.as_deref()
+    }
+
+    pub fn is_skip(&self) -> bool {
+        self.skip
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &PathBuf> {
+        self.files.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.files.len()
+    }
 }
 
 #[derive(Debug, clap::Parser, ValueEnum, Clone)]
