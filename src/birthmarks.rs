@@ -18,6 +18,23 @@ pub enum BirthmarkType {
     OpKgramSet(usize),
 }
 
+impl TryFrom<&str> for BirthmarkType {
+    type Error = Error;
+
+    fn try_from(s: &str) -> Result<Self> {
+        let s = s.to_lowercase();
+        match s.as_str() {
+            "fc-seq" => Ok(BirthmarkType::FcSeq),
+            "fc-set" => Ok(BirthmarkType::FcSet),
+            "fc-freq" => Ok(BirthmarkType::FcFreq),
+            "op-freq" => Ok(BirthmarkType::OpFreq),
+            "op-seq" => Ok(BirthmarkType::OpSeq),
+            "op-set" => Ok(BirthmarkType::OpSet),
+            _ => parse_kgram(&s).ok_or_else(|| Error::BirthmarkType(s)),
+        }
+    }
+}
+
 impl Display for BirthmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -71,6 +88,37 @@ impl Metadata {
     pub fn csv_info(&self) -> String {
         format!("birthmark,{},{},{},{},{}", self.file_name, self.path.display(), self.birthmark_type, self.extracted_at.to_rfc3339(), self.duration.as_nanos())
     }
+
+    pub fn parse(line: &str) -> Result<Self> {
+        let r = csv::ReaderBuilder::new()
+            .flexible(true)
+            .has_headers(false)
+            .from_reader(line.as_bytes());
+        if let Some(result) = r.into_records().next() {
+            let record = result.map_err(Error::Csv)?;
+            let items = record.iter().collect::<Vec<_>>();
+            if items.len() != 6 {
+                return Err(Error::Parse(format!("expected 6 items in metadata, got {}", items.len())));
+            }
+            let file_name = items[1].to_string();
+            let path = PathBuf::from(items[2]);
+            let birthmark_type: BirthmarkType = items[3].try_into()?;
+            let extracted_at = chrono::DateTime::parse_from_rfc3339(items[4])
+                .map_err(|e| Error::Parse(format!("invalid extracted_at datetime: {}", e)))?
+                .with_timezone(&chrono::Utc);
+            let duration = items[5].parse::<u64>()
+                .map_err(|e| Error::Parse(format!("invalid duration: {}", e)))?;
+            Ok(Self {
+                file_name,
+                path,
+                birthmark_type,
+                extracted_at,
+                duration: Duration::from_nanos(duration),
+            })
+        } else {
+            Err(Error::Parse(format!("invalid metadata line: {line}")))
+        }
+    }
 }
 
 fn serialize_duration_as_nanos<S>(duration: &std::time::Duration, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -93,11 +141,14 @@ where
 pub struct Birthmark {
     pub metadata: Metadata,
     pub elements: Vec<Elements>,
+    #[serde(skip)]
+    pub json_path: Option<PathBuf>,
 }
 
 impl CsvInfo for Birthmark {
     fn csv_info(&self) -> String {
-        self.metadata.csv_info()
+        let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+        format!("{},{}", self.metadata.csv_info(), json_path)
     }
 
     fn names(&self) -> Vec<String> {
@@ -106,6 +157,10 @@ impl CsvInfo for Birthmark {
 }
 
 impl Birthmark {
+    pub fn set_json_path(&mut self, path: PathBuf) {
+        self.json_path = Some(path);
+    }
+
     pub fn comparable_with(&self, other: &Birthmark) -> bool {
         self.metadata.birthmark_type == other.metadata.birthmark_type
     }
@@ -304,11 +359,16 @@ fn parse_kgram_and_algorithm(name: String) -> Option<(BirthmarkType, Algorithm)>
 }
 
 fn parse_kgram(name: &str) -> Option<BirthmarkType> {
-    if let Some(k) = name.strip_suffix("gramseq") {
+    let name = if let Some(strip_op) = name.strip_prefix("op-") {
+        strip_op.to_string()
+    } else {
+        name.to_string()
+    };
+    if let Some(k) = name.strip_suffix("gram-seq") {
         parse_k_value(k).map(BirthmarkType::OpKgramSeq)
-    } else if let Some(k) = name.strip_suffix("gramset") {
+    } else if let Some(k) = name.strip_suffix("gram-set") {
         parse_k_value(k).map(BirthmarkType::OpKgramSet)
-    } else if let Some(k) = name.strip_suffix("gramfreq") {
+    } else if let Some(k) = name.strip_suffix("gram-freq") {
         parse_k_value(k).map(BirthmarkType::OpKgramFreq)
     } else {
         None
@@ -322,8 +382,18 @@ fn parse_k_value(k: &str) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    pub fn test_parse_analysis_type() {
+    use super::*;
 
+    #[test]
+    pub fn test_parse_metadata() {
+        let metadata = Metadata::parse("birthmark,bzip2-1.0.2,${HOME}/oinkie/bzip2-1.0.2,op-seq,2026-04-17T04:57:55.385904+00:00,4462500")
+            .expect("failed to parse metadata");
+        assert_eq!(metadata.file_name, "bzip2-1.0.2");
+        assert_eq!(metadata.path, PathBuf::from("${HOME}/oinkie/bzip2-1.0.2"));
+        assert_eq!(metadata.birthmark_type, BirthmarkType::OpSeq);
+        assert_eq!(metadata.extracted_at, chrono::DateTime::parse_from_rfc3339("2026-04-17T04:57:55.385904+00:00")
+            .expect("failed to parse extracted_at")
+            .with_timezone(&chrono::Utc));
+        assert_eq!(metadata.duration, Duration::from_nanos(4462500));
     }
 }

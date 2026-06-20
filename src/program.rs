@@ -12,11 +12,14 @@ pub struct Program<T> {
     path: PathBuf,
     symbols: FxHashMap<String, String>,
     functions: Vec<Function<T>>,
+    #[serde(skip)]
+    pub json_path: Option<PathBuf>,
 }
 
 impl<T> crate::prelude::CsvInfo for Program<T> {
     fn csv_info(&self) -> String {
-        format!("program,{},{},{},{}", self.name, self.path.display(), self.symbols.len(), self.functions.len())
+        let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
+        format!("program,{},{},{},{},{}", self.name, self.path.display(), self.symbols.len(), self.functions.len(), json_path)
     }
     
     fn names(&self) -> Vec<String> {
@@ -25,8 +28,12 @@ impl<T> crate::prelude::CsvInfo for Program<T> {
 }
 
 impl<T> Program<T> {
+    pub fn set_json_path(&mut self, path: PathBuf) {
+        self.json_path = Some(path);
+    }
+
     pub fn new(name: String, path: PathBuf, symbols: FxHashMap<String, String>, functions: Vec<Function<T>>) -> Self {
-        Self { name, path, symbols, functions }
+        Self { name, path, symbols, functions, json_path: None }
     }
 
     pub fn name(&self) -> &str {
