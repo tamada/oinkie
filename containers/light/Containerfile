@@ -13,18 +13,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/oinkie
-COPY . .
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY src        ./src
+COPY cli        ./cli
+COPY lifter     ./lifter
 
 # Build the release binary
-RUN cargo build --release
+RUN cargo build --release --locked
 
 # ==========================================
 # Stage 2: Tiny runtime environment for CLI execution
 # ==========================================
 FROM debian:bookworm-slim AS runner
 
-LABEL maintainer="Haruaki Tamada"
-LABEL description="Lightweight oinkie CLI image for extracting and comparing birthmarks from already lifted OIR JSON files"
+ARG GIT_REVISION
+ARG BUILD_DATE
+ARG VERSION
+
+LABEL org.opencontainers.image.authors="Haruaki TAMADA" \
+      org.opencontainers.image.title="oinkie" \
+      org.opencontainers.image.description="Lightweight oinkie CLI image: The software birthmark toolkit for real-world executables." \
+      org.opencontainers.image.url="https://tamada.github.io/oinkie" \
+      org.opencontainers.image.source="https://github.com/tamada/oinkie" \
+      org.opencontainers.image.version=${VERSION} \
+      org.opencontainers.image.revision=${GIT_REVISION} \
+      org.opencontainers.image.created=${BUILD_DATE} \
+      org.opencontainers.image.licenses="MIT"
 
 # Copy the compiled oinkie binary from the builder stage
 COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie

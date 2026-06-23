@@ -13,18 +13,33 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/oinkie
-COPY . .
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY src        ./src
+COPY cli        ./cli
+COPY lifter     ./lifter
 
 # Build the release binary
-RUN cargo build --release
+RUN cargo build --release --locked
 
 # ==========================================
 # Stage 2: Runtime environment with JDK & Ghidra
 # ==========================================
 FROM eclipse-temurin:21-jdk-noble AS runner
 
-LABEL maintainer="Haruaki Tamada"
-LABEL description="Full oinkie environment including Ghidra lifter for binary analysis and birthmark extraction"
+ARG GIT_REVISION
+ARG BUILD_DATE
+ARG VERSION
+
+LABEL org.opencontainers.image.authors="Haruaki TAMADA" \
+      org.opencontainers.image.title="oinkie" \
+      org.opencontainers.image.description="Oinkie CLI image including Ghidra lifter: The software birthmark toolkit for real-world executables." \
+      org.opencontainers.image.url="https://tamada.github.io/oinkie" \
+      org.opencontainers.image.source="https://github.com/tamada/oinkie" \
+      org.opencontainers.image.version=${VERSION} \
+      org.opencontainers.image.revision=${GIT_REVISION} \
+      org.opencontainers.image.created=${BUILD_DATE} \
+      org.opencontainers.image.licenses="MIT"
 
 # Install system utilities needed by Ghidra and oinkie
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -36,17 +51,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Ghidra
 # You can customize the Ghidra version using build arguments
-ARG GHIDRA_VERSION=11.0.1
-ARG GHIDRA_BUILD_DATE=20240130
+ARG GHIDRA_VERSION=11.0.3
+ARG GHIDRA_BUILD_DATE=20240410
 ARG GHIDRA_ZIP_NAME=ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_BUILD_DATE}.zip
 ARG GHIDRA_DOWNLOAD_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/${GHIDRA_ZIP_NAME}
+ARG GHIDRA_SHA256=2462a2d0ab11e30f9e907cd3b4aa6b48dd2642f325617e3d922c28e752be6761
 
 ENV GHIDRA_HOME=/opt/ghidra
 
-RUN wget --quiet ${GHIDRA_DOWNLOAD_URL} -O /tmp/ghidra.zip && \
-    unzip -q /tmp/ghidra.zip -d /opt && \
-    ln -s /opt/ghidra_${GHIDRA_VERSION}_PUBLIC ${GHIDRA_HOME} && \
-    rm /tmp/ghidra.zip
+RUN  wget --quiet "${GHIDRA_DOWNLOAD_URL}" -O /tmp/ghidra.zip \
+  && if [ -n "${GHIDRA_SHA256}" ]; then echo "${GHIDRA_SHA256}  /tmp/ghidra.zip" | sha256sum -c -; fi \
+  && unzip -q /tmp/ghidra.zip -d /opt \
+  && ln -s "/opt/ghidra_${GHIDRA_VERSION}_PUBLIC" "${GHIDRA_HOME}" \
+  && rm /tmp/ghidra.zip
 
 # Copy the compiled oinkie binary from the builder stage
 COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie
