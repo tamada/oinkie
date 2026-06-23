@@ -40,6 +40,8 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
 
   documents:
+    permissions:
+      contents: write
     uses: ./.github/workflows/documents.yaml
 
   containers:
