@@ -174,26 +174,31 @@ mod tests {
 
     #[test]
     fn parse_pcode_json() {
-        let file = std::fs::File::open("testdata/bzip2/arm64-linux_gcc_O3.json")
+        let file = std::fs::File::open("testdata/hello_world/pcodes/hello_clang.json")
             .expect("Failed to open JSON file");
         let r: Program<super::Op> = serde_json::from_reader(file)
             .expect("Failed to parse JSON");
-        assert_eq!(r.name(), "bzip2");
-        assert_eq!(r.path(), std::path::Path::new("/Users/tamada/researches/2026snpd_tamada/executables/arm64-linux/gcc_O3/bzip2"));
-        assert_eq!(r.len(), 85);
+        assert_eq!(r.name(), "hello_clang");
+        assert_eq!(r.path(), std::path::Path::new("testdata/hello_world/bin/hello_clang"));
+        assert_eq!(r.len(), 1);
 
         let f1 = r.iter().next().unwrap();
-        assert_eq!(f1.name(), "_init");
+        assert_eq!(f1.name(), "entry");
         let op1 = f1.get(0).unwrap();
-        assert_eq!(op1.mnemonic(), "SUBPIECE");
+        assert_eq!(op1.mnemonic(), "CALL");
         assert_eq!(op1.inputs().len(), 2);
-        assert_eq!(op1.ret(), Some("(register, 0x4000, 4)".into()));
+        assert_eq!(op1.ret(), None);
+
+        let op2 = f1.get(1).unwrap();
+        assert_eq!(op2.mnemonic(), "COPY");
+        assert_eq!(op2.inputs().len(), 1);
+        assert_eq!(op2.ret(), Some("(unique, 0x10000009, 8)".into()));
     }
 
 
     #[test]
     fn parse_pcode_json2() {
-        let file = std::fs::File::open("testdata/factorize/factorize_clang.json")
+        let file = std::fs::File::open("testdata/hello_world/pcodes/hello_gcc.json")
             .expect("Failed to open JSON file");
         let _r: Program<super::Op> = serde_json::from_reader(file)
             .expect("Failed to parse JSON");

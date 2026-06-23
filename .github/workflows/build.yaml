@@ -46,3 +46,4 @@ jobs:
 
   containers:
     uses: ./.github/workflows/containers.yaml
+    secrets: inherit
