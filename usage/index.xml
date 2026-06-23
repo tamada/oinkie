@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>🏃 Usage on oinkie</title><link>https://tamada.github.io/oinkie/usage/</link><description>Recent content in 🏃 Usage on oinkie</description><generator>Hugo -- gohugo.io</generator><language>en</language><copyright>Copyright &amp;copy; 2025 by Haruaki Tamada. Made with [Hugo](https://gohugo.io/). Deployed to [GitHub Pages](https://pages.github.com/).</copyright><lastBuildDate>Mon, 22 Jun 2026 00:00:00 +0000</lastBuildDate><atom:link href="https://tamada.github.io/oinkie/usage/index.xml" rel="self" type="application/rss+xml"/><item><title>5. All-in-One Execution (`run` command)</title><link>https://tamada.github.io/oinkie/usage/run/</link><pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate><guid>https://tamada.github.io/oinkie/usage/run/</guid><description>&lt;p&gt;The &lt;strong&gt;run&lt;/strong&gt; command is an all-in-one command designed to perform both &lt;strong&gt;extraction&lt;/strong&gt; and &lt;strong&gt;comparison&lt;/strong&gt; of software birthmarks in a single transaction. This is ideal for quick checks or automated CI pipelines, saving the intermediate step of writing extracted birthmarks manually to separate folders.&lt;/p&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🏃 Usage
+ &lt;div id="-usage" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-usage" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;div class="highlight-wrapper"&gt;&lt;div class="highlight"&gt;&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"&gt;&lt;code class="language-sh" data-lang="sh"&gt;&lt;span style="display:flex;"&gt;&lt;span&gt;oinkie run &lt;span style="color:#f92672"&gt;[&lt;/span&gt;OPTIONS&lt;span style="color:#f92672"&gt;]&lt;/span&gt; &lt;span style="color:#f92672"&gt;[&lt;/span&gt;FILES&lt;span style="color:#f92672"&gt;]&lt;/span&gt;...&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 class="relative group"&gt;Arguments
+ &lt;div id="arguments" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#arguments" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;FILES&amp;gt;...&lt;/code&gt;&lt;br&gt;
+Paths to the OIR JSON files (previously generated via the &lt;code&gt;lift&lt;/code&gt; command) to extract and compare.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 class="relative group"&gt;Options
+ &lt;div id="options" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#options" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-a, --analysis &amp;lt;ANALYSIS&amp;gt;&lt;/code&gt;&lt;br&gt;
+The combination of birthmark-type, representation, and similarity-algorithm to evaluate.&lt;br&gt;
+&lt;code&gt;[default: op-set-jaccard]&lt;/code&gt;&lt;br&gt;
+&lt;em&gt;Refer below for a list of common configuration formats.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-A, --aggregator &amp;lt;METHOD&amp;gt;&lt;/code&gt;&lt;br&gt;
+Specify the method for combining individual element-wise (function-to-function) similarities into a single program-wide similarity score. &lt;code&gt;[default: hungarian]&lt;/code&gt;&lt;br&gt;
+&lt;em&gt;Refer below for a full list of aggregators.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-s, --strategy &amp;lt;STRATEGY&amp;gt;&lt;/code&gt;&lt;br&gt;
+The pairing strategy to use when comparing files. &lt;code&gt;[default: all-and-self]&lt;/code&gt;&lt;br&gt;
+&lt;code&gt;[possible values: all-and-self, all, self-coverage, adjacent, first-vs-others, last-vs-others]&lt;/code&gt;
+&lt;em&gt;Refer a full list in &lt;a href="../compare" &gt;compare&lt;/a&gt; subcommand.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-d, --dest &amp;lt;DIRECTORY&amp;gt;&lt;/code&gt;&lt;br&gt;
+Destination directory for output CSV files containing the similarity results. &lt;code&gt;[default: similarities]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-S, --skip&lt;/code&gt;&lt;br&gt;
+Skip comparison if a similarity output already exists for a specific pair.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🔬 Specifying Analysis Modes (&lt;code&gt;--analysis&lt;/code&gt;)
+ &lt;div id="-specifying-analysis-modes---analysis" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-specifying-analysis-modes---analysis" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;p&gt;The format for &lt;code&gt;--analysis&lt;/code&gt; strings is structured as:&lt;/p&gt;</description></item><item><title>4. Reaggregating Scores (`reaggregate` command)</title><link>https://tamada.github.io/oinkie/usage/reaggregate/</link><pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate><guid>https://tamada.github.io/oinkie/usage/reaggregate/</guid><description>&lt;p&gt;The &lt;strong&gt;reaggregate&lt;/strong&gt; command allows you to recalculate the program-wide similarity score from previously computed element-wise (function-to-function) similarity files. This avoids having to completely rerun expensive pairwise comparisons if you simply want to test a different aggregation method (e.g., swapping between &lt;code&gt;hungarian&lt;/code&gt; and &lt;code&gt;topn:N&lt;/code&gt;).&lt;/p&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🏃 Usage
+ &lt;div id="-usage" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-usage" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;div class="highlight-wrapper"&gt;&lt;div class="highlight"&gt;&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"&gt;&lt;code class="language-sh" data-lang="sh"&gt;&lt;span style="display:flex;"&gt;&lt;span&gt;oinkie reaggregate &lt;span style="color:#f92672"&gt;[&lt;/span&gt;OPTIONS&lt;span style="color:#f92672"&gt;]&lt;/span&gt; &amp;lt;SCORE_DIRECTORY&amp;gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 class="relative group"&gt;Arguments
+ &lt;div id="arguments" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#arguments" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;SCORE_DIRECTORY&amp;gt;&lt;/code&gt;&lt;br&gt;
+Path to the directory containing the saved element-wise function similarity scores (often located inside the output folder generated by the &lt;code&gt;compare&lt;/code&gt; command).&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 class="relative group"&gt;Options
+ &lt;div id="options" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#options" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-A, --aggregator &amp;lt;METHOD&amp;gt;&lt;/code&gt;&lt;br&gt;
+Specify the aggregator method to combine function-to-function scores into a single program-wide score. &lt;code&gt;[default: hungarian]&lt;/code&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;hungarian&lt;/code&gt;&lt;/strong&gt;: Optimal overall bipartite matching between functions.&lt;/li&gt;
+&lt;li&gt;&lt;strong&gt;&lt;code&gt;topn:N&lt;/code&gt;&lt;/strong&gt;: Only average the top \(N\) closest matches for each function.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-d, --dest-file &amp;lt;RESULT.CSV&amp;gt;&lt;/code&gt;&lt;br&gt;
+The path to the destination CSV file where the reaggregated program-wise similarity scores list will be saved. &lt;code&gt;[default: reaggregate.csv]&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;💡 Practical Workflow Example
+ &lt;div id="-practical-workflow-example" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-practical-workflow-example" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;p&gt;Imagine you have run a large comparison across hundreds of files using the standard &lt;code&gt;hungarian&lt;/code&gt; aggregator:&lt;/p&gt;</description></item><item><title>3. Comparing Birthmarks (`compare` command)</title><link>https://tamada.github.io/oinkie/usage/compare/</link><pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate><guid>https://tamada.github.io/oinkie/usage/compare/</guid><description>&lt;p&gt;The &lt;strong&gt;compare&lt;/strong&gt; command performs pairwise comparison between extracted birthmarks to measure their similarity. This step calculates a score between \(0.0\) (entirely different) and \(1.0\) (identical), indicating the level of structural similarity between the programs.&lt;/p&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🏃 Usage
+ &lt;div id="-usage" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-usage" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;div class="highlight-wrapper"&gt;&lt;div class="highlight"&gt;&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"&gt;&lt;code class="language-sh" data-lang="sh"&gt;&lt;span style="display:flex;"&gt;&lt;span&gt;oinkie compare &lt;span style="color:#f92672"&gt;[&lt;/span&gt;OPTIONS&lt;span style="color:#f92672"&gt;]&lt;/span&gt; &lt;span style="color:#f92672"&gt;[&lt;/span&gt;JSON_FILES&lt;span style="color:#f92672"&gt;]&lt;/span&gt;...&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 class="relative group"&gt;Arguments
+ &lt;div id="arguments" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#arguments" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;JSON_FILES&amp;gt;...&lt;/code&gt;&lt;br&gt;
+Paths to the birthmark JSON files (generated using the &lt;code&gt;extract&lt;/code&gt; command) to compare.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 class="relative group"&gt;Options
+ &lt;div id="options" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#options" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-a, --algorithm &amp;lt;ALGORITHM&amp;gt;&lt;/code&gt;&lt;br&gt;
+Specify the similarity calculation algorithm to compare birthmarks. &lt;code&gt;[default: jaccard]&lt;/code&gt;&lt;br&gt;
+&lt;em&gt;Refer below for a full list of algorithms.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-A, --aggregator &amp;lt;METHOD&amp;gt;&lt;/code&gt;&lt;br&gt;
+Specify the method for combining individual element-wise (function-to-function) similarities into a single program-wide similarity score. &lt;code&gt;[default: hungarian]&lt;/code&gt;&lt;br&gt;
+&lt;em&gt;Refer below for a full list of aggregators.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-s, --strategy &amp;lt;STRATEGY&amp;gt;&lt;/code&gt;&lt;br&gt;
+The pairing strategy to use when comparing files. &lt;code&gt;[default: all-and-self]&lt;/code&gt;&lt;br&gt;
+&lt;code&gt;[possible values: all-and-self, all, self-coverage, adjacent, first-vs-others, last-vs-others]&lt;/code&gt;
+&lt;em&gt;Refer below for a full list of strategies.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-d, --dest &amp;lt;DIRECTORY&amp;gt;&lt;/code&gt;&lt;br&gt;
+The output directory where comparison results are saved (typically as CSV files). &lt;code&gt;[default: similarities]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-S, --skip&lt;/code&gt;&lt;br&gt;
+Skip the comparison if the output file already exists for the current file pair.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🧦 Pairing Strategies (&lt;code&gt;--strategy&lt;/code&gt;)
+ &lt;div id="-pairing-strategies---strategy" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-pairing-strategies---strategy" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;p&gt;When comparing multiple files, you can configure which file pairs are compared using the following strategy options:&lt;/p&gt;</description></item><item><title>2. Extracting Birthmarks (`extract` command)</title><link>https://tamada.github.io/oinkie/usage/extract/</link><pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate><guid>https://tamada.github.io/oinkie/usage/extract/</guid><description>&lt;p&gt;The &lt;strong&gt;extract&lt;/strong&gt; command analyzes the lifted OIR (JSON) files and extracts specified types of birthmarks. A software birthmark represents a distinct structural or semantic characteristic of a program (like instruction types or external function dependencies) that remains stable across compilation variations.&lt;/p&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🏃 Usage
+ &lt;div id="-usage" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-usage" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;div class="highlight-wrapper"&gt;&lt;div class="highlight"&gt;&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"&gt;&lt;code class="language-sh" data-lang="sh"&gt;&lt;span style="display:flex;"&gt;&lt;span&gt;oinkie extract &lt;span style="color:#f92672"&gt;[&lt;/span&gt;OPTIONS&lt;span style="color:#f92672"&gt;]&lt;/span&gt; &lt;span style="color:#f92672"&gt;[&lt;/span&gt;FILES&lt;span style="color:#f92672"&gt;]&lt;/span&gt;...&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 class="relative group"&gt;Arguments
+ &lt;div id="arguments" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#arguments" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;&amp;lt;FILES&amp;gt;...&lt;/code&gt;&lt;br&gt;
+Path to the OIR JSON files (previously generated via the &lt;code&gt;lift&lt;/code&gt; command) from which to extract birthmarks.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 class="relative group"&gt;Options
+ &lt;div id="options" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#options" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-d, --dest &amp;lt;DIRECTORY&amp;gt;&lt;/code&gt;&lt;br&gt;
+Specify the destination directory for saving the extracted birthmark files. Defaults to the &lt;code&gt;./birthmarks&lt;/code&gt; directory. &lt;code&gt;[default: birthmarks]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-b, --birthmark-type &amp;lt;BIRTHMARK_TYPE&amp;gt;&lt;/code&gt;&lt;br&gt;
+The type and representation structure of the birthmark to extract. Defaults to &lt;code&gt;op-seq&lt;/code&gt;. &lt;code&gt;[default: op-seq]&lt;/code&gt;&lt;br&gt;
+&lt;em&gt;Refer below for a full list of supported birthmark types.&lt;/em&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-B, --binary-type &amp;lt;BINARY_TYPE&amp;gt;&lt;/code&gt;&lt;br&gt;
+The binary input parser type. The current version only supports &lt;code&gt;ghidra&lt;/code&gt;. &lt;code&gt;[default: ghidra]&lt;/code&gt; &lt;code&gt;[possible values: ghidra, llvm, binary-ninja]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;-S, --skip&lt;/code&gt;&lt;br&gt;
+Skip the extraction process if the output birthmark file already exists.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🧪 Birthmark Types and Structural Representation
+ &lt;div id="-birthmark-types-and-structural-representation" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-birthmark-types-and-structural-representation" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;p&gt;Software birthmarks are categorized by their &lt;strong&gt;underlying element types&lt;/strong&gt; and their &lt;strong&gt;representation structures&lt;/strong&gt;.&lt;/p&gt;</description></item><item><title>1. Lifting Binaries (`lift` command)</title><link>https://tamada.github.io/oinkie/usage/lift/</link><pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate><guid>https://tamada.github.io/oinkie/usage/lift/</guid><description>&lt;p&gt;The &lt;strong&gt;lift&lt;/strong&gt; command converts compiled binary executable files into the Oinkie Intermediate Representation (OIR) JSON format. The current implementation utilizes &lt;strong&gt;Ghidra&lt;/strong&gt; in headless mode (without GUI) to translate machine-specific assembly instructions into platform-agnostic P-code.&lt;/p&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🏃 Usage
+ &lt;div id="-usage" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-usage" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;p&gt;You can lift multiple binary files at once. The default behavior is to use Ghidra to analyze the executables and output the resulting JSON files to the &lt;code&gt;./pcodes&lt;/code&gt; directory.&lt;/p&gt;</description></item><item><title>Application Information (`info` command)</title><link>https://tamada.github.io/oinkie/usage/info/</link><pubDate>Mon, 22 Jun 2026 00:00:00 +0000</pubDate><guid>https://tamada.github.io/oinkie/usage/info/</guid><description>&lt;p&gt;The &lt;strong&gt;info&lt;/strong&gt; command displays general details about the &lt;strong&gt;oinkie&lt;/strong&gt; application, including the version, author, and all currently supported birthmark configurations and comparison algorithms.&lt;/p&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;🏃 Usage
+ &lt;div id="-usage" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-usage" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;div class="highlight-wrapper"&gt;&lt;div class="highlight"&gt;&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;-webkit-text-size-adjust:none;"&gt;&lt;code class="language-sh" data-lang="sh"&gt;&lt;span style="display:flex;"&gt;&lt;span&gt;oinkie info &lt;span style="color:#f92672"&gt;[&lt;/span&gt;OPTIONS&lt;span style="color:#f92672"&gt;]&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 class="relative group"&gt;Options
+ &lt;div id="options" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#options" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h3&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;-h, --help&lt;/code&gt;&lt;br&gt;
+Print help information.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr&gt;
+
+&lt;h2 class="relative group"&gt;📊 Example Output
+ &lt;div id="-example-output" class="anchor"&gt;&lt;/div&gt;
+ 
+ &lt;span
+ class="absolute top-0 w-6 transition-opacity opacity-0 -start-6 not-prose group-hover:opacity-100 select-none"&gt;
+ &lt;a class="text-primary-300 dark:text-neutral-700 !no-underline" href="#-example-output" aria-label="Anchor"&gt;#&lt;/a&gt;
+ &lt;/span&gt;
+ 
+&lt;/h2&gt;
+&lt;p&gt;Running the &lt;code&gt;info&lt;/code&gt; command provides detailed listings of supported formats and algorithms in your current environment:&lt;/p&gt;</description></item></channel></rss>
