@@ -1,0 +1,60 @@
+# Multi-stage Dockerfile for full oinkie environment (includes Rust binary & Ghidra lifter)
+
+# ==========================================
+# Stage 1: Build the Rust oinkie CLI binary
+# ==========================================
+FROM rust:1.95-slim-bookworm AS builder
+
+# Install system dependencies needed for compiling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/oinkie
+COPY . .
+
+# Build the release binary
+RUN cargo build --release
+
+# ==========================================
+# Stage 2: Runtime environment with JDK & Ghidra
+# ==========================================
+FROM eclipse-temurin:21-jdk-noble AS runner
+
+LABEL maintainer="Haruaki Tamada"
+LABEL description="Full oinkie environment including Ghidra lifter for binary analysis and birthmark extraction"
+
+# Install system utilities needed by Ghidra and oinkie
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    unzip \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Ghidra
+# You can customize the Ghidra version using build arguments
+ARG GHIDRA_VERSION=11.0.1
+ARG GHIDRA_BUILD_DATE=20240130
+ARG GHIDRA_ZIP_NAME=ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_BUILD_DATE}.zip
+ARG GHIDRA_DOWNLOAD_URL=https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_${GHIDRA_VERSION}_build/${GHIDRA_ZIP_NAME}
+
+ENV GHIDRA_HOME=/opt/ghidra
+
+RUN wget --quiet ${GHIDRA_DOWNLOAD_URL} -O /tmp/ghidra.zip && \
+    unzip -q /tmp/ghidra.zip -d /opt && \
+    ln -s /opt/ghidra_${GHIDRA_VERSION}_PUBLIC ${GHIDRA_HOME} && \
+    rm /tmp/ghidra.zip
+
+# Copy the compiled oinkie binary from the builder stage
+COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie
+
+# Set environment and working directory
+WORKDIR /work
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Default command
+ENTRYPOINT ["oinkie"]
+CMD ["--help"]

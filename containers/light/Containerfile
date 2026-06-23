@@ -1,0 +1,38 @@
+# Multi-stage Dockerfile for lightweight oinkie execution (excludes Ghidra lifter)
+
+# ==========================================
+# Stage 1: Build the Rust oinkie CLI binary
+# ==========================================
+FROM rust:1.95-slim-bookworm AS builder
+
+# Install system dependencies needed for compiling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/oinkie
+COPY . .
+
+# Build the release binary
+RUN cargo build --release
+
+# ==========================================
+# Stage 2: Tiny runtime environment for CLI execution
+# ==========================================
+FROM debian:bookworm-slim AS runner
+
+LABEL maintainer="Haruaki Tamada"
+LABEL description="Lightweight oinkie CLI image for extracting and comparing birthmarks from already lifted OIR JSON files"
+
+# Copy the compiled oinkie binary from the builder stage
+COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie
+
+# Set environment and working directory
+WORKDIR /work
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Default command
+ENTRYPOINT ["oinkie"]
+CMD ["--help"]
