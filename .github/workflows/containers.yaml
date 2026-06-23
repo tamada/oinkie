@@ -29,5 +29,7 @@ jobs:
           password: ${{ secrets.QUAY_TOKEN }}
 
       - name: Build Container
-        run:
+        run: |
+          pwd
+          ls -la
           just container
