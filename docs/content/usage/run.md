@@ -27,9 +27,13 @@ oinkie run [OPTIONS] [FILES]...
   The combination of birthmark-type, representation, and similarity-algorithm to evaluate.  
   `[default: op-set-jaccard]`  
   *Refer below for a list of common configuration formats.*
+* `-A, --aggregator <METHOD>`  
+  Specify the method for combining individual element-wise (function-to-function) similarities into a single program-wide similarity score. `[default: hungarian]`  
+  *Refer below for a full list of aggregators.*
 * `-s, --strategy <STRATEGY>`  
   The pairing strategy to use when comparing files. `[default: all-and-self]`  
-  `[possible values: all-and-self, all, self-coverage, adjacent, first-vs-others]`
+  `[possible values: all-and-self, all, self-coverage, adjacent, first-vs-others, last-vs-others]`
+  *Refer a full list in [compare](../compare) subcommand.*
 * `-d, --dest <DIRECTORY>`  
   Destination directory for output CSV files containing the similarity results. `[default: similarities]`
 * `-S, --skip`  

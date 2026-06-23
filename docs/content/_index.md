@@ -14,7 +14,7 @@ outputs:
 {{< /keywordList >}}
 
 
-[ [🗣️ Overview](#️-overview) | [🚶 Procedures of Birthmarking](#-procedures-of-birthmarking) | [🧭 Navigation](#-navigation) ]
+[ [🗣️ Overview](#-overview) | [🚶 Procedures of Birthmarking](#-procedures-of-birthmarking) | [🧭 Navigation](#-navigation) ]
 
 {{< figure src="oinkie.png" alt="oinkie logo" width="200px" class="mx-auto my-4" >}}
 

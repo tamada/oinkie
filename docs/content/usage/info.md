@@ -37,12 +37,14 @@ Supported Birthmark Types:
   - op-seq (Opcode Sequence)
   - op-freq (Opcode Frequency)
   - op-set (Opcode Set)
-  - op1gram-seq, op1gram-freq, op1gram-set (Opcode 1-gram variants)
-  - op2gram-seq, op2gram-freq, op2gram-set (Opcode 2-gram variants)
-  - op3gram-seq, op3gram-freq, op3gram-set (Opcode 3-gram variants)
-  - op4gram-seq, op4gram-freq, op4gram-set (Opcode 4-gram variants)
-  - op5gram-seq, op5gram-freq, op5gram-set (Opcode 5-gram variants)
-  - op6gram-seq, op6gram-freq, op6gram-set (Opcode 6-gram variants)
+  - op-uni-gram-seq,   op-uni-gram-freq,   op-uni-gram-set   (Opcode 1-gram variants)
+  - op-bi-gram-seq,    op-bi-gram-freq,    op-bi-gram-set    (Opcode 2-gram variants)
+  - op-tri-gram-seq,   op-tri-gram-freq,   op-tri-gram-set   (Opcode 3-gram variants)
+  - op-quad-gram-seq,  op-quad-gram-freq,  op-quad-gram-set  (Opcode 4-gram variants)
+  - op-penta-gram-seq, op-penta-gram-freq, op-penta-gram-set (Opcode 5-gram variants)
+  - op-hexa-gram-seq,  op-hexa-gram-freq,  op-hexa-gram-set  (Opcode 6-gram variants)
+  - op-hepta-gram-seq, op-hepta-gram-freq, op-hepta-gram-set (Opcode 7-gram variants)
+  - op-octa-gram-seq,  op-octa-gram-freq,  op-octa-gram-set  (Opcode 8-gram variants)
 
 Supported Similarity Algorithms:
   - cosine (Cosine Similarity)
@@ -55,6 +57,6 @@ Supported Similarity Algorithms:
   - weighted-jaccard (Weighted Jaccard Index)
 
 Supported Aggregators:
-  - hungarian (Bipartite Bipartite Matching via Hungarian Algorithm)
+  - hungarian (Bipartite Matching via Hungarian Algorithm)
   - topn:N (Average of Top N Closest Matchings)
 ```

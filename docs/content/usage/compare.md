@@ -30,7 +30,8 @@ oinkie compare [OPTIONS] [JSON_FILES]...
   Specify the method for combining individual element-wise (function-to-function) similarities into a single program-wide similarity score. `[default: hungarian]`  
   *Refer below for a full list of aggregators.*
 * `-s, --strategy <STRATEGY>`  
-  The pairing strategy to determine which files are compared against each other. `[default: all-and-self]`  
+  The pairing strategy to use when comparing files. `[default: all-and-self]`  
+  `[possible values: all-and-self, all, self-coverage, adjacent, first-vs-others, last-vs-others]`
   *Refer below for a full list of strategies.*
 * `-d, --dest <DIRECTORY>`  
   The output directory where comparison results are saved (typically as CSV files). `[default: similarities]`
@@ -50,6 +51,7 @@ When comparing multiple files, you can configure which file pairs are compared u
 | **`self-coverage`** | Compare each file only with itself (useful for baselines). |
 | **`adjacent`** | Compare adjacent files in the input list (e.g., \\(F_1\\) vs \\(F_2\\), \\(F_2\\) vs \\(F_3\\)). |
 | **`first-vs-others`** | Compare the first file in the arguments list against all remaining files. |
+| **`last-vs-others`** | Compare the last file in the arguments list against all remaining files. |
 
 ---
 

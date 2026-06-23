@@ -40,23 +40,28 @@ oinkie extract [OPTIONS] [FILES]...
 Software birthmarks are categorized by their **underlying element types** and their **representation structures**.
 
 ### 1. Element Types
+
 * **`op` (Opcode):** Focuses on the types of P-code instructions being executed (e.g., `INT_ADD`, `COPY`, `CALL`).
 * **`fc` (Function Calls):** Focuses on calls made to external systems, libraries, or internal functions (e.g., `_printf`, `_atoll`).
-* **Opcode \\(k\\)-grams (`op1gram` to `op6gram`):** Focuses on sequences of sequential P-code operations of length \\(k\\). For example, `op3gram` processes sliding windows of 3 instructions.
+* **Opcode \\(k\\)-grams (`op-1gram` to `op-8gram`):** Focuses on sequences of sequential P-code operations of length \\(k\\). For example, `op-3gram` processes sliding windows of 3 instructions.
 
 ### 2. Structural Representations
+
 For any given element type, **oinkie** can format the collection using one of three structures:
+
 * **`seq` (Sequence):** Retains the absolute order of elements as they appear in each function. Comparison is sensitive to the exact execution path/order.
 * **`freq` (Frequency):** Stores elements along with their respective frequency of occurrence (histogram-like). This abstracts away the exact order but retains density/quantity characteristics.
 * **`set` (Set):** Keeps unique elements without duplicate values or order information. This is highly robust against instruction shuffling.
 
 ### Common Combinations (Examples)
+
 * **`op-seq`** (Default): Sequential instruction listing.
 * **`fc-freq`**: How many times each function is called.
 * **`op-3gram-seq`**: Sequences of 3 sequential operations.
 * **`op-set`**: The set of unique opcodes used.
 
 To list all possible birthmark configurations supported by your current installation, run:
+
 ```sh
 oinkie info
 ```
