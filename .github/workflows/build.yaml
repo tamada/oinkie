@@ -38,12 +38,3 @@ jobs:
           github-token: ${{ secrets.github_token }}
           path-to-lcov: coverage.lcov
         if: matrix.os == 'ubuntu-latest'
-
-  documents:
-    permissions:
-      contents: write
-    uses: ./.github/workflows/documents.yaml
-
-  containers:
-    uses: ./.github/workflows/containers.yaml
-    secrets: inherit
