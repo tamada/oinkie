@@ -10,6 +10,9 @@ description = "Detecting software theft, the birthmark toolkit for Ghidra Pcode,
 dateFormat = "2006-01-02"
 copyright = "Copyright &copy; 2025 by Haruaki Tamada. Made with [Hugo](https://gohugo.io/). Deployed to [GitHub Pages](https://pages.github.com/)."
 
+[params.article]
+externalLinkForceNewTab = false
+
 [menus]
 [[menus.main]]
     name = "🏃 Usage"
@@ -33,6 +36,10 @@ copyright = "Copyright &copy; 2025 by Haruaki Tamada. Made with [Hugo](https://g
     name = ":smile: About"
     pageRef = "/about"
     weight = 50
+[[menus.footer]]
+    name = "📃 Academic"
+    pageRef = "/academic"
+    weight = 60
 
 [module]
 [[module.imports]]
