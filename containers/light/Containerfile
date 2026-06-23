@@ -1,0 +1,53 @@
+# Multi-stage Dockerfile for lightweight oinkie execution (excludes Ghidra lifter)
+
+# ==========================================
+# Stage 1: Build the Rust oinkie CLI binary
+# ==========================================
+FROM rust:1.95-slim-bookworm AS builder
+
+# Install system dependencies needed for compiling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    pkg-config \
+    libssl-dev \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/oinkie
+COPY Cargo.toml .
+COPY Cargo.lock .
+COPY src        ./src
+COPY cli        ./cli
+COPY lifter     ./lifter
+
+# Build the release binary
+RUN cargo build --release --locked
+
+# ==========================================
+# Stage 2: Tiny runtime environment for CLI execution
+# ==========================================
+FROM debian:bookworm-slim AS runner
+
+ARG GIT_REVISION
+ARG BUILD_DATE
+ARG VERSION
+
+LABEL org.opencontainers.image.authors="Haruaki TAMADA" \
+      org.opencontainers.image.title="oinkie" \
+      org.opencontainers.image.description="Lightweight oinkie CLI image: The software birthmark toolkit for real-world executables." \
+      org.opencontainers.image.url="https://tamada.github.io/oinkie" \
+      org.opencontainers.image.source="https://github.com/tamada/oinkie" \
+      org.opencontainers.image.version=${VERSION} \
+      org.opencontainers.image.revision=${GIT_REVISION} \
+      org.opencontainers.image.created=${BUILD_DATE} \
+      org.opencontainers.image.licenses="MIT"
+
+# Copy the compiled oinkie binary from the builder stage
+COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie
+
+# Set environment and working directory
+WORKDIR /work
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Default command
+ENTRYPOINT ["oinkie"]
+CMD ["--help"]

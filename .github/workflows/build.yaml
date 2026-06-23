@@ -1,0 +1,40 @@
+name: build
+on:
+  push:
+    branches:
+      - "**"
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macOS-latest
+          # - windows-latest
+    steps:
+      - name: setup rust
+        run: |
+          rustup update stable
+
+      - name: checkout
+        uses: actions/checkout@v6
+
+      - name: build
+        run: |
+          cargo clippy -- -D warnings
+          cargo build --release
+
+      - name: Convert coverage format to lcov
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cargo install cargo-llvm-cov
+          rustup component add llvm-tools-preview
+          cargo llvm-cov --lcov --output-path coverage.lcov
+
+      - name: coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.github_token }}
+          path-to-lcov: coverage.lcov
+        if: matrix.os == 'ubuntu-latest'

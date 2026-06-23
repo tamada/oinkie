@@ -1,0 +1,82 @@
+name: publish
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+    types: [closed]
+
+jobs:
+  documents:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+            
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.158.0'
+          extended: true
+
+      - name: add worktree of gh-pages to docs/public
+        run: |
+          git fetch origin gh-pages
+          git worktree add docs/public gh-pages
+
+      - name: Build Documents
+        run: |
+          cd docs
+          hugo --minify
+
+      - name: commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          cd docs/public
+          git add .
+          git commit -m "Update site data: $(date +'%Y-%m-%d')" || echo "No changes to commit"
+          git push origin gh-pages
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Just
+        uses: extractions/setup-just@v4
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+            
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_ACCOUNT }}
+          password: ${{ secrets.QUAY_TOKEN }}
+
+      - name: Build Container
+        run: |
+          pwd
+          ls -la
+          just container

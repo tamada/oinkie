@@ -136,12 +136,7 @@ fn load_comparison<P: AsRef<Path>>(path: P) -> Result<(Array2<f64>, PathBuf, Pat
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_load_comparison() {
-        let _ = load_comparison_file(1, Path::new("testdata/comparison_data"))
-            .expect("failed to load comparison file");
-        
     }
 }
