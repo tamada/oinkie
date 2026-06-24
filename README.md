@@ -1,11 +1,11 @@
 # oinkie 🐽🐷🐖
 
-[![Version](https://img.shields.io/badge/Version-0.2.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.2.0)
+[![Version](https://img.shields.io/badge/Version-0.2.1-blue)](https://github.com/tamada/oinkie/releases/tag/v0.2.1)
 [![License-MIT](https://img.shields.io/badge/License-MIT-blue)](https://github.com/tamada/oinkie/blob/main/LICENSE)
 
 [![Coverage Status](https://coveralls.io/repos/github/tamada/oinkie/badge.svg)](https://coveralls.io/github/tamada/oinkie)
 
-[![Docker](https://img.shields.io/badge/Container-quay.io/tama5:0.2.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
+[![Docker](https://img.shields.io/badge/Container-quay.io/tama5:0.2.1-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 
 Detecting software theft, the birthmark toolkit for Ghidra Pcode, LLVM IR/BC, and Binary Ninja.
 
