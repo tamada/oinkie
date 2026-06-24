@@ -1,16 +1,115 @@
 name: publish
 on:
-  push:
-    branches:
-      - "**"
   pull_request:
     branches:
       - main
     types: [closed]
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'releases/v') && github.event.pull_request.merged == true
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.vars.outputs.tag }}
+      appname: ${{ steps.vars.outputs.appname }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Git Tag name
+        id: vars
+        run: |
+          echo "tag=${GITHUB_HEAD_REF##*/v}" >> $GITHUB_OUTPUT
+          echo "appname=${GITHUB_REPOSITORY#*/}" >> $GITHUB_OUTPUT
+
+      - name: Set git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and Push tag
+        run: |
+          git tag v${{ steps.vars.outputs.tag }}
+          git push origin v${{ steps.vars.outputs.tag }}    
+
+      - name: Create draft release with gh command
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create v${{ steps.vars.outputs.tag }} --verify-tag --generate-notes --title "Release v${{ steps.vars.outputs.tag }}" --draft          
+
+  publish:
+    runs-on: ${{ matrix.os }}
+    needs: setup
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            architecture: arm64
+            os_name: linux
+            artifact_name: ${{ needs.setup.outputs.appname }}
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            architecture: amd64
+            os_name: linux
+            artifact_name: ${{ needs.setup.outputs.appname }}
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            architecture: arm64
+            os_name: darwin
+            artifact_name: ${{ needs.setup.outputs.appname }}
+          - os: macos-latest
+            architecture: amd64
+            os_name: darwin
+            target: x86_64-apple-darwin
+            artifact_name: ${{ needs.setup.outputs.appname }}
+    outputs:
+      tag: ${{ needs.setup.outputs.tag }}      
+    steps:
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: build
+        run: |
+          rustup update stable
+          rustup target add ${{ matrix.target }}
+          cargo install cargo-zigbuild
+          cargo zigbuild --release --target ${{ matrix.target }}
+
+      - name: Create distribution files.
+        run: |
+          ASSET_NAME=${{ needs.setup.outputs.appname }}-${{ needs.setup.outputs.tag}}_${{ matrix.architecture }}_${{ matrix.os_name }}
+          mkdir -p dist/$ASSET_NAME
+          cp target/${{ matrix.target }}/release/${{ needs.setup.outputs.appname }} dist/$ASSET_NAME/
+          cp README.md LICENSE dist/$ASSET_NAME/
+          cp -r completions dist/$ASSET_NAME/
+          tar cvfz dist/${ASSET_NAME}.tar.gz -C dist $ASSET_NAME
+
+      - name: Upload assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSET_NAME=${{ needs.setup.outputs.appname }}-${{ needs.setup.outputs.tag}}_${{ matrix.architecture }}_${{ matrix.os_name }}
+          gh release upload v${{ needs.setup.outputs.tag }} dist/${ASSET_NAME}.tar.gz          
+
   documents:
     runs-on: ubuntu-latest
+    needs: setup
+    outputs:
+      tag: ${{ needs.setup.outputs.tag }}
     permissions:
       contents: write
     steps:
@@ -52,6 +151,9 @@ jobs:
 
   container:
     runs-on: ubuntu-latest
+    needs: publish
+    outputs:
+      tag: ${{ needs.publish.outputs.tag }}
     steps:
       - name: Setup Just
         uses: extractions/setup-just@v4
@@ -76,6 +178,22 @@ jobs:
 
       - name: Build Container
         run: |
-          pwd
-          ls -la
           just container
+
+  finalize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs: [documents, container]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0 # Fetch all history for .GitInfo and .Lastmod
+
+      - name: Finalize release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release edit v${{ needs.container.outputs.tag }} --draft=false

@@ -1,0 +1,458 @@
+_oinkie() {
+    local i cur prev opts cmd
+    COMPREPLY=()
+    if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
+        cur="$2"
+    else
+        cur="${COMP_WORDS[COMP_CWORD]}"
+    fi
+    prev="$3"
+    cmd=""
+    opts=""
+
+    for i in "${COMP_WORDS[@]:0:COMP_CWORD}"
+    do
+        case "${cmd},${i}" in
+            ",$1")
+                cmd="oinkie"
+                ;;
+            oinkie,compare)
+                cmd="oinkie__subcmd__compare"
+                ;;
+            oinkie,extract)
+                cmd="oinkie__subcmd__extract"
+                ;;
+            oinkie,gencomp)
+                cmd="oinkie__subcmd__gencomp"
+                ;;
+            oinkie,help)
+                cmd="oinkie__subcmd__help"
+                ;;
+            oinkie,info)
+                cmd="oinkie__subcmd__info"
+                ;;
+            oinkie,lift)
+                cmd="oinkie__subcmd__lift"
+                ;;
+            oinkie,reaggregate)
+                cmd="oinkie__subcmd__reaggregate"
+                ;;
+            oinkie,run)
+                cmd="oinkie__subcmd__run"
+                ;;
+            oinkie__subcmd__help,compare)
+                cmd="oinkie__subcmd__help__subcmd__compare"
+                ;;
+            oinkie__subcmd__help,extract)
+                cmd="oinkie__subcmd__help__subcmd__extract"
+                ;;
+            oinkie__subcmd__help,gencomp)
+                cmd="oinkie__subcmd__help__subcmd__gencomp"
+                ;;
+            oinkie__subcmd__help,help)
+                cmd="oinkie__subcmd__help__subcmd__help"
+                ;;
+            oinkie__subcmd__help,info)
+                cmd="oinkie__subcmd__help__subcmd__info"
+                ;;
+            oinkie__subcmd__help,lift)
+                cmd="oinkie__subcmd__help__subcmd__lift"
+                ;;
+            oinkie__subcmd__help,reaggregate)
+                cmd="oinkie__subcmd__help__subcmd__reaggregate"
+                ;;
+            oinkie__subcmd__help,run)
+                cmd="oinkie__subcmd__help__subcmd__run"
+                ;;
+            *)
+                ;;
+        esac
+    done
+
+    case "${cmd}" in
+        oinkie)
+            opts="-h --help info lift extract compare reaggregate run gencomp help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__compare)
+            opts="-a -A -s -d -S -h --algorithm --aggregator --strategy --dest --skip --help [JSON_FILES]..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --algorithm)
+                    COMPREPLY=($(compgen -W "cosine dice euclidean jaccard levenshtein lcs simpson weighted-jaccard" -- "${cur}"))
+                    return 0
+                    ;;
+                -a)
+                    COMPREPLY=($(compgen -W "cosine dice euclidean jaccard levenshtein lcs simpson weighted-jaccard" -- "${cur}"))
+                    return 0
+                    ;;
+                --aggregator)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -A)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --strategy)
+                    COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
+                    return 0
+                    ;;
+                -s)
+                    COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
+                    return 0
+                    ;;
+                --dest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -d)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__extract)
+            opts="-d -b -S -B -h --dest --birthmark-type --skip --binary-type --help [JSON_FILES]..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --dest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -d)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --birthmark-type)
+                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-uni-gram-seq op-bi-gram-seq op-tri-gram-seq op-quad-gram-seq op-penta-gram-seq op-hexa-gram-seq op-hepta-gram-seq op-octa-gram-seq op-uni-gram-freq op-bi-gram-freq op-tri-gram-freq op-quad-gram-freq op-penta-gram-freq op-hexa-gram-freq op-hepta-gram-freq op-octa-gram-freq op-uni-gram-set op-bi-gram-set op-tri-gram-set op-quad-gram-set op-penta-gram-set op-hexa-gram-set op-hepta-gram-set op-octa-gram-set" -- "${cur}"))
+                    return 0
+                    ;;
+                -b)
+                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-uni-gram-seq op-bi-gram-seq op-tri-gram-seq op-quad-gram-seq op-penta-gram-seq op-hexa-gram-seq op-hepta-gram-seq op-octa-gram-seq op-uni-gram-freq op-bi-gram-freq op-tri-gram-freq op-quad-gram-freq op-penta-gram-freq op-hexa-gram-freq op-hepta-gram-freq op-octa-gram-freq op-uni-gram-set op-bi-gram-set op-tri-gram-set op-quad-gram-set op-penta-gram-set op-hexa-gram-set op-hepta-gram-set op-octa-gram-set" -- "${cur}"))
+                    return 0
+                    ;;
+                --binary-type)
+                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
+                    return 0
+                    ;;
+                -B)
+                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__gencomp)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help)
+            opts="info lift extract compare reaggregate run gencomp help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__compare)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__extract)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__gencomp)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__info)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__lift)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__reaggregate)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__run)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__info)
+            opts="-h --help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__lift)
+            opts="-d -l -H -i -S -h --dest --lifter-type --home --intermediate --script --skip --help [FILES]..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --dest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -d)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --lifter-type)
+                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
+                    return 0
+                    ;;
+                -l)
+                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
+                    return 0
+                    ;;
+                --home)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -H)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --intermediate)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -i)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --script)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__reaggregate)
+            opts="-A -d -h --aggregator --dest-file --help <SCORE_DIRECTORY>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --aggregator)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -A)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --dest-file)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -d)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__run)
+            opts="-a -s -d -A -S -h --analysis --strategy --dest --aggregator --skip --help [FILES]..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --analysis)
+                    COMPREPLY=($(compgen -W "fc-freq-cosine fc-set-dice fc-freq-euclidean fc-set-jaccard fc-seq-levenshtein fc-seq-lcs fc-set-simpson fc-freq-weightedjaccard op-freq-cosine op-set-dice op-freq-euclidean op-set-jaccard op-seq-levenshtein op-seq-lcs op-set-simpson op-freq-weightedjaccard op1gram-set-dice op1gram-set-jaccard op1gram-set-simpson op1gram-seq-levenshtein op1gram-seq-lcs op1gram-freq-cosine op1gram-freq-euclidean op1gram-freq-weightedjaccard op2gram-set-dice op2gram-set-jaccard op2gram-set-simpson op2gram-seq-levenshtein op2gram-seq-lcs op2gram-freq-cosine op2gram-freq-euclidean op2gram-freq-weightedjaccard op3gram-set-dice op3gram-set-jaccard op3gram-set-simpson op3gram-seq-levenshtein op3gram-seq-lcs op3gram-freq-cosine op3gram-freq-euclidean op3gram-freq-weightedjaccard op4gram-set-dice op4gram-set-jaccard op4gram-set-simpson op4gram-seq-levenshtein op4gram-seq-lcs op4gram-freq-cosine op4gram-freq-euclidean op4gram-freq-weightedjaccard op5gram-set-dice op5gram-set-jaccard op5gram-set-simpson op5gram-seq-levenshtein op5gram-seq-lcs op5gram-freq-cosine op5gram-freq-euclidean op5gram-freq-weightedjaccard op6gram-set-dice op6gram-set-jaccard op6gram-set-simpson op6gram-seq-levenshtein op6gram-seq-lcs op6gram-freq-cosine op6gram-freq-euclidean op6gram-freq-weightedjaccard" -- "${cur}"))
+                    return 0
+                    ;;
+                -a)
+                    COMPREPLY=($(compgen -W "fc-freq-cosine fc-set-dice fc-freq-euclidean fc-set-jaccard fc-seq-levenshtein fc-seq-lcs fc-set-simpson fc-freq-weightedjaccard op-freq-cosine op-set-dice op-freq-euclidean op-set-jaccard op-seq-levenshtein op-seq-lcs op-set-simpson op-freq-weightedjaccard op1gram-set-dice op1gram-set-jaccard op1gram-set-simpson op1gram-seq-levenshtein op1gram-seq-lcs op1gram-freq-cosine op1gram-freq-euclidean op1gram-freq-weightedjaccard op2gram-set-dice op2gram-set-jaccard op2gram-set-simpson op2gram-seq-levenshtein op2gram-seq-lcs op2gram-freq-cosine op2gram-freq-euclidean op2gram-freq-weightedjaccard op3gram-set-dice op3gram-set-jaccard op3gram-set-simpson op3gram-seq-levenshtein op3gram-seq-lcs op3gram-freq-cosine op3gram-freq-euclidean op3gram-freq-weightedjaccard op4gram-set-dice op4gram-set-jaccard op4gram-set-simpson op4gram-seq-levenshtein op4gram-seq-lcs op4gram-freq-cosine op4gram-freq-euclidean op4gram-freq-weightedjaccard op5gram-set-dice op5gram-set-jaccard op5gram-set-simpson op5gram-seq-levenshtein op5gram-seq-lcs op5gram-freq-cosine op5gram-freq-euclidean op5gram-freq-weightedjaccard op6gram-set-dice op6gram-set-jaccard op6gram-set-simpson op6gram-seq-levenshtein op6gram-seq-lcs op6gram-freq-cosine op6gram-freq-euclidean op6gram-freq-weightedjaccard" -- "${cur}"))
+                    return 0
+                    ;;
+                --strategy)
+                    COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
+                    return 0
+                    ;;
+                -s)
+                    COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
+                    return 0
+                    ;;
+                --dest)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -d)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --aggregator)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -A)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+    esac
+}
+
+if [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 4 || "${BASH_VERSINFO[0]}" -gt 4 ]]; then
+    complete -F _oinkie -o nosort -o bashdefault -o default oinkie
+else
+    complete -F _oinkie -o bashdefault -o default oinkie
+fi
