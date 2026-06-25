@@ -139,3 +139,58 @@ fn extract_function_calls_freq<T: crate::Op>(f: &Function<T>, p: &Program<T>) ->
             acc
         })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_dest_file_name_small_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("small_test.txt");
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        file.write_all(b"hello world").unwrap();
+
+        let name = dest_file_name(&file_path).unwrap();
+        assert!(name.starts_with("small_test_"));
+        assert!(name.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_dest_file_name_large_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("large_test.txt");
+        let mut file = std::fs::File::create(&file_path).unwrap();
+        
+        // Write 10KB of data
+        let data = vec![0u8; 10240];
+        file.write_all(&data).unwrap();
+
+        let name = dest_file_name(&file_path).unwrap();
+        assert!(name.starts_with("large_test_"));
+        assert!(name.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_get_hash_io_error() {
+        // Test with a non-existent file
+        let path = Path::new("non_existent_file.xyz");
+        let result = get_hash(path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_extractor_extract_multiple() {
+        // We'll just test that Extractor::extract doesn't panic on empty input
+        let extractor = Extractor::new(BirthmarkType::OpSeq);
+        // Create dummy programs if possible, or just pass empty vec
+        // We cannot easily create a Program here without parsing JSON, but passing empty vec works to cover line 58.
+        let empty_args: Vec<&crate::program::Program<crate::ghidra::Op>> = vec![];
+        let result = extractor.extract(empty_args);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+}
+

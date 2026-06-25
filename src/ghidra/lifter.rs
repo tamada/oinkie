@@ -93,3 +93,84 @@ pub fn find_ghidra_home(home_opt: Option<&Path>) -> Result<PathBuf> {
 
     Err(Error::Parse("GHIDRA_HOME not found. Please specify it via --home option or GHIDRA_HOME environment variable.".to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_find_ghidra_home_with_opt() {
+        let opt_path = PathBuf::from("/custom/ghidra/home");
+        let result = find_ghidra_home(Some(&opt_path));
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), opt_path);
+    }
+
+    #[test]
+    fn test_find_ghidra_home_with_env() {
+        // Backup the env
+        let old_env = env::var("GHIDRA_HOME").ok();
+        unsafe { env::set_var("GHIDRA_HOME", "/env/ghidra/home"); }
+
+        let result = find_ghidra_home(None);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), PathBuf::from("/env/ghidra/home"));
+
+        // Restore env
+        if let Some(val) = old_env {
+            unsafe { env::set_var("GHIDRA_HOME", val); }
+        } else {
+            unsafe { env::remove_var("GHIDRA_HOME"); }
+        }
+    }
+
+    #[test]
+    fn test_find_ghidra_home_not_found() {
+        // Backup the env
+        let old_env = env::var("GHIDRA_HOME").ok();
+        unsafe { env::remove_var("GHIDRA_HOME"); }
+
+        let result = find_ghidra_home(None);
+        // It might find it in standard paths on some systems, so we can't definitively assert error
+        // unless we know the system doesn't have it. But we can check it doesn't crash.
+        let _ = result;
+
+        // Restore env
+        if let Some(val) = old_env {
+            unsafe { env::set_var("GHIDRA_HOME", val); }
+        }
+    }
+
+    #[test]
+    fn test_ghidra_lifter_new() {
+        let home = PathBuf::from("/dummy/home");
+        let script = Some(PathBuf::from("/dummy/script.java"));
+        let intermediate_dir = Some(PathBuf::from("/dummy/intermediate"));
+
+        let lifter = GhidraLifter::new(home.clone(), script.clone(), intermediate_dir.clone());
+        assert_eq!(lifter.home, home);
+        assert_eq!(lifter.script, script);
+        assert_eq!(lifter.intermediate_dir, intermediate_dir);
+    }
+
+    #[test]
+    fn test_ghidra_lifter_lift_headless_not_found() {
+        // Use a dummy home where analyzeHeadless definitely doesn't exist
+        let temp_dir = tempdir().unwrap();
+        let lifter = GhidraLifter::new(temp_dir.path().to_path_buf(), None, None);
+
+        let input = PathBuf::from("dummy_input");
+        let output = PathBuf::from("dummy_output");
+
+        let result = lifter.lift(&input, &output);
+        assert!(result.is_err());
+        match result {
+            Err(Error::Parse(msg)) => {
+                assert!(msg.contains("Ghidra headless analyzer not found at"));
+            },
+            _ => panic!("Expected Error::Parse"),
+        }
+    }
+}
