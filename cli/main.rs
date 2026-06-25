@@ -1,6 +1,9 @@
 mod cli;
 mod info;
 
+#[cfg(debug_assertions)]
+mod gencomp;
+
 use std::path::PathBuf;
 use std::io::Write;
 use std::time::Duration;
@@ -257,6 +260,12 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Reaggregate(opts) => reaggregator::perform(opts),
         Lift(opts) => perform_lift(opts),
         Info => perform_info(),
+        #[cfg(debug_assertions)]
+        GenComp => {
+            let now = Instant::now();
+            gencomp::generate("oinkie", Path::new("completions"));
+            Ok(vec![now.elapsed()])
+        }
     }
 }
 

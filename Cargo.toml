@@ -1,12 +1,13 @@
 [package]
 name = "oinkie"
-version = "0.2.0"
+version = "0.2.1"
 description = "Birthmarking toolkit for Ghidra P-Code"
 edition = "2024"
 
 [dependencies]
 chrono = { version = "0.4.44", features = [ "serde" ] }
 clap = { version = "4.6.1", features = [ "derive" ] }
+clap_complete = "4.6.5"
 csv = "1.4.0"
 env_logger = "0.11.10"
 indicatif = "0.18.4"
@@ -27,3 +28,7 @@ tempfile = "3.10.1"
 [[bin]]
 name = "oinkie"
 path = "cli/main.rs"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+predicates = "3.1.4"
