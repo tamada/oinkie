@@ -83,14 +83,12 @@ pub fn find_ghidra_home(home_opt: Option<&Path>) -> Result<PathBuf> {
         "/usr/local/opt/ghidra/libexec",
         "/opt/ghidra/libexec",
     ];
-
     for c in candidates {
         let p = PathBuf::from(c);
         if p.exists() {
             return Ok(p);
         }
     }
-
     Err(Error::Parse("GHIDRA_HOME not found. Please specify it via --home option or GHIDRA_HOME environment variable.".to_string()))
 }
 

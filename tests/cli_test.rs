@@ -29,16 +29,9 @@ fn test_lift_command() {
         .arg("testdata/hello_world/bin/hello_clang")
         .assert();
 
-    // The lift command will fail if Ghidra is not installed.
-    // In environments where Ghidra is not installed, it will exit with a non-zero status code.
-    // If it succeeds, we check that the JSON file was generated.
-    if String::from_utf8_lossy(&result.get_output().stderr).contains("GHIDRA_HOME not found") {
-        println!("Skipping lift test as Ghidra is not installed.");
-    } else {
-        result.success();
-        let out_file = dest.join("hello_clang.json");
-        assert!(out_file.exists(), "hello_clang.json was not generated");
-    }
+    result.success();
+    let out_file = dest.join("hello_clang.json");
+    assert!(out_file.exists(), "hello_clang.json was not generated");
 }
 
 #[test]
