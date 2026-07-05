@@ -78,7 +78,9 @@ pub struct Comparison<'a, S> {
     similarities: Vec<f64>,
 }
 
-fn escape_csv_string(s: &str) -> String {
+/// Quotes a value for embedding into a CSV field when it contains
+/// characters that would otherwise break the record structure.
+pub fn escape_csv_string(s: &str) -> String {
     if s.contains(',') || s.contains('"') || s.contains('\n') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
