@@ -175,7 +175,6 @@ fn compare_impl(tuple: (usize, (&Path, &Path)), comparator: &Comparator, dest: &
 }
 
 fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
-    // let (dest, btype, _bin_type, files) = (opts.dest, opts.birthmark_type, opts.binary_type, opts.files);
     let dest = opts.dest();
     let pb = ProgressBar::new(opts.len() as u64)
             .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}").unwrap())
