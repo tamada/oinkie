@@ -195,10 +195,6 @@ impl Birthmark {
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
-
-    // pub fn iter(&self) -> impl Iterator<Item = &Elements> {
-    //     self.elements.iter()
-    // }
 }
 
 impl crate::Iterable for &Birthmark {

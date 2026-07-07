@@ -11,8 +11,6 @@ pub mod extractor;
 mod compare;
 mod birthmarks;
 mod program;
-mod llvm;
-mod ninja;
 
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -56,10 +56,6 @@ impl<T> Program<T> {
         &self.path
     }
 
-    // pub fn iter(&self) -> impl Iterator<Item = &Function<T>> {
-    //     self.functions.iter()
-    // }
-
     pub fn symbols(&self) -> impl Iterator<Item = (&str, &str)> {
         self.symbols.iter().map(|(k, v)| (k.as_str(), v.as_str()))
     }
