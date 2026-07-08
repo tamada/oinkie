@@ -28,7 +28,7 @@ The logo of **oinkie** illustrates a pig searching for truffles, symbolizing the
 
 ---
 
-## 📃 How to refer the tool
+## 📃 How to refer to the tool
 
 Use the following \(\BibTeX\) entry.
 
