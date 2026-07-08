@@ -1,4 +1,4 @@
-name: build
+name: deploy-page
 on:
   push:
     branches:
