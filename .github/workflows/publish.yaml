@@ -105,50 +105,6 @@ jobs:
           ASSET_NAME=${{ needs.setup.outputs.appname }}-${{ needs.setup.outputs.tag}}_${{ matrix.architecture }}_${{ matrix.os_name }}
           gh release upload v${{ needs.setup.outputs.tag }} dist/${ASSET_NAME}.tar.gz          
 
-  documents:
-    runs-on: ubuntu-latest
-    needs: setup
-    outputs:
-      tag: ${{ needs.setup.outputs.tag }}
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-            
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: 1.26
-
-      - name: Setup Hugo
-        uses: peaceiris/actions-hugo@v3
-        with:
-          hugo-version: '0.158.0'
-          extended: true
-
-      - name: add worktree of gh-pages to docs/public
-        run: |
-          git fetch origin gh-pages
-          git worktree add docs/public gh-pages
-
-      - name: Build Documents
-        run: |
-          cd docs
-          hugo --minify
-
-      - name: commit and push changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          cd docs/public
-          git add .
-          git commit -m "Update site data: $(date +'%Y-%m-%d')" || echo "No changes to commit"
-          git push origin gh-pages
-
   container:
     runs-on: ubuntu-latest
     needs: publish
@@ -184,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: [documents, container]
+    needs: container
     steps:
       - name: Checkout
         uses: actions/checkout@v6

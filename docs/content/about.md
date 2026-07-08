@@ -25,3 +25,20 @@ The predecessor of **oinkie** is [**pochi**](https://github.com/tamada/pochi), a
 {{< figure src="../oinkie.png" alt="oinkie logo" width="300px" class="my-4" >}}
 
 The logo of **oinkie** illustrates a pig searching for truffles, symbolizing the tool sniffing out clues of plagiarism in binary files. The illustration was generated with Microsoft Copilot.
+
+---
+
+## 📃 How to refer the tool
+
+Use the following \(\BibTeX\) entry.
+
+```tex
+@misc { oinkie,
+    author = {Haruaki Tamada},
+    title  = {oinkie: The software birthmark toolkit for real-world executables},
+    doi    = {10.5281/zenodo.20841239},
+    note   = {\url{https://github.com/tamada/oinkie}},
+    year   = {2026},
+}
+```
+
