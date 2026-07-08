@@ -49,12 +49,12 @@ impl crate::Op for Op {
         self.op as u32
     }
 
-    fn inputs(&self) -> Vec<String> {
-        self.inputs.clone()
+    fn inputs(&self) -> &[String] {
+        &self.inputs
     }
 
-    fn ret(&self) -> Option<String> {
-        self.out.clone()
+    fn ret(&self) -> Option<&str> {
+        self.out.as_deref()
     }
 }
 
@@ -192,7 +192,7 @@ mod tests {
         let op2 = f1.get(1).unwrap();
         assert_eq!(op2.mnemonic(), "COPY");
         assert_eq!(op2.inputs().len(), 1);
-        assert_eq!(op2.ret(), Some("(unique, 0x10000009, 8)".into()));
+        assert_eq!(op2.ret(), Some("(unique, 0x10000009, 8)"));
     }
 
 
