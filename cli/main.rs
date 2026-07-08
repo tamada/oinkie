@@ -67,35 +67,37 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
 /// This function skips actual comparison and shorten the comparison time if the result file already exists.
 /// The CSV file is expected to have a line starting with "result," followed by the duration in nanoseconds and the similarity value, separated by commas.
 fn read_result_file(dest_path: &Path, index: usize, _path1: &Path, _path2: &Path) -> Result<CompareResult> {
-    let content = std::fs::read_to_string(dest_path)
+    let file = std::fs::File::open(dest_path)
         .map_err(|e| Error::Io(dest_path.to_path_buf(), e))?;
-    let lines = content.lines();
-    
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(true)
+        .has_headers(false)
+        .from_reader(file);
+
     let mut original_path1 = PathBuf::new();
     let mut original_path2 = PathBuf::new();
     let mut similarity = 0.0;
     let mut duration_nanos = 0;
 
-    for line in lines {
-        if line.starts_with("result,") {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() < 3 {
-                return Err(Error::Parse(format!("Invalid result line format in {}", dest_path.display())));
-            }
-            duration_nanos = parts[1].parse()
-                .map_err(|e| Error::ParseInt(parts[1].to_string(), e))?;
-            similarity = parts[2].parse()
-                .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
-        } else if line.starts_with("left,") {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 4 {
-                original_path1 = PathBuf::from(parts[3]);
-            }
-        } else if line.starts_with("right,") {
-            let parts: Vec<&str> = line.split(',').collect();
-            if parts.len() >= 4 {
-                original_path2 = PathBuf::from(parts[3]);
-            }
+    for result in reader.records() {
+        let record = result.map_err(Error::Csv)?;
+        match record.get(0) {
+            Some("result") => {
+                if record.len() < 3 {
+                    return Err(Error::Parse(format!("Invalid result line format in {}", dest_path.display())));
+                }
+                duration_nanos = record[1].parse()
+                    .map_err(|e| Error::ParseInt(record[1].to_string(), e))?;
+                similarity = record[2].parse()
+                    .map_err(|e| Error::Parse(format!("Failed to parse similarity value in {}: {}", dest_path.display(), e)))?;
+            },
+            Some("left") => if let Some(s) = record.get(3) {
+                original_path1 = PathBuf::from(s);
+            },
+            Some("right") => if let Some(s) = record.get(3) {
+                original_path2 = PathBuf::from(s);
+            },
+            _ => {},
         }
     }
 
@@ -173,7 +175,6 @@ fn compare_impl(tuple: (usize, (&Path, &Path)), comparator: &Comparator, dest: &
 }
 
 fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
-    // let (dest, btype, _bin_type, files) = (opts.dest, opts.birthmark_type, opts.binary_type, opts.files);
     let dest = opts.dest();
     let pb = ProgressBar::new(opts.len() as u64)
             .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}").unwrap())
@@ -314,22 +315,32 @@ impl CompareResult {
     }
 
     pub fn to_csv(&self) -> String {
-        format!("{},{},{},{},{}", self.index, self.similarity, self.path1.display(), self.path2.display(), self.duration.as_nanos())
+        format!("{},{},{},{},{}", self.index, self.similarity,
+            escape_csv_string(&self.path1.display().to_string()),
+            escape_csv_string(&self.path2.display().to_string()),
+            self.duration.as_nanos())
     }
 
     pub fn parse(line: &str) -> Result<Self> {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() < 5 {
+        let mut reader = csv::ReaderBuilder::new()
+            .flexible(true)
+            .has_headers(false)
+            .from_reader(line.as_bytes());
+        let record = match reader.records().next() {
+            Some(r) => r.map_err(|e| Error::Parse(format!("Invalid compare result line format: {e}")))?,
+            None => return Err(Error::Parse(format!("Invalid compare result line format: {}", line))),
+        };
+        if record.len() < 5 {
             return Err(Error::Parse(format!("Invalid compare result line format: {}", line)));
         }
-        let index: usize = parts[0].parse()
-            .map_err(|e| Error::ParseInt(parts[0].to_string(), e))?;
-        let similarity: f64 = parts[1].parse()
+        let index: usize = record[0].parse()
+            .map_err(|e| Error::ParseInt(record[0].to_string(), e))?;
+        let similarity: f64 = record[1].parse()
             .map_err(|e| Error::Parse(format!("Failed to parse similarity value: {}", e)))?;
-        let path1 = PathBuf::from(parts[2]);
-        let path2 = PathBuf::from(parts[3]);
-        let duration_nanos: u64 = parts[4].parse()
-            .map_err(|e| Error::ParseInt(parts[4].to_string(), e))?;
+        let path1 = PathBuf::from(&record[2]);
+        let path2 = PathBuf::from(&record[3]);
+        let duration_nanos: u64 = record[4].parse()
+            .map_err(|e| Error::ParseInt(record[4].to_string(), e))?;
         Ok(Self::new(index, similarity, path1, path2, Duration::from_nanos(duration_nanos)))
     }
 }
@@ -399,6 +410,21 @@ mod tests {
         } else {
             panic!("Expected Lift command");
         }
+    }
+
+    #[test]
+    fn test_compare_result_roundtrip_with_comma_in_path() {
+        let original = CompareResult::new(3, 0.5,
+            PathBuf::from("dir,with,commas/a.json"),
+            PathBuf::from("dir/\"quoted\"/b.json"),
+            Duration::from_nanos(123));
+        let line = original.to_csv();
+        let parsed = CompareResult::parse(&line)
+            .expect("Failed to parse escaped compare result");
+        assert_eq!(parsed.index, original.index);
+        assert_eq!(parsed.path1, original.path1);
+        assert_eq!(parsed.path2, original.path2);
+        assert_eq!(parsed.duration, original.duration);
     }
 
     #[test]

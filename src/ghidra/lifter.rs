@@ -24,7 +24,8 @@ impl Lifter for GhidraLifter {
         }
 
         let (script_path, _temp_dir) = if let Some(s) = &self.script {
-            (s.to_path_buf(), None)
+            let s = std::fs::canonicalize(s).map_err(|e| Error::Io(s.clone(), e))?;
+            (s, None)
         } else {
             let temp_dir = tempfile::Builder::new().prefix("oinkie_script").tempdir().map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
             let script_file = temp_dir.path().join("HighPCodeLifter.java");
@@ -32,6 +33,10 @@ impl Lifter for GhidraLifter {
                 .map_err(|e| Error::Io(script_file.clone(), e))?;
             (script_file, Some(temp_dir))
         };
+        let script_dir = script_path.parent()
+            .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
+        let script_name = script_path.file_name()
+            .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
 
         let (proj_dir, _temp_proj_dir) = if let Some(i) = &self.intermediate_dir {
             (i.to_path_buf(), None)
@@ -40,14 +45,24 @@ impl Lifter for GhidraLifter {
             (temp_proj.path().to_path_buf(), Some(temp_proj))
         };
 
-        let proj_name = input.file_name().ok_or_else(|| Error::Parse(format!("Invalid input path: {:?}", input)))?.to_str().unwrap();
-        
+        let proj_name = input.file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| Error::Parse(format!("Invalid input path: {:?}", input)))?;
+        // the working directory of the Ghidra process is the project directory,
+        // so relative paths must be resolved beforehand
+        let input = std::fs::canonicalize(input).map_err(|e| Error::Io(input.to_path_buf(), e))?;
+
         let mut command = std::process::Command::new(&analyze_headless);
         command.arg(&proj_dir)
                .arg(proj_name)
-               .arg("-import").arg(input)
-               .arg("-scriptPath").arg(script_path.parent().unwrap())
-               .arg("-postScript").arg(script_path.file_name().unwrap());
+               .arg("-import").arg(&input)
+               .arg("-scriptPath").arg(script_dir)
+               .arg("-postScript").arg(script_name)
+               // The lifter script writes "{program name}.json" into the working
+               // directory of the Ghidra process. Run it inside the project
+               // directory so that concurrent lifts of same-named binaries do not
+               // race on a single path in the user's current directory.
+               .current_dir(&proj_dir);
 
         log::info!("Executing Ghidra: {:?}", command);
         let output_res = command.output().map_err(|e| Error::Io(analyze_headless, e))?;
@@ -58,10 +73,15 @@ impl Lifter for GhidraLifter {
         }
 
         // Move the generated JSON to the destination
-        let generated_json = std::env::current_dir().unwrap().join(format!("{}.json", proj_name));
+        let generated_json = proj_dir.join(format!("{}.json", proj_name));
         if generated_json.exists() {
-            std::fs::rename(&generated_json, output)
-                .map_err(|e| Error::Io(output.to_path_buf(), e))?;
+            // rename fails across file systems (e.g., temp dir on another
+            // volume); fall back to copy + remove in that case
+            if std::fs::rename(&generated_json, output).is_err() {
+                std::fs::copy(&generated_json, output)
+                    .map_err(|e| Error::Io(output.to_path_buf(), e))?;
+                let _ = std::fs::remove_file(&generated_json);
+            }
         } else {
             return Err(Error::Parse(format!("Expected Ghidra to generate {:?}, but it was not found.", generated_json)));
         }

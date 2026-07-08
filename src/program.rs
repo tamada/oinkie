@@ -19,7 +19,11 @@ pub struct Program<T> {
 impl<T> crate::prelude::CsvInfo for Program<T> {
     fn csv_info(&self) -> String {
         let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-        format!("program,{},{},{},{},{}", self.name, self.path.display(), self.symbols.len(), self.functions.len(), json_path)
+        format!("program,{},{},{},{},{}",
+            crate::compare::escape_csv_string(&self.name),
+            crate::compare::escape_csv_string(&self.path.display().to_string()),
+            self.symbols.len(), self.functions.len(),
+            crate::compare::escape_csv_string(&json_path))
     }
     
     fn names(&self) -> Vec<String> {
@@ -51,10 +55,6 @@ impl<T> Program<T> {
     pub fn path(&self) -> &Path {
         &self.path
     }
-
-    // pub fn iter(&self) -> impl Iterator<Item = &Function<T>> {
-    //     self.functions.iter()
-    // }
 
     pub fn symbols(&self) -> impl Iterator<Item = (&str, &str)> {
         self.symbols.iter().map(|(k, v)| (k.as_str(), v.as_str()))

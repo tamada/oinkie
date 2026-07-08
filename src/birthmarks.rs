@@ -86,7 +86,10 @@ pub struct Metadata {
 
 impl Metadata {
     pub fn csv_info(&self) -> String {
-        format!("birthmark,{},{},{},{},{}", self.file_name, self.path.display(), self.birthmark_type, self.extracted_at.to_rfc3339(), self.duration.as_nanos())
+        format!("birthmark,{},{},{},{},{}",
+            crate::compare::escape_csv_string(&self.file_name),
+            crate::compare::escape_csv_string(&self.path.display().to_string()),
+            self.birthmark_type, self.extracted_at.to_rfc3339(), self.duration.as_nanos())
     }
 
     pub fn parse(line: &str) -> Result<Self> {
@@ -148,7 +151,7 @@ pub struct Birthmark {
 impl CsvInfo for Birthmark {
     fn csv_info(&self) -> String {
         let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-        format!("{},{}", self.metadata.csv_info(), json_path)
+        format!("{},{}", self.metadata.csv_info(), crate::compare::escape_csv_string(&json_path))
     }
 
     fn names(&self) -> Vec<String> {
@@ -192,10 +195,6 @@ impl Birthmark {
     pub fn is_empty(&self) -> bool {
         self.elements.is_empty()
     }
-
-    // pub fn iter(&self) -> impl Iterator<Item = &Elements> {
-    //     self.elements.iter()
-    // }
 }
 
 impl crate::Iterable for &Birthmark {
@@ -383,6 +382,22 @@ fn parse_k_value(k: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    pub fn test_metadata_csv_info_roundtrip_with_comma_in_path() {
+        let metadata = Metadata {
+            file_name: "app, v1".to_string(),
+            path: PathBuf::from("dir,with,commas/app"),
+            extracted_at: chrono::Utc::now(),
+            duration: Duration::from_nanos(42),
+            birthmark_type: BirthmarkType::OpSeq,
+        };
+        let parsed = Metadata::parse(&metadata.csv_info())
+            .expect("failed to parse escaped metadata");
+        assert_eq!(parsed.file_name, metadata.file_name);
+        assert_eq!(parsed.path, metadata.path);
+        assert_eq!(parsed.birthmark_type, metadata.birthmark_type);
+    }
 
     #[test]
     pub fn test_parse_metadata() {

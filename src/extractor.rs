@@ -12,7 +12,9 @@ use crate::program::{Program, Function};
 /// `hash` is a hash value generated from the content of the source file
 /// to ensure uniqueness and avoid overwriting files with the same name.
 pub fn dest_file_name(program_path: &Path) -> Result<String> {
-    let file_name = program_path.file_stem().unwrap().to_string_lossy();
+    let file_name = program_path.file_stem()
+        .ok_or_else(|| Error::Parse(format!("{}: cannot determine the file stem", program_path.display())))?
+        .to_string_lossy();
     let hash = get_hash(program_path);
     let new_filename = format!("{file_name}_{}.json", hash?);
     Ok(new_filename)
@@ -25,20 +27,26 @@ fn get_hash(path: &Path) -> Result<String> {
 
     let mut file = std::fs::File::open(path).map_err(|e| Error::Io(pbuf.clone(), e))?;
     let len = file.metadata().map_err(|e| Error::Io(pbuf.clone(), e))?.len();
-    let mut buffer = Vec::new();
+
+    let mut hasher = sha2::Sha256::new();
+    // the file length participates in the hash so that same-prefix/suffix
+    // files of different sizes never collide
+    hasher.update(len.to_le_bytes());
 
     // Read the first 4KB of the file for hashing
     let mut head = vec![0; 4096.min(len as usize)];
     file.read_exact(&mut head).map_err(|e| Error::Io(pbuf.clone(), e))?;
-    buffer.extend(head);
+    hasher.update(&head);
 
     if len > 4096 {
-        let mut tail = vec![0; 4096.min(len as usize - 4096)];
-        file.seek(std::io::SeekFrom::End(-4096)).map_err(|e| Error::Io(pbuf.clone(), e))?;
+        // Read the last (up to) 4KB of the file, without overlapping the head
+        let tail_len = 4096.min(len as usize - 4096);
+        let mut tail = vec![0; tail_len];
+        file.seek(std::io::SeekFrom::End(-(tail_len as i64))).map_err(|e| Error::Io(pbuf.clone(), e))?;
         file.read_exact(&mut tail).map_err(|e| Error::Io(pbuf.clone(), e))?;
-        buffer.extend(tail);
+        hasher.update(&tail);
     }
-    let hash = sha2::Sha256::digest(&buffer);
+    let hash = hasher.finalize();
     Ok(format!("{:x}", hash)[..8].to_string())
 }
 
@@ -171,6 +179,33 @@ mod tests {
         let name = dest_file_name(&file_path).unwrap();
         assert!(name.starts_with("large_test_"));
         assert!(name.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_get_hash_reflects_tail_difference() {
+        // Two files sharing the same first 4KB but differing after it must
+        // yield different hashes; otherwise their birthmark files collide.
+        let dir = tempdir().unwrap();
+        let path1 = dir.path().join("a.bin");
+        let path2 = dir.path().join("b.bin");
+        let mut data1 = vec![0u8; 5000];
+        let mut data2 = vec![0u8; 5000];
+        data1[4500] = 1;
+        data2[4500] = 2;
+        std::fs::write(&path1, &data1).unwrap();
+        std::fs::write(&path2, &data2).unwrap();
+        assert_ne!(get_hash(&path1).unwrap(), get_hash(&path2).unwrap());
+    }
+
+    #[test]
+    fn test_get_hash_is_deterministic() {
+        let dir = tempdir().unwrap();
+        let path1 = dir.path().join("a.bin");
+        let path2 = dir.path().join("b.bin");
+        let data = vec![7u8; 10240];
+        std::fs::write(&path1, &data).unwrap();
+        std::fs::write(&path2, &data).unwrap();
+        assert_eq!(get_hash(&path1).unwrap(), get_hash(&path2).unwrap());
     }
 
     #[test]

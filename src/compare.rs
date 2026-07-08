@@ -36,7 +36,7 @@ pub enum PairingStrategy {
 impl PairingStrategy {
     pub fn compare_count<T>(&self, targets: &[T]) -> usize {
         match self {
-            PairingStrategy::All => targets.len() * (targets.len() - 1) / 2,
+            PairingStrategy::All => targets.len() * targets.len().saturating_sub(1) / 2,
             PairingStrategy::SelfCoverage => targets.len(),
             PairingStrategy::Adjacent => targets.len().saturating_sub(1),
             PairingStrategy::FirstVsOthers | PairingStrategy::LastVsOthers => targets.len().saturating_sub(1),
@@ -78,7 +78,9 @@ pub struct Comparison<'a, S> {
     similarities: Vec<f64>,
 }
 
-fn escape_csv_string(s: &str) -> String {
+/// Quotes a value for embedding into a CSV field when it contains
+/// characters that would otherwise break the record structure.
+pub fn escape_csv_string(s: &str) -> String {
     if s.contains(',') || s.contains('"') || s.contains('\n') {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
@@ -92,28 +94,33 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
     }
 
     pub fn store<P: AsRef<Path>>(&self, dest: P) -> Result<()> {
-        let mut file = std::fs::File::create(dest.as_ref())
-            .map_err(|e| Error::Io(dest.as_ref().to_path_buf(), e))?;
+        let dest = dest.as_ref();
+        let io_err = |e| Error::Io(dest.to_path_buf(), e);
+        let mut file = std::fs::File::create(dest).map_err(io_err)?;
         let mut out = std::io::BufWriter::new(&mut file);
-        let _ = writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarity());
-        let _ = writeln!(out, "left,{}", self.rows.csv_info());
-        let _ = writeln!(out, "right,{}", self.columns.csv_info());
+        writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarity()).map_err(io_err)?;
+        writeln!(out, "left,{}", self.rows.csv_info()).map_err(io_err)?;
+        writeln!(out, "right,{}", self.columns.csv_info()).map_err(io_err)?;
         let b1_names = self.columns.names();
         let b2_names = self.rows.names();
-        let _ = write!(out, "matrix,,{}", b1_names.iter()
-            .map(|s| escape_csv_string(s)).join(","));
+        write!(out, "matrix,,{}", b1_names.iter()
+            .map(|s| escape_csv_string(s)).join(",")).map_err(io_err)?;
         for (j, item) in b2_names.iter().enumerate() {
-            let _ = write!(out, "\n{}, {}", j, escape_csv_string(item));
+            write!(out, "\n{}, {}", j, escape_csv_string(item)).map_err(io_err)?;
             for i in 0..b1_names.len() {
                 let value = self.matrix[[i, j]];
-                let _ = write!(out, ",{value}");
+                write!(out, ",{value}").map_err(io_err)?;
             }
         }
-        let _ = writeln!(out);
+        writeln!(out).map_err(io_err)?;
+        out.flush().map_err(io_err)?;
         Ok(())
     }
 
     pub fn similarity(&self) -> f64 {
+        if self.similarities.is_empty() {
+            return 0.0;
+        }
         self.similarities.iter().sum::<f64>() / self.similarities.len() as f64
     }
 
@@ -146,10 +153,11 @@ impl std::str::FromStr for Aggregator {
             log::info!("Using TopN(all) algorithm for aggregation");
             Ok(Aggregator::TopN(Size::All))
         } else if let Some(n) = s.strip_prefix("topn:") {
-            match n.parse::<usize>().map(Size::Num) {
+            match n.parse::<usize>() {
+                Ok(0) => Err(Error::Parse("topn requires N >= 1 (use \"topn:all\" for all elements)".to_string())),
                 Ok(n) => {
-                    log::info!("Using TopN({:?}) algorithm for aggregation", n);
-                    Ok(Aggregator::TopN(n))
+                    log::info!("Using TopN({n}) algorithm for aggregation");
+                    Ok(Aggregator::TopN(Size::Num(n)))
                 },
                 Err(e) => Err(Error::ParseInt(s, e)),
             }
@@ -200,15 +208,16 @@ fn build_matrix<F, T>(p1: impl Iterable<Item = T>, p2: impl Iterable<Item = T>, 
 where 
     F: Fn(&T, &T) -> f64,
 {
-    let mut flat_costs = vec![0.0; size * size];
+    // The matrix holds similarities; the conversion to costs for lapjv
+    // happens later in hungarian_algorithm. Cells beyond the shorter input
+    // stay 0.0 so that the matrix is always square (size x size).
+    let mut similarities = vec![0.0; size * size];
     for (i, item1) in p1.iter().enumerate() {
         for (j, item2) in p2.iter().enumerate() {
-            // lapjv expects a cost matrix where lower values indicate better matches.
-            // so we convert similarity to cost by using (1.0 - similarity).
-            flat_costs[i * size + j] = compare_func(item1, item2);
+            similarities[i * size + j] = compare_func(item1, item2);
         }
     }
-    Array2::from_shape_vec((size, size), flat_costs)
+    Array2::from_shape_vec((size, size), similarities)
         .map_err(Error::ShapeError)
 }
 
@@ -764,6 +773,30 @@ fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     // the previous row contains the final results since the last swap
     let lcs_length = prev[m]; 
     2.0 * lcs_length as f64 / (n + m) as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compare_count_does_not_panic_on_empty_targets() {
+        let empty: Vec<i32> = vec![];
+        assert_eq!(PairingStrategy::All.compare_count(&empty), 0);
+        assert_eq!(PairingStrategy::AllAndSelf.compare_count(&empty), 0);
+        assert_eq!(PairingStrategy::SelfCoverage.compare_count(&empty), 0);
+        assert_eq!(PairingStrategy::Adjacent.compare_count(&empty), 0);
+        assert_eq!(PairingStrategy::FirstVsOthers.compare_count(&empty), 0);
+        assert_eq!(PairingStrategy::LastVsOthers.compare_count(&empty), 0);
+    }
+
+    #[test]
+    fn aggregator_rejects_topn_zero() {
+        assert!("topn:0".parse::<Aggregator>().is_err());
+        assert!(matches!("topn:3".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::Num(3)))));
+        assert!(matches!("topn".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::All))));
+        assert!(matches!("hungarian".parse::<Aggregator>(), Ok(Aggregator::Hungarian)));
+    }
 }
 
 #[allow(dead_code)]

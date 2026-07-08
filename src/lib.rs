@@ -11,8 +11,6 @@ pub mod extractor;
 mod compare;
 mod birthmarks;
 mod program;
-mod llvm;
-mod ninja;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -93,10 +91,10 @@ pub trait Op {
     fn code(&self) -> u32;
 
     /// returns the inputs of the operation, e.g., the source registers or memory locations.
-    fn inputs(&self) -> Vec<String>;
+    fn inputs(&self) -> &[String];
 
     /// returns the output of the operation, e.g., the destination register or memory location.
-    fn ret(&self) -> Option<String>;
+    fn ret(&self) -> Option<&str>;
 }
 
 pub trait Iterable {

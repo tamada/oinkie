@@ -16,17 +16,15 @@ pub struct OinkieOpts {
 
 impl OinkieOpts {
     pub fn init(&self) -> Result<()> {
-        unsafe {
-            match self.level {
-                LogLevel::Debug => std::env::set_var("RUST_LOG", "debug"),
-                LogLevel::Info => std::env::set_var("RUST_LOG", "info"),
-                LogLevel::Warn => std::env::set_var("RUST_LOG", "warn"),
-                LogLevel::Error => std::env::set_var("RUST_LOG", "error"),
-                LogLevel::Trace => std::env::set_var("RUST_LOG", "trace"),
-                LogLevel::Off => std::env::set_var("RUST_LOG", "off"),
-            }
-        }
-        env_logger::init();
+        let filter = match self.level {
+            LogLevel::Debug => log::LevelFilter::Debug,
+            LogLevel::Info => log::LevelFilter::Info,
+            LogLevel::Warn => log::LevelFilter::Warn,
+            LogLevel::Error => log::LevelFilter::Error,
+            LogLevel::Trace => log::LevelFilter::Trace,
+            LogLevel::Off => log::LevelFilter::Off,
+        };
+        env_logger::Builder::new().filter_level(filter).init();
         Ok(())
     }
 }
@@ -54,8 +52,7 @@ pub enum OinkieCommand {
 
     #[command(name="compare", about = "Compare birthmarks and output the similarity score")]
     Compare(CompareOpts),
-    // #[command(name="execute", about = "Execute a command on the JSON files")]
-    // Execute(ExecuteOpts),
+
     #[command(name="reaggregate", about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score")]
     Reaggregate(ReaggregateOpts),
 
