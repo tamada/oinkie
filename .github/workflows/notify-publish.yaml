@@ -1,0 +1,34 @@
+# To use this workflow, you need to install the GitHub App (tamada-pipline-bot).
+# The App is already installed for repositories owned by tamada,
+# so you don't need to do anything for those.
+# You also need to set APP_ID and APP_PRIVATE_KEY in the GitHub Actions Secrets.
+# - CLIENT_ID can be found in the GitHub App settings.
+# - APP_PRIVATE_KEY can be generated in the GitHub App settings.
+name: notify-publish
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      # Generate a one-time token using the private key
+      - name: Generate Token
+        id: generate_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      # Fire the workflow for the other repository using the generated token
+      - name: Trigger API Repository
+        run: |
+          gh workflow run "deploy.yml"     \
+          --repo "tamada/api"              \
+          -f repo=${{ github.repository }} \
+          -f update_brew=true
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
