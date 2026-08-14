@@ -775,9 +775,27 @@ fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     2.0 * lcs_length as f64 / (n + m) as f64
 }
 
+#[allow(dead_code)]
+fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+    let mut dp = Array2::<usize>::zeros((s1.len() + 1, s2.len() + 1));
+    for i in 1..=s1.len() {
+        for j in 1..=s2.len() {
+            if s1[i - 1] == s2[j - 1] {
+                dp[[i, j]] = dp[[i - 1, j - 1]] + 1;
+            } else {
+                dp[[i, j]] = dp[[i - 1, j]].max(dp[[i, j - 1]]);
+            }
+        }
+    }
+    let lcs_length = dp[[s1.len(), s2.len()]];
+    2.0 * lcs_length as f64 / (s1.len() + s2.len()) as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::birthmarks::Metadata;
+    use std::path::PathBuf;
 
     #[test]
     fn compare_count_does_not_panic_on_empty_targets() {
@@ -797,20 +815,305 @@ mod tests {
         assert!(matches!("topn".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::All))));
         assert!(matches!("hungarian".parse::<Aggregator>(), Ok(Aggregator::Hungarian)));
     }
-}
 
-#[allow(dead_code)]
-fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
-    let mut dp = Array2::<usize>::zeros((s1.len() + 1, s2.len() + 1));
-    for i in 1..=s1.len() {
-        for j in 1..=s2.len() {
-            if s1[i - 1] == s2[j - 1] {
-                dp[[i, j]] = dp[[i - 1, j - 1]] + 1;
-            } else {
-                dp[[i, j]] = dp[[i - 1, j]].max(dp[[i, j - 1]]);
-            }
+    #[test]
+    fn aggregator_rejects_malformed_input() {
+        // a non-numeric N and an entirely unknown name take separate error paths
+        assert!(matches!("topn:abc".parse::<Aggregator>(), Err(Error::ParseInt(..))));
+        assert!(matches!("nonsense".parse::<Aggregator>(), Err(Error::Parse(_))));
+        // parsing is case insensitive
+        assert!(matches!("HUNGARIAN".parse::<Aggregator>(), Ok(Aggregator::Hungarian)));
+        assert!(matches!("TopN:All".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::All))));
+    }
+
+    #[test]
+    fn pairs_on_empty_targets_yield_nothing() {
+        let empty: Vec<i32> = vec![];
+        for strategy in [PairingStrategy::FirstVsOthers, PairingStrategy::LastVsOthers,
+                         PairingStrategy::All, PairingStrategy::AllAndSelf,
+                         PairingStrategy::Adjacent, PairingStrategy::SelfCoverage] {
+            assert_eq!(strategy.pairs(&empty).count(), 0, "strategy: {strategy:?}");
         }
     }
-    let lcs_length = dp[[s1.len(), s2.len()]];
-    2.0 * lcs_length as f64 / (s1.len() + s2.len()) as f64
+
+    #[test]
+    fn pairs_match_compare_count() {
+        let targets = vec![1, 2, 3, 4];
+        for strategy in [PairingStrategy::All, PairingStrategy::AllAndSelf,
+                         PairingStrategy::Adjacent, PairingStrategy::SelfCoverage,
+                         PairingStrategy::FirstVsOthers, PairingStrategy::LastVsOthers] {
+            assert_eq!(strategy.pairs(&targets).count(), strategy.compare_count(&targets),
+                "strategy: {strategy:?}");
+        }
+    }
+
+    #[test]
+    fn algorithm_display_is_defined_for_every_variant() {
+        let cases = [
+            (Algorithm::Cosine, "Cosine Similarity"),
+            (Algorithm::Dice, "Dice Coefficient"),
+            (Algorithm::Euclidean, "Euclidean Distance"),
+            (Algorithm::Jaccard, "Jaccard Index"),
+            (Algorithm::Levenshtein, "Levenshtein Distance"),
+            (Algorithm::Lcs, "Longest Common Subsequence"),
+            (Algorithm::Simpson, "Simpson's Coefficient"),
+            (Algorithm::WeightedJaccard, "Weighted Jaccard Index"),
+        ];
+        for (algorithm, expected) in cases {
+            assert_eq!(algorithm.to_string(), expected);
+        }
+    }
+
+    fn elements(name: &str, data: Data) -> Elements {
+        Elements { name: name.to_string(), data }
+    }
+
+    fn seq(items: &[&str]) -> Data {
+        Data::Seq(items.iter().map(|s| s.to_string()).collect())
+    }
+
+    fn set(items: &[&str]) -> Data {
+        Data::Set(items.iter().map(|s| s.to_string()).collect())
+    }
+
+    fn freq(items: &[&str]) -> Data {
+        Data::Freq(seq2freq(&items.iter().map(|s| s.to_string()).collect::<Vec<_>>()))
+    }
+
+    fn kgram_seq(items: &[&str]) -> Data {
+        Data::KgramSeq(items.iter().map(|s| Kgram::new(vec![s.to_string()])).collect())
+    }
+
+    fn kgram_set(items: &[&str]) -> Data {
+        Data::KgramSet(items.iter().map(|s| Kgram::new(vec![s.to_string()])).collect())
+    }
+
+    fn kgram_freq(items: &[&str]) -> Data {
+        Data::KgramFreq(seq2freq(&items.iter().map(|s| Kgram::new(vec![s.to_string()])).collect::<Vec<_>>()))
+    }
+
+    /// Every set-like comparator must report 1.0 for identical inputs across
+    /// each Data representation it claims to support.
+    #[test]
+    fn set_like_comparators_accept_every_supported_representation() {
+        let builders: [fn(&[&str]) -> Data; 6] = [seq, set, freq, kgram_seq, kgram_set, kgram_freq];
+        for build in builders {
+            let e1 = elements("f", build(&["A", "B", "C"]));
+            let e2 = elements("g", build(&["A", "B", "C"]));
+            assert!((Jaccard.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Dice.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Simpson.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn sequence_comparators_accept_seq_representations() {
+        let builders: [fn(&[&str]) -> Data; 2] = [seq, kgram_seq];
+        for build in builders {
+            let e1 = elements("f", build(&["A", "B", "C"]));
+            let e2 = elements("g", build(&["A", "B", "C"]));
+            assert!((Levenshtein.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Lcs.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn frequency_comparators_accept_every_supported_representation() {
+        let builders: [fn(&[&str]) -> Data; 4] = [seq, freq, kgram_seq, kgram_freq];
+        for build in builders {
+            let e1 = elements("f", build(&["A", "B", "C"]));
+            let e2 = elements("g", build(&["A", "B", "C"]));
+            assert!((Cosine.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((WeightedJaccard.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Euclidean.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+        }
+    }
+
+    /// Mismatched or unsupported representations fall through to 0.0 rather
+    /// than panicking.
+    #[test]
+    fn comparators_return_zero_for_unsupported_representations() {
+        let s = elements("f", seq(&["A"]));
+        let st = elements("g", set(&["A"]));
+        // Data variants that do not pair up
+        assert_eq!(Jaccard.compare_elements(&s, &st), 0.0);
+        assert_eq!(Dice.compare_elements(&s, &st), 0.0);
+        assert_eq!(Simpson.compare_elements(&s, &st), 0.0);
+        assert_eq!(Cosine.compare_elements(&s, &st), 0.0);
+        assert_eq!(Euclidean.compare_elements(&s, &st), 0.0);
+        assert_eq!(WeightedJaccard.compare_elements(&s, &st), 0.0);
+        // Levenshtein and LCS only support sequences at all
+        assert_eq!(Levenshtein.compare_elements(&st, &st), 0.0);
+        assert_eq!(Lcs.compare_elements(&st, &st), 0.0);
+    }
+
+    fn birthmark(name: &str, funcs: &[(&str, &[&str])]) -> Birthmark {
+        Birthmark {
+            metadata: Metadata {
+                file_name: name.to_string(),
+                path: PathBuf::from(format!("/tmp/{name}")),
+                extracted_at: chrono::Utc::now(),
+                duration: std::time::Duration::from_nanos(1),
+                birthmark_type: BirthmarkType::OpSeq,
+            },
+            elements: funcs.iter().map(|(n, ops)| elements(n, seq(ops))).collect(),
+            json_path: None,
+        }
+    }
+
+    #[test]
+    fn compare_birthmarks_rejects_mismatched_types() {
+        let b1 = birthmark("a", &[("main", &["A"])]);
+        let mut b2 = birthmark("b", &[("main", &["A"])]);
+        b2.metadata.birthmark_type = BirthmarkType::OpSet;
+        match Jaccard.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian) {
+            Err(Error::Mismatch(..)) => {},
+            Err(e) => panic!("unexpected error: {e}"),
+            Ok(_) => panic!("expected a mismatch error"),
+        }
+    }
+
+    #[test]
+    fn compare_birthmarks_handles_empty_operands() {
+        let empty = birthmark("empty", &[]);
+        let filled = birthmark("filled", &[("main", &["A"])]);
+
+        // both empty means identical
+        let both = Jaccard.compare_birthmarks(&empty, &empty, &Aggregator::Hungarian).unwrap();
+        assert_eq!(both.similarity(), 1.0);
+
+        // exactly one empty means nothing in common
+        let one = Jaccard.compare_birthmarks(&empty, &filled, &Aggregator::Hungarian).unwrap();
+        assert_eq!(one.similarity(), 0.0);
+        let other = Jaccard.compare_birthmarks(&filled, &empty, &Aggregator::Hungarian).unwrap();
+        assert_eq!(other.similarity(), 0.0);
+    }
+
+    #[test]
+    fn compare_birthmarks_of_identical_inputs_scores_one() {
+        let b = birthmark("a", &[("f", &["A", "B"]), ("g", &["C"])]);
+        for aggregator in [Aggregator::Hungarian, Aggregator::TopN(Size::All), Aggregator::TopN(Size::Num(1))] {
+            let c = Jaccard.compare_birthmarks(&b, &b, &aggregator).unwrap();
+            assert!((c.similarity() - 1.0).abs() < 1e-9, "aggregator: {aggregator:?}");
+        }
+    }
+
+    #[test]
+    fn top_n_selection_limits_the_number_of_scores() {
+        let matrix = Array2::from_shape_vec((3, 3), vec![
+            1.0, 0.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+        ]).unwrap();
+        // Size::Num(k) keeps k row maxima plus k column maxima
+        let picked = top_n_selection(&matrix, &Size::Num(2)).unwrap();
+        assert_eq!(picked.len(), 4);
+        assert!(picked.iter().all(|v| (*v - 1.0).abs() < 1e-9));
+        // Size::All keeps every row and column maximum
+        let all = top_n_selection(&matrix, &Size::All).unwrap();
+        assert_eq!(all.len(), 6);
+    }
+
+    #[test]
+    fn comparison_similarity_is_zero_when_no_scores_were_aggregated() {
+        let b = birthmark("a", &[("f", &["A"])]);
+        let c = Comparison::new(&b, &b, Array2::zeros((0, 0)), vec![], std::time::Duration::from_nanos(0));
+        assert_eq!(c.similarity(), 0.0, "an empty aggregation must not produce NaN");
+        assert_eq!(c.duration(), std::time::Duration::from_nanos(0));
+    }
+
+    #[test]
+    fn comparison_store_writes_a_parsable_matrix() {
+        let b1 = birthmark("left", &[("f", &["A", "B"]), ("g", &["B"])]);
+        let b2 = birthmark("right", &[("h", &["A"]), ("i", &["B"])]);
+        let c = Jaccard.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian).unwrap();
+
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("00000.csv");
+        c.store(&dest).expect("failed to store the comparison");
+
+        let content = std::fs::read_to_string(&dest).unwrap();
+        assert!(content.starts_with("result,"));
+        // NOTE: Comparison::new takes (columns, rows) and compare_birthmarks
+        // passes (b1, b2), while store writes the "left" record from `rows`.
+        // The stored "left" is therefore the *second* birthmark, and "right"
+        // the first. This asserts the behaviour as it currently stands.
+        assert!(content.contains("\nleft,birthmark,right,"));
+        assert!(content.contains("\nright,birthmark,left,"));
+        assert!(content.contains("\nmatrix,,"));
+        // one line per row element, each prefixed with its index
+        assert_eq!(content.lines().filter(|l| l.starts_with('0') || l.starts_with('1')).count(), 2);
+    }
+
+    #[test]
+    fn comparison_store_reports_io_errors() {
+        let b = birthmark("a", &[("f", &["A"])]);
+        let c = Jaccard.compare_birthmarks(&b, &b, &Aggregator::Hungarian).unwrap();
+        // a directory that does not exist cannot receive the result file
+        let err = c.store("no/such/directory/out.csv").unwrap_err();
+        assert!(matches!(err, Error::Io(..)));
+    }
+
+    #[test]
+    fn comparator_dispatches_every_algorithm() {
+        let b = birthmark("a", &[("f", &["A", "B"])]);
+        for algorithm in [Algorithm::Cosine, Algorithm::Dice, Algorithm::Euclidean,
+                          Algorithm::Jaccard, Algorithm::Levenshtein, Algorithm::Lcs,
+                          Algorithm::Simpson, Algorithm::WeightedJaccard] {
+            let comparator = algorithm.comparator();
+            let c = comparator.compare_birthmarks(&b, &b, &Aggregator::Hungarian)
+                .unwrap_or_else(|e| panic!("{algorithm}: {e}"));
+            assert!((c.similarity() - 1.0).abs() < 1e-9, "algorithm: {algorithm}");
+        }
+    }
+
+    #[test]
+    fn similarity_functions_agree_with_their_full_memory_variants() {
+        let a = ["A", "B", "C", "D"];
+        let b = ["A", "C", "D", "E"];
+        assert!((longest_common_subsequence(&a, &b) - longest_common_subsequence_full_memory(&a, &b)).abs() < 1e-9);
+        assert!((levenshtein_distance(&a, &b) - levenshtein_distance_full_memory(&a, &b)).abs() < 1e-9);
+        // the row/column swap for the shorter sequence must not change the score
+        let short = ["A", "B"];
+        assert!((longest_common_subsequence(&a, &short) - longest_common_subsequence(&short, &a)).abs() < 1e-9);
+        assert!((levenshtein_distance(&a, &short) - levenshtein_distance(&short, &a)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn similarity_functions_handle_empty_sequences() {
+        let empty: [&str; 0] = [];
+        let one = ["A"];
+        assert_eq!(levenshtein_distance(&empty, &empty), 1.0);
+        assert_eq!(levenshtein_distance(&empty, &one), 0.0);
+        assert_eq!(levenshtein_distance(&one, &empty), 0.0);
+        assert_eq!(longest_common_subsequence(&empty, &one), 0.0);
+        assert_eq!(longest_common_subsequence(&one, &empty), 0.0);
+    }
+
+    #[test]
+    fn set_indices_handle_empty_inputs() {
+        let empty: FxHashSet<&str> = FxHashSet::default();
+        let one: FxHashSet<&str> = ["A"].into_iter().collect();
+        for f in [jaccard_index, dice_index, simpson_index] {
+            assert_eq!(f(&empty, &empty), 1.0);
+            assert_eq!(f(&empty, &one), 0.0);
+            assert_eq!(f(&one, &empty), 0.0);
+        }
+    }
+
+    #[test]
+    fn frequency_metrics_handle_empty_inputs() {
+        let empty: FxHashMap<&str, usize> = FxHashMap::default();
+        // an empty vector has no direction, so both are treated as identical
+        assert_eq!(cosine_similarity(&empty, &empty), 1.0);
+        assert_eq!(weighted_jaccard(&empty, &empty), 1.0);
+    }
+
+    #[test]
+    fn escape_csv_string_quotes_only_when_needed() {
+        assert_eq!(escape_csv_string("plain"), "plain");
+        assert_eq!(escape_csv_string("a,b"), "\"a,b\"");
+        assert_eq!(escape_csv_string("a\"b"), "\"a\"\"b\"");
+        assert_eq!(escape_csv_string("a\nb"), "\"a\nb\"");
+    }
 }

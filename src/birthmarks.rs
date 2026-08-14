@@ -411,4 +411,208 @@ mod tests {
             .with_timezone(&chrono::Utc));
         assert_eq!(metadata.duration, Duration::from_nanos(4462500));
     }
+
+    #[test]
+    fn test_parse_metadata_rejects_wrong_field_count() {
+        let err = Metadata::parse("birthmark,name,path").unwrap_err();
+        assert!(matches!(err, Error::Parse(msg) if msg.contains("expected 6 items")));
+    }
+
+    #[test]
+    fn test_parse_metadata_rejects_empty_line() {
+        assert!(Metadata::parse("").is_err());
+    }
+
+    #[test]
+    fn test_parse_metadata_rejects_bad_datetime_and_duration() {
+        assert!(Metadata::parse("birthmark,n,p,op-seq,not-a-date,1").is_err());
+        assert!(Metadata::parse("birthmark,n,p,op-seq,2026-04-17T04:57:55+00:00,x").is_err());
+    }
+
+    #[test]
+    fn test_birthmark_type_try_from_str() {
+        let cases = [
+            ("fc-seq", BirthmarkType::FcSeq),
+            ("fc-set", BirthmarkType::FcSet),
+            ("fc-freq", BirthmarkType::FcFreq),
+            ("op-freq", BirthmarkType::OpFreq),
+            ("op-seq", BirthmarkType::OpSeq),
+            ("op-set", BirthmarkType::OpSet),
+            ("op-3gram-seq", BirthmarkType::OpKgramSeq(3)),
+            ("op-4gram-set", BirthmarkType::OpKgramSet(4)),
+            ("op-5gram-freq", BirthmarkType::OpKgramFreq(5)),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(BirthmarkType::try_from(input).unwrap(), expected, "input: {input}");
+            // parsing must be case insensitive
+            assert_eq!(BirthmarkType::try_from(input.to_uppercase().as_str()).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn test_birthmark_type_try_from_str_rejects_unknown() {
+        for input in ["", "op-unknown", "op-xgram-seq", "op-3gram-unknown"] {
+            assert!(BirthmarkType::try_from(input).is_err(), "input: {input}");
+        }
+    }
+
+    #[test]
+    fn test_birthmark_type_display_roundtrips() {
+        let types = [
+            BirthmarkType::FcSeq, BirthmarkType::FcSet, BirthmarkType::FcFreq,
+            BirthmarkType::OpFreq, BirthmarkType::OpSeq, BirthmarkType::OpSet,
+            BirthmarkType::OpKgramSeq(2), BirthmarkType::OpKgramFreq(3), BirthmarkType::OpKgramSet(4),
+        ];
+        for bt in types {
+            let rendered = bt.to_string();
+            assert_eq!(BirthmarkType::try_from(rendered.as_str()).unwrap(), bt, "rendered: {rendered}");
+        }
+    }
+
+    #[test]
+    fn test_analysis_type_try_from_named_combinations() {
+        let names = [
+            "op-freq-cosine", "op-set-dice", "op-freq-euclidean", "op-set-jaccard",
+            "op-seq-levenshtein", "op-set-simpson", "op-freq-weightedjaccard",
+        ];
+        for name in names {
+            assert!(AnalysisType::try_from(name).is_ok(), "name: {name}");
+            // the String and &str impls must agree
+            assert!(AnalysisType::try_from(name.to_string()).is_ok(), "name: {name}");
+        }
+    }
+
+    #[test]
+    fn test_analysis_type_try_from_kgram_combinations() {
+        let cases = [
+            ("op-2gram-set-jaccard", BirthmarkType::OpKgramSet(2)),
+            ("op-3gram-set-dice", BirthmarkType::OpKgramSet(3)),
+            ("op-3gram-set-simpson", BirthmarkType::OpKgramSet(3)),
+            ("op-4gram-seq-levenshtein", BirthmarkType::OpKgramSeq(4)),
+            ("op-5gram-freq-cosine", BirthmarkType::OpKgramFreq(5)),
+            ("op-5gram-freq-euclidean", BirthmarkType::OpKgramFreq(5)),
+            ("op-6gram-freq-weightedjaccard", BirthmarkType::OpKgramFreq(6)),
+        ];
+        for (name, expected) in cases {
+            let at = AnalysisType::try_from(name)
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(at.birthmark, expected, "name: {name}");
+        }
+    }
+
+    #[test]
+    fn test_analysis_type_try_from_rejects_unknown() {
+        for name in ["", "unknown", "op-2gram-set-unknown", "fc-set-jaccard-extra"] {
+            assert!(AnalysisType::try_from(name).is_err(), "name: {name}");
+        }
+    }
+
+    #[test]
+    fn test_data_len_and_iter_for_every_variant() {
+        let kgram = Kgram::new(vec!["A".to_string(), "B".to_string()]);
+        let variants = [
+            Data::Seq(vec!["A".to_string(), "B".to_string()]),
+            Data::Set(["A".to_string(), "B".to_string()].into_iter().collect()),
+            Data::Freq([("A".to_string(), 1), ("B".to_string(), 2)].into_iter().collect()),
+            Data::KgramSeq(vec![kgram.clone()]),
+            Data::KgramSet([kgram.clone()].into_iter().collect()),
+            Data::KgramFreq([(kgram, 1)].into_iter().collect()),
+        ];
+        for data in variants {
+            let elements = Elements { name: "f".to_string(), data };
+            // every variant above carries two mnemonics in total
+            assert_eq!(elements.ops().count(), 2);
+            assert!(!elements.is_empty());
+            assert_eq!(elements.name(), "f");
+        }
+    }
+
+    #[test]
+    fn test_elements_is_empty_on_empty_data() {
+        let elements = Elements { name: "f".to_string(), data: Data::Seq(vec![]) };
+        assert!(elements.is_empty());
+        assert_eq!(elements.len(), 0);
+        assert_eq!(elements.ops().count(), 0);
+    }
+
+    fn sample_birthmark() -> Birthmark {
+        Birthmark {
+            metadata: Metadata {
+                file_name: "sample".to_string(),
+                path: PathBuf::from("/tmp/sample"),
+                extracted_at: chrono::Utc::now(),
+                duration: Duration::from_nanos(7),
+                birthmark_type: BirthmarkType::OpSeq,
+            },
+            elements: vec![Elements {
+                name: "main".to_string(),
+                data: Data::Seq(vec!["COPY".to_string()]),
+            }],
+            json_path: None,
+        }
+    }
+
+    #[test]
+    fn test_birthmark_accessors() {
+        let mut b = sample_birthmark();
+        assert_eq!(b.name(), "sample");
+        assert_eq!(b.path(), Path::new("/tmp/sample"));
+        assert_eq!(b.duration(), Duration::from_nanos(7));
+        assert_eq!(b.birthmark_type(), &BirthmarkType::OpSeq);
+        assert_eq!(b.len(), 1);
+        assert!(!b.is_empty());
+        assert!(b.extracted_at() <= chrono::Utc::now());
+
+        // csv_info leaves the json path empty until it is set
+        assert!(b.csv_info().ends_with(','));
+        b.set_json_path(PathBuf::from("/tmp/sample.json"));
+        assert!(b.csv_info().ends_with("/tmp/sample.json"));
+        assert_eq!(b.names(), vec!["main".to_string()]);
+    }
+
+    #[test]
+    fn test_birthmark_comparable_with() {
+        let b1 = sample_birthmark();
+        let mut b2 = sample_birthmark();
+        assert!(b1.comparable_with(&b2));
+        b2.metadata.birthmark_type = BirthmarkType::OpSet;
+        assert!(!b1.comparable_with(&b2));
+    }
+
+    #[test]
+    fn test_birthmark_iterable_for_value_and_reference() {
+        // Iterable is implemented for both Birthmark and &Birthmark; going
+        // through a generic function exercises each impl distinctly.
+        fn count_elements<I: crate::Iterable>(iterable: I) -> usize {
+            iterable.iter().count()
+        }
+        let b = sample_birthmark();
+        assert_eq!(count_elements(&b), 1);
+        assert_eq!(count_elements(b), 1);
+    }
+
+    #[test]
+    fn test_birthmark_try_from_path_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("b.json");
+        let b = sample_birthmark();
+        std::fs::write(&path, serde_json::to_string(&b).unwrap()).unwrap();
+
+        // both the PathBuf and the &Path impls must work
+        let loaded = Birthmark::try_from(path.as_path()).expect("failed to load birthmark");
+        assert_eq!(loaded.name(), b.name());
+        assert_eq!(loaded.len(), b.len());
+        assert!(Birthmark::try_from(path.clone()).is_ok());
+    }
+
+    #[test]
+    fn test_birthmark_try_from_path_reports_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing.json");
+        assert!(matches!(Birthmark::try_from(missing).unwrap_err(), Error::Io(..)));
+
+        let broken = dir.path().join("broken.json");
+        std::fs::write(&broken, b"{ not json").unwrap();
+        assert!(matches!(Birthmark::try_from(broken).unwrap_err(), Error::Json(..)));
+    }
 }
