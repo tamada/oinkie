@@ -1,8 +1,8 @@
 # To use this workflow, you need to install the GitHub App (tamada-pipline-bot).
 # The App is already installed for repositories owned by tamada,
 # so you don't need to do anything for those.
-# You also need to set APP_ID and APP_PRIVATE_KEY in the GitHub Actions Secrets.
-# - CLIENT_ID can be found in the GitHub App settings.
+# You also need to set APP_CLIENT_ID and APP_PRIVATE_KEY in the GitHub Actions Secrets.
+# - APP_CLIENT_ID can be found in the GitHub App settings.
 # - APP_PRIVATE_KEY can be generated in the GitHub App settings.
 name: notify-publish
 on:
@@ -19,7 +19,7 @@ jobs:
         id: generate_token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ secrets.CLIENT_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
