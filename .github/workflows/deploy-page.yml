@@ -1,0 +1,50 @@
+name: deploy-page
+on:
+  push:
+    branches:
+      - "main"
+    paths:
+      - "docs/**"
+  workflow_dispatch:
+
+jobs:
+  document:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.26
+
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: '0.158.0'
+          extended: true
+
+      - name: Build Documents
+        run: |
+          mkdir -p docs/public
+          cd docs
+          hugo --minify
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload entire repository
+          path: 'docs/public'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
+
