@@ -1,9 +1,6 @@
 mod cli;
 mod info;
 
-#[cfg(debug_assertions)]
-mod gencomp;
-
 use clap::{Parser, ValueEnum};
 use indicatif::ProgressBar;
 use oinkie::ghidra::Op;
@@ -381,12 +378,6 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Reaggregate(opts) => reaggregator::perform(opts),
         Lift(opts) => perform_lift(opts),
         Info => perform_info(),
-        #[cfg(debug_assertions)]
-        GenComp => {
-            let now = Instant::now();
-            gencomp::generate("oinkie", Path::new("assets/completions"));
-            Ok(vec![now.elapsed()])
-        }
     }
 }
 

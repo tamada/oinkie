@@ -29,6 +29,10 @@ tempfile = "3.10.1"
 name = "oinkie"
 path = "cli/main.rs"
 
+[[bin]]
+name = "gencomp"
+path = "cli/gencomp.rs"
+
 [dev-dependencies]
 assert_cmd = "2.2.2"
 predicates = "3.1.4"

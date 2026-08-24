@@ -73,10 +73,6 @@ pub enum OinkieCommand {
         about = "Extract birthmarks and compare them in one command"
     )]
     Run(RunOpts),
-
-    #[cfg(debug_assertions)]
-    #[command(name = "gencomp", about = "Generate completions")]
-    GenComp,
 }
 
 #[derive(Debug, clap::Parser)]

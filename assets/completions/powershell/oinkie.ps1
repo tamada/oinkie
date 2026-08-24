@@ -21,15 +21,18 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'oinkie' {
+            [CompletionResult]::new('-l', '-l', [CompletionResultType]::ParameterName, 'Log level for the application')
+            [CompletionResult]::new('--level', '--level', [CompletionResultType]::ParameterName, 'Log level for the application')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
+            [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Display information about the application')
             [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to P-code JSON files using a specified lifter')
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
-            [CompletionResult]::new('gencomp', 'gencomp', [CompletionResultType]::ParameterValue, 'Generate completions')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -104,11 +107,6 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
-        'oinkie;gencomp' {
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
-            break
-        }
         'oinkie;help' {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Display information about the application')
             [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to P-code JSON files using a specified lifter')
@@ -116,7 +114,6 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
-            [CompletionResult]::new('gencomp', 'gencomp', [CompletionResultType]::ParameterValue, 'Generate completions')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
         }
@@ -136,9 +133,6 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             break
         }
         'oinkie;help;run' {
-            break
-        }
-        'oinkie;help;gencomp' {
             break
         }
         'oinkie;help;help' {

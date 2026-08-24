@@ -18,15 +18,18 @@ set edit:completion:arg-completer[oinkie] = {|@words|
     }
     var completions = [
         &'oinkie'= {
+            cand -l 'Log level for the application'
+            cand --level 'Log level for the application'
             cand -h 'Print help'
             cand --help 'Print help'
+            cand -V 'Print version'
+            cand --version 'Print version'
             cand info 'Display information about the application'
             cand lift 'Lift binary files to P-code JSON files using a specified lifter'
             cand extract 'Extract birthmarks from a lifted binary file (JSON format)'
             cand compare 'Compare birthmarks and output the similarity score'
             cand reaggregate 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
             cand run 'Extract birthmarks and compare them in one command'
-            cand gencomp 'Generate completions'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'oinkie;info'= {
@@ -94,10 +97,6 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
-        &'oinkie;gencomp'= {
-            cand -h 'Print help'
-            cand --help 'Print help'
-        }
         &'oinkie;help'= {
             cand info 'Display information about the application'
             cand lift 'Lift binary files to P-code JSON files using a specified lifter'
@@ -105,7 +104,6 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand compare 'Compare birthmarks and output the similarity score'
             cand reaggregate 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
             cand run 'Extract birthmarks and compare them in one command'
-            cand gencomp 'Generate completions'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'oinkie;help;info'= {
@@ -119,8 +117,6 @@ set edit:completion:arg-completer[oinkie] = {|@words|
         &'oinkie;help;reaggregate'= {
         }
         &'oinkie;help;run'= {
-        }
-        &'oinkie;help;gencomp'= {
         }
         &'oinkie;help;help'= {
         }

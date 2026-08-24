@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_oinkie_global_optspecs
-	string join \n h/help
+	string join \n l/level= h/help V/version
 end
 
 function __fish_oinkie_needs_command
@@ -24,14 +24,20 @@ function __fish_oinkie_using_subcommand
 	contains -- $cmd[1] $argv
 end
 
+complete -c oinkie -n "__fish_oinkie_needs_command" -s l -l level -d 'Log level for the application' -r -f -a "error\t''
+warn\t''
+info\t''
+debug\t''
+trace\t''
+off\t''"
 complete -c oinkie -n "__fish_oinkie_needs_command" -s h -l help -d 'Print help'
+complete -c oinkie -n "__fish_oinkie_needs_command" -s V -l version -d 'Print version'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "info" -d 'Display information about the application'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "lift" -d 'Lift binary files to P-code JSON files using a specified lifter'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "extract" -d 'Extract birthmarks from a lifted binary file (JSON format)'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "compare" -d 'Compare birthmarks and output the similarity score'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "reaggregate" -d 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "run" -d 'Extract birthmarks and compare them in one command'
-complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "gencomp" -d 'Generate completions'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s d -l dest -d 'Specify the directory for putting the resultant JSON files for the lifted P-code (default: \'./pcodes\' directory)' -r -F
@@ -172,12 +178,10 @@ complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s d -l dest -d 'Dest
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn).' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s S -l skip -d 'Skip if the similarity file already exists for the pair of birthmarks'
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s h -l help -d 'Print help (see more with \'--help\')'
-complete -c oinkie -n "__fish_oinkie_using_subcommand gencomp" -s h -l help -d 'Print help'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "info" -d 'Display information about the application'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "lift" -d 'Lift binary files to P-code JSON files using a specified lifter'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "extract" -d 'Extract birthmarks from a lifted binary file (JSON format)'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "compare" -d 'Compare birthmarks and output the similarity score'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "reaggregate" -d 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "run" -d 'Extract birthmarks and compare them in one command'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "gencomp" -d 'Generate completions'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run gencomp help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "info" -d 'Display information about the application'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "lift" -d 'Lift binary files to P-code JSON files using a specified lifter'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "extract" -d 'Extract birthmarks from a lifted binary file (JSON format)'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "compare" -d 'Compare birthmarks and output the similarity score'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "reaggregate" -d 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "run" -d 'Extract birthmarks and compare them in one command'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'

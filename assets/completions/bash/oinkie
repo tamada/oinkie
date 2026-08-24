@@ -22,9 +22,6 @@ _oinkie() {
             oinkie,extract)
                 cmd="oinkie__subcmd__extract"
                 ;;
-            oinkie,gencomp)
-                cmd="oinkie__subcmd__gencomp"
-                ;;
             oinkie,help)
                 cmd="oinkie__subcmd__help"
                 ;;
@@ -45,9 +42,6 @@ _oinkie() {
                 ;;
             oinkie__subcmd__help,extract)
                 cmd="oinkie__subcmd__help__subcmd__extract"
-                ;;
-            oinkie__subcmd__help,gencomp)
-                cmd="oinkie__subcmd__help__subcmd__gencomp"
                 ;;
             oinkie__subcmd__help,help)
                 cmd="oinkie__subcmd__help__subcmd__help"
@@ -71,12 +65,20 @@ _oinkie() {
 
     case "${cmd}" in
         oinkie)
-            opts="-h --help info lift extract compare reaggregate run gencomp help"
+            opts="-l -h -V --level --help --version info lift extract compare reaggregate run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
+                --level)
+                    COMPREPLY=($(compgen -W "error warn info debug trace off" -- "${cur}"))
+                    return 0
+                    ;;
+                -l)
+                    COMPREPLY=($(compgen -W "error warn info debug trace off" -- "${cur}"))
+                    return 0
+                    ;;
                 *)
                     COMPREPLY=()
                     ;;
@@ -160,22 +162,8 @@ _oinkie() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        oinkie__subcmd__gencomp)
-            opts="-h --help"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
         oinkie__subcmd__help)
-            opts="info lift extract compare reaggregate run gencomp help"
+            opts="info lift extract compare reaggregate run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -203,20 +191,6 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__help__subcmd__extract)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__gencomp)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
