@@ -6,6 +6,11 @@ use crate::birthmarks::{Birthmark, BirthmarkType, Data, Elements, Kgram, Metadat
 use crate::program::{Function, Program};
 use crate::{Error, Iterable, Result};
 
+/// Number of hex characters kept from the SHA-256 digest. 16 characters
+/// is 64 bits, which puts the birthday bound around 5 billion files;
+/// 8 characters (32 bits) collided at roughly 77,000.
+const HASH_PREFIX_LEN: usize = 16;
+
 /// Generates the file name for the extracted birthmark JSON file.
 /// The format of resultant file name is `{original_file_stem}_{hash}.json`,
 /// where `original_file_stem` is the stem of the input source file and
@@ -59,7 +64,7 @@ fn get_hash(path: &Path) -> Result<String> {
         hasher.update(&tail);
     }
     let hash = hasher.finalize();
-    Ok(format!("{:x}", hash)[..8].to_string())
+    Ok(format!("{:x}", hash)[..HASH_PREFIX_LEN].to_string())
 }
 
 pub struct Extractor {
@@ -259,5 +264,27 @@ mod tests {
         let result = extractor.extract(empty_args);
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
+    }
+
+    /// Pins the generated file-name layout: `{stem}_{hash}.json` with the
+    /// digest truncated to a fixed width. The strip_prefix/strip_suffix pair
+    /// fails if the layout changes, and the length is checked against a
+    /// literal rather than HASH_PREFIX_LEN so that widening the prefix trips
+    /// this test — changing it renames every birthmark file and breaks
+    /// `--skip` against existing directories, which should never happen
+    /// silently.
+    #[test]
+    fn test_dest_file_name_hash_length() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("sample.bin");
+        std::fs::write(&file_path, b"contents").unwrap();
+
+        let name = dest_file_name(&file_path).unwrap();
+        let hash = name
+            .strip_prefix("sample_")
+            .and_then(|s| s.strip_suffix(".json"))
+            .expect("unexpected file name layout");
+        assert_eq!(hash.len(), 16);
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()));
     }
 }
