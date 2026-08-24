@@ -28,8 +28,6 @@ oinkie extract [OPTIONS] [FILES]...
 * `-b, --birthmark-type <BIRTHMARK_TYPE>`  
   The type and representation structure of the birthmark to extract. Defaults to `op-seq`. `[default: op-seq]`  
   *Refer below for a full list of supported birthmark types.*
-* `-B, --binary-type <BINARY_TYPE>`  
-  The binary input parser type. The current version only supports `ghidra`. `[default: ghidra]` `[possible values: ghidra, llvm, binary-ninja]`
 * `-S, --skip`  
   Skip the extraction process if the output birthmark file already exists.
 
