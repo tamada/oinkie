@@ -1,0 +1,4 @@
+# Run `cargo gencomp` to regenerate the shell completion scripts under
+# assets/completions.
+[alias]
+gencomp = "run --features gencomp --bin gencomp"
