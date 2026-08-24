@@ -53,7 +53,7 @@ Note that `oinkie` does not care about the binary formats; it only looks at the 
 
 Next, we should lift the binary files to the OIR format.
 The current version of `oinkie` was only tested by lifting with [Ghidra](https://www.ghidradocs.com) and generated the OIR format.
-The future version will support [LLVM IR/BC](https://llvm.org) and [Binary Ninja](https://binary.ninja).
+The future version will support [Binary Ninja](https://binary.ninja), and [IDA Pro](https://hex-rays.com/ida-pro).
 
 See also ([`lifter/README.md`](lifter/README.md)).
 

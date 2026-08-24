@@ -7,11 +7,12 @@ mod completions {
     use std::fs::File;
     use std::path::Path;
 
-    fn generate_impl(s: Shell, app: &mut Command, appname: &str, outdir: &Path, file: String) {
-        let destfile = outdir.join(file);
+    fn generate_impl(s: Shell, app: &mut Command, outdir: &Path, file: String) {
+        let destfile = outdir.join(format!("{s}")).join(file);
         std::fs::create_dir_all(destfile.parent().unwrap()).unwrap();
+        let bin_name = app.get_name().to_string();
         if let Ok(mut dest) = File::create(destfile) {
-            clap_complete::generate(s, app, appname, &mut dest);
+            clap_complete::generate(s, app, bin_name, &mut dest);
         }
     }
 
@@ -21,11 +22,11 @@ mod completions {
         let mut app = crate::cli::OinkieCommand::command();
         app.set_bin_name(appname);
 
-        generate_impl(Bash,       &mut app, appname, outdir, format!("bash/{appname}"));
-        generate_impl(Elvish,     &mut app, appname, outdir, format!("elvish/{appname}"));
-        generate_impl(Fish,       &mut app, appname, outdir, format!("fish/{appname}"));
-        generate_impl(PowerShell, &mut app, appname, outdir, format!("powershell/{appname}"));
-        generate_impl(Zsh, &mut app, appname, outdir, format!("zsh/_{appname}"));
+        generate_impl(Bash,       &mut app, outdir, format!("{appname}"));
+        generate_impl(Elvish,     &mut app, outdir, format!("{appname}.elv"));
+        generate_impl(Fish,       &mut app, outdir, format!("{appname}.fish"));
+        generate_impl(PowerShell, &mut app, outdir, format!("{appname}.ps1"));
+        generate_impl(Zsh,        &mut app, outdir, format!("_{appname}"));
     }
 }
 

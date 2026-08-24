@@ -264,7 +264,7 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         #[cfg(debug_assertions)]
         GenComp => {
             let now = Instant::now();
-            gencomp::generate("oinkie", Path::new("completions"));
+            gencomp::generate("oinkie", Path::new("assets/completions"));
             Ok(vec![now.elapsed()])
         }
     }
