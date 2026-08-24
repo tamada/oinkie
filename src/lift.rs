@@ -1,7 +1,7 @@
-use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
-use clap::ValueEnum;
 use crate::Result;
+use clap::ValueEnum;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 pub trait Lifter {
     fn lift(&self, input: &Path, output: &Path) -> Result<()>;
@@ -11,7 +11,8 @@ pub trait Lifter {
 #[clap(rename_all = "kebab-case")]
 pub enum LifterType {
     Ghidra,
-    Llvm,
+    Angr,
+    IDAPro,
     BinaryNinja,
 }
 
@@ -57,8 +58,15 @@ impl LifterBuilder {
                     self.intermediate_dir,
                 )))
             }
-            LifterType::Llvm => Err(crate::Error::Parse("LLVM lifter is not yet implemented.".to_string())),
-            LifterType::BinaryNinja => Err(crate::Error::Parse("Binary Ninja lifter is not yet implemented.".to_string())),
+            LifterType::Angr => Err(crate::Error::Parse(
+                "angr lifter is not yet implemented.".to_string(),
+            )),
+            LifterType::IDAPro => Err(crate::Error::Parse(
+                "IDA Pro lifter is not yet implemented.".to_string(),
+            )),
+            LifterType::BinaryNinja => Err(crate::Error::Parse(
+                "Binary Ninja lifter is not yet implemented.".to_string(),
+            )),
         }
     }
 }

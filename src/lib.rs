@@ -4,12 +4,12 @@ use ndarray::ShapeError;
 
 use crate::prelude::BirthmarkType;
 
-pub mod lift;
-pub mod ghidra;
-pub mod prelude;
-pub mod extractor;
-mod compare;
 mod birthmarks;
+mod compare;
+pub mod extractor;
+pub mod ghidra;
+pub mod lift;
+pub mod prelude;
 mod program;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -42,7 +42,7 @@ impl std::fmt::Display for Error {
                     write!(f, "\n  {}. {}", i + 1, err)?;
                 }
                 Ok(())
-            },
+            }
             Error::BirthmarkType(t) => write!(f, "{t}: unknown birthmark type"),
             Error::Csv(e) => write!(f, "CSV error: {}", e),
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),

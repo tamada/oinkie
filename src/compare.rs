@@ -1,9 +1,9 @@
 use crate::{Iterable, prelude::*};
-use std::{io::Write, path::Path, time::Instant};
 use clap::ValueEnum;
-use rustc_hash::{FxHashMap, FxHashSet};
 use itertools::Itertools;
 use ndarray::Array2;
+use rustc_hash::{FxHashMap, FxHashSet};
+use std::{io::Write, path::Path, time::Instant};
 
 #[cfg_attr(doc, katexit::katexit)]
 #[derive(Debug, Clone, ValueEnum)]
@@ -39,14 +39,24 @@ impl PairingStrategy {
             PairingStrategy::All => targets.len() * targets.len().saturating_sub(1) / 2,
             PairingStrategy::SelfCoverage => targets.len(),
             PairingStrategy::Adjacent => targets.len().saturating_sub(1),
-            PairingStrategy::FirstVsOthers | PairingStrategy::LastVsOthers => targets.len().saturating_sub(1),
+            PairingStrategy::FirstVsOthers | PairingStrategy::LastVsOthers => {
+                targets.len().saturating_sub(1)
+            }
             PairingStrategy::AllAndSelf => targets.len() * (targets.len() + 1) / 2,
         }
     }
-    pub fn pairs<'a, T: std::marker::Sync>(&'a self, targets: &'a [T]) -> Box<dyn Iterator<Item = (&'a T, &'a T)> + Send + 'a> {
+    pub fn pairs<'a, T: std::marker::Sync>(
+        &'a self,
+        targets: &'a [T],
+    ) -> Box<dyn Iterator<Item = (&'a T, &'a T)> + Send + 'a> {
         match self {
-            PairingStrategy::AllAndSelf => Box::new(targets.iter().combinations(2).map(|c| (c[0], c[1]))
-                .chain(targets.iter().map(|f| (f, f)))),
+            PairingStrategy::AllAndSelf => Box::new(
+                targets
+                    .iter()
+                    .combinations(2)
+                    .map(|c| (c[0], c[1]))
+                    .chain(targets.iter().map(|f| (f, f))),
+            ),
             PairingStrategy::All => Box::new(targets.iter().combinations(2).map(|c| (c[0], c[1]))),
             PairingStrategy::SelfCoverage => Box::new(targets.iter().map(|f| (f, f))),
             PairingStrategy::Adjacent => Box::new(targets.windows(2).map(|w| (&w[0], &w[1]))),
@@ -57,7 +67,7 @@ impl PairingStrategy {
                 } else {
                     Box::new(std::iter::empty())
                 }
-            },
+            }
             PairingStrategy::LastVsOthers => {
                 let mut it = targets.iter().rev();
                 if let Some(last) = it.next() {
@@ -89,8 +99,20 @@ pub fn escape_csv_string(s: &str) -> String {
 }
 
 impl<'a, S: CsvInfo> Comparison<'a, S> {
-    pub fn new(columns: &'a S, rows: &'a S, matrix: Array2<f64>, similarities: Vec<f64>, duration: std::time::Duration) -> Comparison<'a, S> {
-        Self { columns, rows, matrix, similarities, duration }
+    pub fn new(
+        columns: &'a S,
+        rows: &'a S,
+        matrix: Array2<f64>,
+        similarities: Vec<f64>,
+        duration: std::time::Duration,
+    ) -> Comparison<'a, S> {
+        Self {
+            columns,
+            rows,
+            matrix,
+            similarities,
+            duration,
+        }
     }
 
     pub fn store<P: AsRef<Path>>(&self, dest: P) -> Result<()> {
@@ -98,13 +120,23 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
         let io_err = |e| Error::Io(dest.to_path_buf(), e);
         let mut file = std::fs::File::create(dest).map_err(io_err)?;
         let mut out = std::io::BufWriter::new(&mut file);
-        writeln!(out, "result,{},{}", self.duration.as_nanos(), self.similarity()).map_err(io_err)?;
-        writeln!(out, "left,{}", self.rows.csv_info()).map_err(io_err)?;
-        writeln!(out, "right,{}", self.columns.csv_info()).map_err(io_err)?;
+        writeln!(
+            out,
+            "result,{},{}",
+            self.duration.as_nanos(),
+            self.similarity()
+        )
+        .map_err(io_err)?;
+        writeln!(out, "left,{}", self.columns.csv_info()).map_err(io_err)?;
+        writeln!(out, "right,{}", self.rows.csv_info()).map_err(io_err)?;
         let b1_names = self.columns.names();
         let b2_names = self.rows.names();
-        write!(out, "matrix,,{}", b1_names.iter()
-            .map(|s| escape_csv_string(s)).join(",")).map_err(io_err)?;
+        write!(
+            out,
+            "matrix,,{}",
+            b1_names.iter().map(|s| escape_csv_string(s)).join(",")
+        )
+        .map_err(io_err)?;
         for (j, item) in b2_names.iter().enumerate() {
             write!(out, "\n{}, {}", j, escape_csv_string(item)).map_err(io_err)?;
             for i in 0..b1_names.len() {
@@ -154,11 +186,13 @@ impl std::str::FromStr for Aggregator {
             Ok(Aggregator::TopN(Size::All))
         } else if let Some(n) = s.strip_prefix("topn:") {
             match n.parse::<usize>() {
-                Ok(0) => Err(Error::Parse("topn requires N >= 1 (use \"topn:all\" for all elements)".to_string())),
+                Ok(0) => Err(Error::Parse(
+                    "topn requires N >= 1 (use \"topn:all\" for all elements)".to_string(),
+                )),
                 Ok(n) => {
                     log::info!("Using TopN({n}) algorithm for aggregation");
                     Ok(Aggregator::TopN(Size::Num(n)))
-                },
+                }
                 Err(e) => Err(Error::ParseInt(s, e)),
             }
         } else {
@@ -170,33 +204,49 @@ impl std::str::FromStr for Aggregator {
 impl Aggregator {
     pub fn aggregate(&self, array: &Array2<f64>) -> Result<Vec<f64>> {
         match self {
-            Aggregator::Hungarian => 
-                hungarian_algorithm(array)
-                    .map(|(sim, _matches)| sim),
-            Aggregator::TopN(n) => 
-                top_n_selection(array, n)
+            Aggregator::Hungarian => hungarian_algorithm(array).map(|(sim, _matches)| sim),
+            Aggregator::TopN(n) => top_n_selection(array, n),
         }
     }
 }
 
 trait BirthmarkComparator {
-    fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark, aggregator: &Aggregator) -> Result<Comparison<'a, Birthmark>> {
+    fn compare_birthmarks<'a>(
+        &self,
+        b1: &'a Birthmark,
+        b2: &'a Birthmark,
+        aggregator: &Aggregator,
+    ) -> Result<Comparison<'a, Birthmark>> {
         if !b1.comparable_with(b2) {
-            return Err(Error::Mismatch(b1.metadata.birthmark_type.clone(), b2.metadata.birthmark_type.clone()));
+            return Err(Error::Mismatch(
+                b1.metadata.birthmark_type.clone(),
+                b2.metadata.birthmark_type.clone(),
+            ));
         }
         let p1_len = b1.elements.len();
         let p2_len = b2.elements.len();
         let size = std::cmp::max(p1_len, p2_len);
         if p1_len == 0 && p2_len == 0 {
-            Ok(Comparison::new(b1, b2, Array2::<f64>::zeros((0, 0)), vec![1.0], std::time::Duration::from_millis(0)))
+            Ok(Comparison::new(
+                b1,
+                b2,
+                Array2::<f64>::zeros((0, 0)),
+                vec![1.0],
+                std::time::Duration::from_millis(0),
+            ))
         } else if p1_len == 0 || p2_len == 0 {
-            Ok(Comparison::new(b1, b2, Array2::<f64>::zeros((0, 0)), vec![0.0], std::time::Duration::from_millis(0)))
+            Ok(Comparison::new(
+                b1,
+                b2,
+                Array2::<f64>::zeros((0, 0)),
+                vec![0.0],
+                std::time::Duration::from_millis(0),
+            ))
         } else {
             let start = Instant::now();
-            let r = build_matrix(b1, b2, size, |e1, e2| {
-                self.compare_elements(e1, e2)
-            })?;
-            aggregator.aggregate(&r)
+            let r = build_matrix(b1, b2, size, |e1, e2| self.compare_elements(e1, e2))?;
+            aggregator
+                .aggregate(&r)
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
         }
     }
@@ -204,8 +254,13 @@ trait BirthmarkComparator {
     fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64;
 }
 
-fn build_matrix<F, T>(p1: impl Iterable<Item = T>, p2: impl Iterable<Item = T>, size: usize, compare_func: F) -> Result<Array2<f64>>
-where 
+fn build_matrix<F, T>(
+    p1: impl Iterable<Item = T>,
+    p2: impl Iterable<Item = T>,
+    size: usize,
+    compare_func: F,
+) -> Result<Array2<f64>>
+where
     F: Fn(&T, &T) -> f64,
 {
     // The matrix holds similarities; the conversion to costs for lapjv
@@ -217,22 +272,26 @@ where
             similarities[i * size + j] = compare_func(item1, item2);
         }
     }
-    Array2::from_shape_vec((size, size), similarities)
-        .map_err(Error::ShapeError)
+    Array2::from_shape_vec((size, size), similarities).map_err(Error::ShapeError)
 }
 
 fn top_n_selection(array2d: &Array2<f64>, n: &Size) -> Result<Vec<f64>> {
-    let rows = array2d.axis_iter(ndarray::Axis(0))
+    let rows = array2d
+        .axis_iter(ndarray::Axis(0))
         .map(|col| col.fold(0.0f64, |acc, &v| acc.max(v)))
         .sorted_by(|a, b| b.total_cmp(a))
         .collect::<Vec<_>>();
-    let cols = array2d.axis_iter(ndarray::Axis(1))
+    let cols = array2d
+        .axis_iter(ndarray::Axis(1))
         .map(|col| col.fold(0.0f64, |acc, &v| acc.max(v)))
         .sorted_by(|a, b| b.total_cmp(a))
         .collect::<Vec<_>>();
     match n {
-        Size::Num(k) => 
-            Ok(rows.into_iter().take(*k).chain(cols.into_iter().take(*k)).collect()),
+        Size::Num(k) => Ok(rows
+            .into_iter()
+            .take(*k)
+            .chain(cols.into_iter().take(*k))
+            .collect()),
         Size::All => Ok(rows.into_iter().chain(cols).collect()),
     }
 }
@@ -245,30 +304,46 @@ fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec
             for (i, &j) in rows.iter().enumerate() {
                 if i < cost_matrix.nrows() && j < cost_matrix.ncols() {
                     // Convert cost back to similarity by using (1.0 - cost).
-                    similarities.push(1.0 - cost_matrix[(i, j)]); 
+                    similarities.push(1.0 - cost_matrix[(i, j)]);
                 }
             }
             Ok((similarities, rows))
-        },
+        }
         Err(e) => Err(Error::LapJV(e)),
     }
 }
 
 trait ProgramComparator<T: crate::Op> {
-    fn compare_programs<'a>(&self, p1: &'a Program<T>, p2: &'a Program<T>, aggregator: &Aggregator) -> Result<Comparison<'a, Program<T>>> {
+    fn compare_programs<'a>(
+        &self,
+        p1: &'a Program<T>,
+        p2: &'a Program<T>,
+        aggregator: &Aggregator,
+    ) -> Result<Comparison<'a, Program<T>>> {
         let p1_len = p1.len();
         let p2_len = p2.len();
         let size = std::cmp::max(p1_len, p2_len);
         if p1_len == 0 && p2_len == 0 {
-            Ok(Comparison::new(p1, p2, Array2::<f64>::zeros((0, 0)), vec![1.0], std::time::Duration::from_millis(0)))
+            Ok(Comparison::new(
+                p1,
+                p2,
+                Array2::<f64>::zeros((0, 0)),
+                vec![1.0],
+                std::time::Duration::from_millis(0),
+            ))
         } else if p1_len == 0 || p2_len == 0 {
-            Ok(Comparison::new(p1, p2, Array2::<f64>::zeros((0, 0)), vec![0.0], std::time::Duration::from_millis(0)))
+            Ok(Comparison::new(
+                p1,
+                p2,
+                Array2::<f64>::zeros((0, 0)),
+                vec![0.0],
+                std::time::Duration::from_millis(0),
+            ))
         } else {
             let start = Instant::now();
-            let r = build_matrix(p1, p2, size, |f1, f2| {
-                self.compare_func(f1, f2)
-            })?;
-            aggregator.aggregate(&r)
+            let r = build_matrix(p1, p2, size, |f1, f2| self.compare_func(f1, f2))?;
+            aggregator
+                .aggregate(&r)
                 .map(|sim| Comparison::new(p1, p2, r, sim, start.elapsed()))
         }
     }
@@ -319,7 +394,7 @@ impl Algorithm {
 
 /// This struct holds the specific algorithm instance and dispatches the comparison calls to it.
 pub struct Comparator {
-    inner: ComparatorImpl
+    inner: ComparatorImpl,
 }
 
 /// The implementation of Comparator, which holds the specific algorithm instance and dispatches the comparison calls to it.
@@ -338,20 +413,41 @@ enum ComparatorImpl {
 impl From<&Algorithm> for Comparator {
     fn from(algorithm: &Algorithm) -> Self {
         match algorithm {
-            Algorithm::Cosine => Comparator{ inner: ComparatorImpl::Cosine(Cosine{}) },
-            Algorithm::Dice => Comparator{ inner: ComparatorImpl::Dice(Dice{}) },
-            Algorithm::Euclidean => Comparator{ inner: ComparatorImpl::Euclidean(Euclidean{}) },
-            Algorithm::Jaccard => Comparator{ inner: ComparatorImpl::Jaccard(Jaccard{}) },
-            Algorithm::Levenshtein => Comparator{ inner: ComparatorImpl::Levenshtein(Levenshtein{}) },
-            Algorithm::Lcs => Comparator{ inner: ComparatorImpl::Lcs(Lcs{}) },
-            Algorithm::Simpson => Comparator{ inner: ComparatorImpl::Simpson(Simpson{}) },
-            Algorithm::WeightedJaccard => Comparator{ inner: ComparatorImpl::WeightedJaccard(WeightedJaccard{}) },
+            Algorithm::Cosine => Comparator {
+                inner: ComparatorImpl::Cosine(Cosine {}),
+            },
+            Algorithm::Dice => Comparator {
+                inner: ComparatorImpl::Dice(Dice {}),
+            },
+            Algorithm::Euclidean => Comparator {
+                inner: ComparatorImpl::Euclidean(Euclidean {}),
+            },
+            Algorithm::Jaccard => Comparator {
+                inner: ComparatorImpl::Jaccard(Jaccard {}),
+            },
+            Algorithm::Levenshtein => Comparator {
+                inner: ComparatorImpl::Levenshtein(Levenshtein {}),
+            },
+            Algorithm::Lcs => Comparator {
+                inner: ComparatorImpl::Lcs(Lcs {}),
+            },
+            Algorithm::Simpson => Comparator {
+                inner: ComparatorImpl::Simpson(Simpson {}),
+            },
+            Algorithm::WeightedJaccard => Comparator {
+                inner: ComparatorImpl::WeightedJaccard(WeightedJaccard {}),
+            },
         }
     }
 }
 
 impl Comparator {
-    pub fn compare_programs<'a, T: crate::Op>(&self, p1: &'a Program<T>, p2: &'a Program<T>, aggregator: &Aggregator) -> Result<Comparison<'a, Program<T>>> {
+    pub fn compare_programs<'a, T: crate::Op>(
+        &self,
+        p1: &'a Program<T>,
+        p2: &'a Program<T>,
+        aggregator: &Aggregator,
+    ) -> Result<Comparison<'a, Program<T>>> {
         match &self.inner {
             ComparatorImpl::Cosine(c) => c.compare_programs(p1, p2, aggregator),
             ComparatorImpl::Dice(d) => d.compare_programs(p1, p2, aggregator),
@@ -364,7 +460,12 @@ impl Comparator {
         }
     }
 
-    pub fn compare_birthmarks<'a>(&self, b1: &'a Birthmark, b2: &'a Birthmark, aggregator: &Aggregator) -> Result<Comparison<'a, Birthmark>> {
+    pub fn compare_birthmarks<'a>(
+        &self,
+        b1: &'a Birthmark,
+        b2: &'a Birthmark,
+        aggregator: &Aggregator,
+    ) -> Result<Comparison<'a, Birthmark>> {
         match &self.inner {
             ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2, aggregator),
             ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2, aggregator),
@@ -610,7 +711,10 @@ where
     freq
 }
 
-fn jaccard_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+fn jaccard_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(
+    s1: &FxHashSet<T>,
+    s2: &FxHashSet<T>,
+) -> f64 {
     if s1.is_empty() && s2.is_empty() {
         1.0
     } else if s1.is_empty() || s2.is_empty() {
@@ -620,7 +724,10 @@ fn jaccard_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHas
     }
 }
 
-fn dice_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+fn dice_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(
+    s1: &FxHashSet<T>,
+    s2: &FxHashSet<T>,
+) -> f64 {
     if s1.is_empty() && s2.is_empty() {
         1.0
     } else if s1.is_empty() || s2.is_empty() {
@@ -630,7 +737,10 @@ fn dice_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSe
     }
 }
 
-fn simpson_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(s1: &FxHashSet<T>, s2: &FxHashSet<T>) -> f64 {
+fn simpson_index<T: std::fmt::Debug + std::cmp::Eq + std::hash::Hash>(
+    s1: &FxHashSet<T>,
+    s2: &FxHashSet<T>,
+) -> f64 {
     if s1.is_empty() && s2.is_empty() {
         1.0
     } else if s1.is_empty() || s2.is_empty() {
@@ -644,8 +754,12 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let n = s1.len();
     let m = s2.len();
 
-    if n == 0 && m == 0 { return 1.0; }
-    if n == 0 || m == 0 { return 0.0; }
+    if n == 0 && m == 0 {
+        return 1.0;
+    }
+    if n == 0 || m == 0 {
+        return 0.0;
+    }
     let max_len = n.max(m);
 
     // shorter sequence is s2, longer sequence is s1 for minimizing memory usage.
@@ -660,7 +774,7 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
         curr[0] = i;
         for j in 1..=m {
             let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
-            
+
             // 3つの操作の最小値をとる
             let substitution = prev[j - 1] + cost;
             let insertion = curr[j - 1] + 1;
@@ -699,13 +813,19 @@ fn levenshtein_distance_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     1.0 - (dp[[s1.len(), s2.len()]] as f64 / (s1.len().max(s2.len()) as f64))
 }
 
-fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
+fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(
+    f1: &FxHashMap<T, usize>,
+    f2: &FxHashMap<T, usize>,
+) -> f64 {
     let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
-    let dot_product = keys.iter().map(|k| {
-        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-        v1 * v2
-    }).sum::<f64>();
+    let dot_product = keys
+        .iter()
+        .map(|k| {
+            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+            v1 * v2
+        })
+        .sum::<f64>();
     let magnitude1 = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     let magnitude2 = f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     if magnitude1 > 0.0 && magnitude2 > 0.0 {
@@ -715,28 +835,45 @@ fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>
     }
 }
 
-fn euclidean_distance<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
+fn euclidean_distance<T: std::cmp::Eq + std::hash::Hash>(
+    f1: &FxHashMap<T, usize>,
+    f2: &FxHashMap<T, usize>,
+) -> f64 {
     let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
-    let sum_of_squares = keys.iter().map(|k| {
-        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-        (v1 - v2).powi(2)
-    }).sum::<f64>();
-    1.0 - (sum_of_squares.sqrt() / (f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt() + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()))
+    let sum_of_squares = keys
+        .iter()
+        .map(|k| {
+            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+            (v1 - v2).powi(2)
+        })
+        .sum::<f64>();
+    1.0 - (sum_of_squares.sqrt()
+        / (f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()
+            + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()))
 }
 
-fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>, f2: &FxHashMap<T, usize>) -> f64 {
+fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(
+    f1: &FxHashMap<T, usize>,
+    f2: &FxHashMap<T, usize>,
+) -> f64 {
     let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
-    let min_sum = keys.iter().map(|k| {
-        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-        v1.min(v2)
-    }).sum::<f64>();
-    let max_sum = keys.iter().map(|k| {
-        let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-        let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-        v1.max(v2)
-    }).sum::<f64>();
+    let min_sum = keys
+        .iter()
+        .map(|k| {
+            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+            v1.min(v2)
+        })
+        .sum::<f64>();
+    let max_sum = keys
+        .iter()
+        .map(|k| {
+            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+            v1.max(v2)
+        })
+        .sum::<f64>();
     if max_sum > 0.0 {
         min_sum / max_sum
     } else {
@@ -747,7 +884,9 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(f1: &FxHashMap<T, usize>,
 fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let n = s1.len();
     let m = s2.len();
-    if n == 0 || m == 0 { return 0.0; }
+    if n == 0 || m == 0 {
+        return 0.0;
+    }
 
     // shorter sequence is s2, longer sequence is s1 for minimizing memory usage.
     let (s1, s2) = if n < m { (s2, s1) } else { (s1, s2) };
@@ -771,7 +910,7 @@ fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     }
 
     // the previous row contains the final results since the last swap
-    let lcs_length = prev[m]; 
+    let lcs_length = prev[m];
     2.0 * lcs_length as f64 / (n + m) as f64
 }
 
@@ -811,27 +950,53 @@ mod tests {
     #[test]
     fn aggregator_rejects_topn_zero() {
         assert!("topn:0".parse::<Aggregator>().is_err());
-        assert!(matches!("topn:3".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::Num(3)))));
-        assert!(matches!("topn".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::All))));
-        assert!(matches!("hungarian".parse::<Aggregator>(), Ok(Aggregator::Hungarian)));
+        assert!(matches!(
+            "topn:3".parse::<Aggregator>(),
+            Ok(Aggregator::TopN(Size::Num(3)))
+        ));
+        assert!(matches!(
+            "topn".parse::<Aggregator>(),
+            Ok(Aggregator::TopN(Size::All))
+        ));
+        assert!(matches!(
+            "hungarian".parse::<Aggregator>(),
+            Ok(Aggregator::Hungarian)
+        ));
     }
 
     #[test]
     fn aggregator_rejects_malformed_input() {
         // a non-numeric N and an entirely unknown name take separate error paths
-        assert!(matches!("topn:abc".parse::<Aggregator>(), Err(Error::ParseInt(..))));
-        assert!(matches!("nonsense".parse::<Aggregator>(), Err(Error::Parse(_))));
+        assert!(matches!(
+            "topn:abc".parse::<Aggregator>(),
+            Err(Error::ParseInt(..))
+        ));
+        assert!(matches!(
+            "nonsense".parse::<Aggregator>(),
+            Err(Error::Parse(_))
+        ));
         // parsing is case insensitive
-        assert!(matches!("HUNGARIAN".parse::<Aggregator>(), Ok(Aggregator::Hungarian)));
-        assert!(matches!("TopN:All".parse::<Aggregator>(), Ok(Aggregator::TopN(Size::All))));
+        assert!(matches!(
+            "HUNGARIAN".parse::<Aggregator>(),
+            Ok(Aggregator::Hungarian)
+        ));
+        assert!(matches!(
+            "TopN:All".parse::<Aggregator>(),
+            Ok(Aggregator::TopN(Size::All))
+        ));
     }
 
     #[test]
     fn pairs_on_empty_targets_yield_nothing() {
         let empty: Vec<i32> = vec![];
-        for strategy in [PairingStrategy::FirstVsOthers, PairingStrategy::LastVsOthers,
-                         PairingStrategy::All, PairingStrategy::AllAndSelf,
-                         PairingStrategy::Adjacent, PairingStrategy::SelfCoverage] {
+        for strategy in [
+            PairingStrategy::FirstVsOthers,
+            PairingStrategy::LastVsOthers,
+            PairingStrategy::All,
+            PairingStrategy::AllAndSelf,
+            PairingStrategy::Adjacent,
+            PairingStrategy::SelfCoverage,
+        ] {
             assert_eq!(strategy.pairs(&empty).count(), 0, "strategy: {strategy:?}");
         }
     }
@@ -839,11 +1004,19 @@ mod tests {
     #[test]
     fn pairs_match_compare_count() {
         let targets = vec![1, 2, 3, 4];
-        for strategy in [PairingStrategy::All, PairingStrategy::AllAndSelf,
-                         PairingStrategy::Adjacent, PairingStrategy::SelfCoverage,
-                         PairingStrategy::FirstVsOthers, PairingStrategy::LastVsOthers] {
-            assert_eq!(strategy.pairs(&targets).count(), strategy.compare_count(&targets),
-                "strategy: {strategy:?}");
+        for strategy in [
+            PairingStrategy::All,
+            PairingStrategy::AllAndSelf,
+            PairingStrategy::Adjacent,
+            PairingStrategy::SelfCoverage,
+            PairingStrategy::FirstVsOthers,
+            PairingStrategy::LastVsOthers,
+        ] {
+            assert_eq!(
+                strategy.pairs(&targets).count(),
+                strategy.compare_count(&targets),
+                "strategy: {strategy:?}"
+            );
         }
     }
 
@@ -865,7 +1038,10 @@ mod tests {
     }
 
     fn elements(name: &str, data: Data) -> Elements {
-        Elements { name: name.to_string(), data }
+        Elements {
+            name: name.to_string(),
+            data,
+        }
     }
 
     fn seq(items: &[&str]) -> Data {
@@ -877,19 +1053,36 @@ mod tests {
     }
 
     fn freq(items: &[&str]) -> Data {
-        Data::Freq(seq2freq(&items.iter().map(|s| s.to_string()).collect::<Vec<_>>()))
+        Data::Freq(seq2freq(
+            &items.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+        ))
     }
 
     fn kgram_seq(items: &[&str]) -> Data {
-        Data::KgramSeq(items.iter().map(|s| Kgram::new(vec![s.to_string()])).collect())
+        Data::KgramSeq(
+            items
+                .iter()
+                .map(|s| Kgram::new(vec![s.to_string()]))
+                .collect(),
+        )
     }
 
     fn kgram_set(items: &[&str]) -> Data {
-        Data::KgramSet(items.iter().map(|s| Kgram::new(vec![s.to_string()])).collect())
+        Data::KgramSet(
+            items
+                .iter()
+                .map(|s| Kgram::new(vec![s.to_string()]))
+                .collect(),
+        )
     }
 
     fn kgram_freq(items: &[&str]) -> Data {
-        Data::KgramFreq(seq2freq(&items.iter().map(|s| Kgram::new(vec![s.to_string()])).collect::<Vec<_>>()))
+        Data::KgramFreq(seq2freq(
+            &items
+                .iter()
+                .map(|s| Kgram::new(vec![s.to_string()]))
+                .collect::<Vec<_>>(),
+        ))
     }
 
     /// Every set-like comparator must report 1.0 for identical inputs across
@@ -967,7 +1160,7 @@ mod tests {
         let mut b2 = birthmark("b", &[("main", &["A"])]);
         b2.metadata.birthmark_type = BirthmarkType::OpSet;
         match Jaccard.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian) {
-            Err(Error::Mismatch(..)) => {},
+            Err(Error::Mismatch(..)) => {}
             Err(e) => panic!("unexpected error: {e}"),
             Ok(_) => panic!("expected a mismatch error"),
         }
@@ -979,32 +1172,43 @@ mod tests {
         let filled = birthmark("filled", &[("main", &["A"])]);
 
         // both empty means identical
-        let both = Jaccard.compare_birthmarks(&empty, &empty, &Aggregator::Hungarian).unwrap();
+        let both = Jaccard
+            .compare_birthmarks(&empty, &empty, &Aggregator::Hungarian)
+            .unwrap();
         assert_eq!(both.similarity(), 1.0);
 
         // exactly one empty means nothing in common
-        let one = Jaccard.compare_birthmarks(&empty, &filled, &Aggregator::Hungarian).unwrap();
+        let one = Jaccard
+            .compare_birthmarks(&empty, &filled, &Aggregator::Hungarian)
+            .unwrap();
         assert_eq!(one.similarity(), 0.0);
-        let other = Jaccard.compare_birthmarks(&filled, &empty, &Aggregator::Hungarian).unwrap();
+        let other = Jaccard
+            .compare_birthmarks(&filled, &empty, &Aggregator::Hungarian)
+            .unwrap();
         assert_eq!(other.similarity(), 0.0);
     }
 
     #[test]
     fn compare_birthmarks_of_identical_inputs_scores_one() {
         let b = birthmark("a", &[("f", &["A", "B"]), ("g", &["C"])]);
-        for aggregator in [Aggregator::Hungarian, Aggregator::TopN(Size::All), Aggregator::TopN(Size::Num(1))] {
+        for aggregator in [
+            Aggregator::Hungarian,
+            Aggregator::TopN(Size::All),
+            Aggregator::TopN(Size::Num(1)),
+        ] {
             let c = Jaccard.compare_birthmarks(&b, &b, &aggregator).unwrap();
-            assert!((c.similarity() - 1.0).abs() < 1e-9, "aggregator: {aggregator:?}");
+            assert!(
+                (c.similarity() - 1.0).abs() < 1e-9,
+                "aggregator: {aggregator:?}"
+            );
         }
     }
 
     #[test]
     fn top_n_selection_limits_the_number_of_scores() {
-        let matrix = Array2::from_shape_vec((3, 3), vec![
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0,
-        ]).unwrap();
+        let matrix =
+            Array2::from_shape_vec((3, 3), vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
+                .unwrap();
         // Size::Num(k) keeps k row maxima plus k column maxima
         let picked = top_n_selection(&matrix, &Size::Num(2)).unwrap();
         assert_eq!(picked.len(), 4);
@@ -1017,8 +1221,18 @@ mod tests {
     #[test]
     fn comparison_similarity_is_zero_when_no_scores_were_aggregated() {
         let b = birthmark("a", &[("f", &["A"])]);
-        let c = Comparison::new(&b, &b, Array2::zeros((0, 0)), vec![], std::time::Duration::from_nanos(0));
-        assert_eq!(c.similarity(), 0.0, "an empty aggregation must not produce NaN");
+        let c = Comparison::new(
+            &b,
+            &b,
+            Array2::zeros((0, 0)),
+            vec![],
+            std::time::Duration::from_nanos(0),
+        );
+        assert_eq!(
+            c.similarity(),
+            0.0,
+            "an empty aggregation must not produce NaN"
+        );
         assert_eq!(c.duration(), std::time::Duration::from_nanos(0));
     }
 
@@ -1026,7 +1240,9 @@ mod tests {
     fn comparison_store_writes_a_parsable_matrix() {
         let b1 = birthmark("left", &[("f", &["A", "B"]), ("g", &["B"])]);
         let b2 = birthmark("right", &[("h", &["A"]), ("i", &["B"])]);
-        let c = Jaccard.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian).unwrap();
+        let c = Jaccard
+            .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
+            .unwrap();
 
         let dir = tempfile::tempdir().unwrap();
         let dest = dir.path().join("00000.csv");
@@ -1034,21 +1250,25 @@ mod tests {
 
         let content = std::fs::read_to_string(&dest).unwrap();
         assert!(content.starts_with("result,"));
-        // NOTE: Comparison::new takes (columns, rows) and compare_birthmarks
-        // passes (b1, b2), while store writes the "left" record from `rows`.
-        // The stored "left" is therefore the *second* birthmark, and "right"
-        // the first. This asserts the behaviour as it currently stands.
-        assert!(content.contains("\nleft,birthmark,right,"));
-        assert!(content.contains("\nright,birthmark,left,"));
+        assert!(content.contains("\nleft,birthmark,left,"));
+        assert!(content.contains("\nright,birthmark,right,"));
         assert!(content.contains("\nmatrix,,"));
         // one line per row element, each prefixed with its index
-        assert_eq!(content.lines().filter(|l| l.starts_with('0') || l.starts_with('1')).count(), 2);
+        assert_eq!(
+            content
+                .lines()
+                .filter(|l| l.starts_with('0') || l.starts_with('1'))
+                .count(),
+            2
+        );
     }
 
     #[test]
     fn comparison_store_reports_io_errors() {
         let b = birthmark("a", &[("f", &["A"])]);
-        let c = Jaccard.compare_birthmarks(&b, &b, &Aggregator::Hungarian).unwrap();
+        let c = Jaccard
+            .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
+            .unwrap();
         // a directory that does not exist cannot receive the result file
         let err = c.store("no/such/directory/out.csv").unwrap_err();
         assert!(matches!(err, Error::Io(..)));
@@ -1057,13 +1277,24 @@ mod tests {
     #[test]
     fn comparator_dispatches_every_algorithm() {
         let b = birthmark("a", &[("f", &["A", "B"])]);
-        for algorithm in [Algorithm::Cosine, Algorithm::Dice, Algorithm::Euclidean,
-                          Algorithm::Jaccard, Algorithm::Levenshtein, Algorithm::Lcs,
-                          Algorithm::Simpson, Algorithm::WeightedJaccard] {
+        for algorithm in [
+            Algorithm::Cosine,
+            Algorithm::Dice,
+            Algorithm::Euclidean,
+            Algorithm::Jaccard,
+            Algorithm::Levenshtein,
+            Algorithm::Lcs,
+            Algorithm::Simpson,
+            Algorithm::WeightedJaccard,
+        ] {
             let comparator = algorithm.comparator();
-            let c = comparator.compare_birthmarks(&b, &b, &Aggregator::Hungarian)
+            let c = comparator
+                .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
                 .unwrap_or_else(|e| panic!("{algorithm}: {e}"));
-            assert!((c.similarity() - 1.0).abs() < 1e-9, "algorithm: {algorithm}");
+            assert!(
+                (c.similarity() - 1.0).abs() < 1e-9,
+                "algorithm: {algorithm}"
+            );
         }
     }
 
@@ -1071,11 +1302,20 @@ mod tests {
     fn similarity_functions_agree_with_their_full_memory_variants() {
         let a = ["A", "B", "C", "D"];
         let b = ["A", "C", "D", "E"];
-        assert!((longest_common_subsequence(&a, &b) - longest_common_subsequence_full_memory(&a, &b)).abs() < 1e-9);
-        assert!((levenshtein_distance(&a, &b) - levenshtein_distance_full_memory(&a, &b)).abs() < 1e-9);
+        assert!(
+            (longest_common_subsequence(&a, &b) - longest_common_subsequence_full_memory(&a, &b))
+                .abs()
+                < 1e-9
+        );
+        assert!(
+            (levenshtein_distance(&a, &b) - levenshtein_distance_full_memory(&a, &b)).abs() < 1e-9
+        );
         // the row/column swap for the shorter sequence must not change the score
         let short = ["A", "B"];
-        assert!((longest_common_subsequence(&a, &short) - longest_common_subsequence(&short, &a)).abs() < 1e-9);
+        assert!(
+            (longest_common_subsequence(&a, &short) - longest_common_subsequence(&short, &a)).abs()
+                < 1e-9
+        );
         assert!((levenshtein_distance(&a, &short) - levenshtein_distance(&short, &a)).abs() < 1e-9);
     }
 
