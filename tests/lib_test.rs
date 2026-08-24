@@ -1,5 +1,5 @@
-use oinkie::prelude::*;
 use oinkie::ghidra::Op;
+use oinkie::prelude::*;
 use std::path::PathBuf;
 
 fn load_program(path: &str) -> Program<Op> {
@@ -37,22 +37,38 @@ fn test_extractor_and_comparator() {
 
         let extracted = extractor.extract(vec![&p1, &p2]).unwrap();
         assert_eq!(extracted.len(), 2);
-    
+
         let comparator = algo.comparator();
-        
+
         // Test with Hungarian aggregator
-        let result_hungarian = comparator.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian).unwrap();
-        assert!(result_hungarian.similarity() >= -0.01 && result_hungarian.similarity() <= 1.01, 
-            "Similarity out of bounds for {:?} and {:?} with Hungarian: {}", bt, algo, result_hungarian.similarity());
+        let result_hungarian = comparator
+            .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
+            .unwrap();
+        assert!(
+            result_hungarian.similarity() >= -0.01 && result_hungarian.similarity() <= 1.01,
+            "Similarity out of bounds for {:?} and {:?} with Hungarian: {}",
+            bt,
+            algo,
+            result_hungarian.similarity()
+        );
 
         // Test with TopN aggregator
         use std::str::FromStr;
-        let result_topn = comparator.compare_birthmarks(&b1, &b2, &Aggregator::from_str("topn:all").unwrap()).unwrap();
-        assert!(result_topn.similarity() >= -0.01 && result_topn.similarity() <= 1.01,
-            "Similarity out of bounds for {:?} and {:?} with TopN: {}", bt, algo, result_topn.similarity());
-            
+        let result_topn = comparator
+            .compare_birthmarks(&b1, &b2, &Aggregator::from_str("topn:all").unwrap())
+            .unwrap();
+        assert!(
+            result_topn.similarity() >= -0.01 && result_topn.similarity() <= 1.01,
+            "Similarity out of bounds for {:?} and {:?} with TopN: {}",
+            bt,
+            algo,
+            result_topn.similarity()
+        );
+
         // Test comparing programs directly
-        let result_prog = comparator.compare_programs(&p1, &p2, &Aggregator::Hungarian).unwrap();
+        let result_prog = comparator
+            .compare_programs(&p1, &p2, &Aggregator::Hungarian)
+            .unwrap();
         assert!(result_prog.similarity() >= -0.01 && result_prog.similarity() <= 1.01);
     }
 }
@@ -90,7 +106,7 @@ fn test_empty_comparisons() {
     let p1 = load_program("testdata/hello_world/pcodes/hello_clang.json");
     let ext1 = Extractor::new(BirthmarkType::OpSeq);
     let ext2 = Extractor::new(BirthmarkType::FcSeq);
-    
+
     let b1 = ext1.extract_each(&p1).unwrap();
     let b2 = ext2.extract_each(&p1).unwrap();
 

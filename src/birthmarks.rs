@@ -1,9 +1,12 @@
-use std::{fmt::Display, path::{Path, PathBuf}};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
+use crate::prelude::*;
+use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
-use rustc_hash::{FxHashMap, FxHashSet};
-use crate::prelude::*;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum BirthmarkType {
@@ -55,10 +58,8 @@ impl TryFrom<PathBuf> for Birthmark {
     type Error = Error;
 
     fn try_from(path: PathBuf) -> Result<Self> {
-        let file = std::fs::File::open(&path)
-            .map_err(|e| Error::Io(path.clone(), e))?;
-        serde_json::from_reader(file)
-            .map_err(|e| Error::Json(path, e))
+        let file = std::fs::File::open(&path).map_err(|e| Error::Io(path.clone(), e))?;
+        serde_json::from_reader(file).map_err(|e| Error::Json(path, e))
     }
 }
 
@@ -78,7 +79,7 @@ pub struct Metadata {
     /// Represents the time taken to extract the birthmark, measured in nanoseconds for precision.
     #[serde(
         serialize_with = "serialize_duration_as_nanos",
-        deserialize_with = "deserialize_duration_from_nanos",
+        deserialize_with = "deserialize_duration_from_nanos"
     )]
     pub duration: std::time::Duration,
     pub birthmark_type: BirthmarkType,
@@ -86,10 +87,14 @@ pub struct Metadata {
 
 impl Metadata {
     pub fn csv_info(&self) -> String {
-        format!("birthmark,{},{},{},{},{}",
+        format!(
+            "birthmark,{},{},{},{},{}",
             crate::compare::escape_csv_string(&self.file_name),
             crate::compare::escape_csv_string(&self.path.display().to_string()),
-            self.birthmark_type, self.extracted_at.to_rfc3339(), self.duration.as_nanos())
+            self.birthmark_type,
+            self.extracted_at.to_rfc3339(),
+            self.duration.as_nanos()
+        )
     }
 
     pub fn parse(line: &str) -> Result<Self> {
@@ -101,7 +106,10 @@ impl Metadata {
             let record = result.map_err(Error::Csv)?;
             let items = record.iter().collect::<Vec<_>>();
             if items.len() != 6 {
-                return Err(Error::Parse(format!("expected 6 items in metadata, got {}", items.len())));
+                return Err(Error::Parse(format!(
+                    "expected 6 items in metadata, got {}",
+                    items.len()
+                )));
             }
             let file_name = items[1].to_string();
             let path = PathBuf::from(items[2]);
@@ -109,7 +117,8 @@ impl Metadata {
             let extracted_at = chrono::DateTime::parse_from_rfc3339(items[4])
                 .map_err(|e| Error::Parse(format!("invalid extracted_at datetime: {}", e)))?
                 .with_timezone(&chrono::Utc);
-            let duration = items[5].parse::<u64>()
+            let duration = items[5]
+                .parse::<u64>()
                 .map_err(|e| Error::Parse(format!("invalid duration: {}", e)))?;
             Ok(Self {
                 file_name,
@@ -124,7 +133,10 @@ impl Metadata {
     }
 }
 
-fn serialize_duration_as_nanos<S>(duration: &std::time::Duration, serializer: S) -> std::result::Result<S::Ok, S::Error>
+fn serialize_duration_as_nanos<S>(
+    duration: &std::time::Duration,
+    serializer: S,
+) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -150,8 +162,16 @@ pub struct Birthmark {
 
 impl CsvInfo for Birthmark {
     fn csv_info(&self) -> String {
-        let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-        format!("{},{}", self.metadata.csv_info(), crate::compare::escape_csv_string(&json_path))
+        let json_path = self
+            .json_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        format!(
+            "{},{}",
+            self.metadata.csv_info(),
+            crate::compare::escape_csv_string(&json_path)
+        )
     }
 
     fn names(&self) -> Vec<String> {
@@ -260,9 +280,15 @@ impl Data {
             Data::Freq(freq) => Box::new(freq.keys().map(|s| s.as_str())),
             Data::Seq(seq) => Box::new(seq.iter().map(|s| s.as_str())),
             Data::Set(set) => Box::new(set.iter().map(|s| s.as_str())),
-            Data::KgramSeq(seq) => Box::new(seq.iter().flat_map(|k| k.0.iter().map(|s| s.as_str()))),
-            Data::KgramFreq(freq) => Box::new(freq.keys().flat_map(|k| k.0.iter().map(|s| s.as_str()))),
-            Data::KgramSet(set) => Box::new(set.iter().flat_map(|k| k.0.iter().map(|s| s.as_str()))),
+            Data::KgramSeq(seq) => {
+                Box::new(seq.iter().flat_map(|k| k.0.iter().map(|s| s.as_str())))
+            }
+            Data::KgramFreq(freq) => {
+                Box::new(freq.keys().flat_map(|k| k.0.iter().map(|s| s.as_str())))
+            }
+            Data::KgramSet(set) => {
+                Box::new(set.iter().flat_map(|k| k.0.iter().map(|s| s.as_str())))
+            }
         }
     }
 
@@ -314,21 +340,29 @@ impl TryFrom<String> for AnalysisType {
         } else if s == "op-set-dice" {
             Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Dice))
         } else if s == "op-freq-euclidean" {
-            Ok(AnalysisType::new(BirthmarkType::OpFreq, Algorithm::Euclidean))
+            Ok(AnalysisType::new(
+                BirthmarkType::OpFreq,
+                Algorithm::Euclidean,
+            ))
         } else if s == "op-set-jaccard" {
             Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Jaccard))
         } else if s == "op-seq-levenshtein" {
-            Ok(AnalysisType::new(BirthmarkType::OpSeq, Algorithm::Levenshtein))
+            Ok(AnalysisType::new(
+                BirthmarkType::OpSeq,
+                Algorithm::Levenshtein,
+            ))
         } else if s == "op-set-simpson" {
             Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Simpson))
         } else if s == "op-freq-weightedjaccard" {
-            Ok(AnalysisType::new(BirthmarkType::OpFreq, Algorithm::WeightedJaccard))
+            Ok(AnalysisType::new(
+                BirthmarkType::OpFreq,
+                Algorithm::WeightedJaccard,
+            ))
         } else if let Some((bt, c)) = parse_kgram_and_algorithm(s) {
             Ok(AnalysisType::new(bt, c))
         } else {
             Err(Error::BirthmarkType(name))
         }
-
     }
 }
 
@@ -375,8 +409,7 @@ fn parse_kgram(name: &str) -> Option<BirthmarkType> {
 }
 
 fn parse_k_value(k: &str) -> Option<usize> {
-    k.parse()
-        .ok()
+    k.parse().ok()
 }
 
 #[cfg(test)]
@@ -392,8 +425,8 @@ mod tests {
             duration: Duration::from_nanos(42),
             birthmark_type: BirthmarkType::OpSeq,
         };
-        let parsed = Metadata::parse(&metadata.csv_info())
-            .expect("failed to parse escaped metadata");
+        let parsed =
+            Metadata::parse(&metadata.csv_info()).expect("failed to parse escaped metadata");
         assert_eq!(parsed.file_name, metadata.file_name);
         assert_eq!(parsed.path, metadata.path);
         assert_eq!(parsed.birthmark_type, metadata.birthmark_type);
@@ -406,9 +439,12 @@ mod tests {
         assert_eq!(metadata.file_name, "bzip2-1.0.2");
         assert_eq!(metadata.path, PathBuf::from("${HOME}/oinkie/bzip2-1.0.2"));
         assert_eq!(metadata.birthmark_type, BirthmarkType::OpSeq);
-        assert_eq!(metadata.extracted_at, chrono::DateTime::parse_from_rfc3339("2026-04-17T04:57:55.385904+00:00")
-            .expect("failed to parse extracted_at")
-            .with_timezone(&chrono::Utc));
+        assert_eq!(
+            metadata.extracted_at,
+            chrono::DateTime::parse_from_rfc3339("2026-04-17T04:57:55.385904+00:00")
+                .expect("failed to parse extracted_at")
+                .with_timezone(&chrono::Utc)
+        );
         assert_eq!(metadata.duration, Duration::from_nanos(4462500));
     }
 
@@ -443,9 +479,16 @@ mod tests {
             ("op-5gram-freq", BirthmarkType::OpKgramFreq(5)),
         ];
         for (input, expected) in cases {
-            assert_eq!(BirthmarkType::try_from(input).unwrap(), expected, "input: {input}");
+            assert_eq!(
+                BirthmarkType::try_from(input).unwrap(),
+                expected,
+                "input: {input}"
+            );
             // parsing must be case insensitive
-            assert_eq!(BirthmarkType::try_from(input.to_uppercase().as_str()).unwrap(), expected);
+            assert_eq!(
+                BirthmarkType::try_from(input.to_uppercase().as_str()).unwrap(),
+                expected
+            );
         }
     }
 
@@ -459,26 +502,44 @@ mod tests {
     #[test]
     fn test_birthmark_type_display_roundtrips() {
         let types = [
-            BirthmarkType::FcSeq, BirthmarkType::FcSet, BirthmarkType::FcFreq,
-            BirthmarkType::OpFreq, BirthmarkType::OpSeq, BirthmarkType::OpSet,
-            BirthmarkType::OpKgramSeq(2), BirthmarkType::OpKgramFreq(3), BirthmarkType::OpKgramSet(4),
+            BirthmarkType::FcSeq,
+            BirthmarkType::FcSet,
+            BirthmarkType::FcFreq,
+            BirthmarkType::OpFreq,
+            BirthmarkType::OpSeq,
+            BirthmarkType::OpSet,
+            BirthmarkType::OpKgramSeq(2),
+            BirthmarkType::OpKgramFreq(3),
+            BirthmarkType::OpKgramSet(4),
         ];
         for bt in types {
             let rendered = bt.to_string();
-            assert_eq!(BirthmarkType::try_from(rendered.as_str()).unwrap(), bt, "rendered: {rendered}");
+            assert_eq!(
+                BirthmarkType::try_from(rendered.as_str()).unwrap(),
+                bt,
+                "rendered: {rendered}"
+            );
         }
     }
 
     #[test]
     fn test_analysis_type_try_from_named_combinations() {
         let names = [
-            "op-freq-cosine", "op-set-dice", "op-freq-euclidean", "op-set-jaccard",
-            "op-seq-levenshtein", "op-set-simpson", "op-freq-weightedjaccard",
+            "op-freq-cosine",
+            "op-set-dice",
+            "op-freq-euclidean",
+            "op-set-jaccard",
+            "op-seq-levenshtein",
+            "op-set-simpson",
+            "op-freq-weightedjaccard",
         ];
         for name in names {
             assert!(AnalysisType::try_from(name).is_ok(), "name: {name}");
             // the String and &str impls must agree
-            assert!(AnalysisType::try_from(name.to_string()).is_ok(), "name: {name}");
+            assert!(
+                AnalysisType::try_from(name.to_string()).is_ok(),
+                "name: {name}"
+            );
         }
     }
 
@@ -491,18 +552,25 @@ mod tests {
             ("op-4gram-seq-levenshtein", BirthmarkType::OpKgramSeq(4)),
             ("op-5gram-freq-cosine", BirthmarkType::OpKgramFreq(5)),
             ("op-5gram-freq-euclidean", BirthmarkType::OpKgramFreq(5)),
-            ("op-6gram-freq-weightedjaccard", BirthmarkType::OpKgramFreq(6)),
+            (
+                "op-6gram-freq-weightedjaccard",
+                BirthmarkType::OpKgramFreq(6),
+            ),
         ];
         for (name, expected) in cases {
-            let at = AnalysisType::try_from(name)
-                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            let at = AnalysisType::try_from(name).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(at.birthmark, expected, "name: {name}");
         }
     }
 
     #[test]
     fn test_analysis_type_try_from_rejects_unknown() {
-        for name in ["", "unknown", "op-2gram-set-unknown", "fc-set-jaccard-extra"] {
+        for name in [
+            "",
+            "unknown",
+            "op-2gram-set-unknown",
+            "fc-set-jaccard-extra",
+        ] {
             assert!(AnalysisType::try_from(name).is_err(), "name: {name}");
         }
     }
@@ -513,13 +581,20 @@ mod tests {
         let variants = [
             Data::Seq(vec!["A".to_string(), "B".to_string()]),
             Data::Set(["A".to_string(), "B".to_string()].into_iter().collect()),
-            Data::Freq([("A".to_string(), 1), ("B".to_string(), 2)].into_iter().collect()),
+            Data::Freq(
+                [("A".to_string(), 1), ("B".to_string(), 2)]
+                    .into_iter()
+                    .collect(),
+            ),
             Data::KgramSeq(vec![kgram.clone()]),
             Data::KgramSet([kgram.clone()].into_iter().collect()),
             Data::KgramFreq([(kgram, 1)].into_iter().collect()),
         ];
         for data in variants {
-            let elements = Elements { name: "f".to_string(), data };
+            let elements = Elements {
+                name: "f".to_string(),
+                data,
+            };
             // every variant above carries two mnemonics in total
             assert_eq!(elements.ops().count(), 2);
             assert!(!elements.is_empty());
@@ -529,7 +604,10 @@ mod tests {
 
     #[test]
     fn test_elements_is_empty_on_empty_data() {
-        let elements = Elements { name: "f".to_string(), data: Data::Seq(vec![]) };
+        let elements = Elements {
+            name: "f".to_string(),
+            data: Data::Seq(vec![]),
+        };
         assert!(elements.is_empty());
         assert_eq!(elements.len(), 0);
         assert_eq!(elements.ops().count(), 0);
@@ -609,10 +687,16 @@ mod tests {
     fn test_birthmark_try_from_path_reports_errors() {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("missing.json");
-        assert!(matches!(Birthmark::try_from(missing).unwrap_err(), Error::Io(..)));
+        assert!(matches!(
+            Birthmark::try_from(missing).unwrap_err(),
+            Error::Io(..)
+        ));
 
         let broken = dir.path().join("broken.json");
         std::fs::write(&broken, b"{ not json").unwrap();
-        assert!(matches!(Birthmark::try_from(broken).unwrap_err(), Error::Json(..)));
+        assert!(matches!(
+            Birthmark::try_from(broken).unwrap_err(),
+            Error::Json(..)
+        ));
     }
 }

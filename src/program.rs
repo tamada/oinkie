@@ -18,14 +18,21 @@ pub struct Program<T> {
 
 impl<T> crate::prelude::CsvInfo for Program<T> {
     fn csv_info(&self) -> String {
-        let json_path = self.json_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-        format!("program,{},{},{},{},{}",
+        let json_path = self
+            .json_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+        format!(
+            "program,{},{},{},{},{}",
             crate::compare::escape_csv_string(&self.name),
             crate::compare::escape_csv_string(&self.path.display().to_string()),
-            self.symbols.len(), self.functions.len(),
-            crate::compare::escape_csv_string(&json_path))
+            self.symbols.len(),
+            self.functions.len(),
+            crate::compare::escape_csv_string(&json_path)
+        )
     }
-    
+
     fn names(&self) -> Vec<String> {
         self.functions.iter().map(|f| f.name.clone()).collect()
     }
@@ -36,8 +43,19 @@ impl<T> Program<T> {
         self.json_path = Some(path);
     }
 
-    pub fn new(name: String, path: PathBuf, symbols: FxHashMap<String, String>, functions: Vec<Function<T>>) -> Self {
-        Self { name, path, symbols, functions, json_path: None }
+    pub fn new(
+        name: String,
+        path: PathBuf,
+        symbols: FxHashMap<String, String>,
+        functions: Vec<Function<T>>,
+    ) -> Self {
+        Self {
+            name,
+            path,
+            symbols,
+            functions,
+            json_path: None,
+        }
     }
 
     pub fn name(&self) -> &str {
@@ -82,7 +100,7 @@ impl<T> Iterable for Program<T> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Function<T> {
     name: String,
-    ops: Vec<T>
+    ops: Vec<T>,
 }
 
 impl<T: crate::Op> Function<T> {

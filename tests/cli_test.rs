@@ -14,14 +14,14 @@ fn test_info_command() {
         .stdout(predicate::str::contains("Compare Algorithms"));
 }
 
-
 #[test]
 fn test_lift_command() {
     let temp_dir = tempdir().unwrap();
     let dest = temp_dir.path().join("lifted");
 
     let mut cmd = Command::cargo_bin("oinkie").unwrap();
-    let result = cmd.arg("lift")
+    let result = cmd
+        .arg("lift")
         .arg("-d")
         .arg(&dest)
         .arg("-l")
@@ -38,7 +38,7 @@ fn test_lift_command() {
 fn test_extract_command() {
     let temp_dir = tempdir().unwrap();
     let dest = temp_dir.path().join("birthmarks");
-    
+
     let mut cmd = Command::cargo_bin("oinkie").unwrap();
     cmd.arg("extract")
         .arg("-d")
@@ -51,8 +51,15 @@ fn test_extract_command() {
         .success();
 
     // Verify the output files were created
-    let entries: Vec<_> = fs::read_dir(&dest).unwrap().map(|e| e.unwrap().path()).collect();
-    assert_eq!(entries.len(), 2, "Expected 2 birthmark files to be generated");
+    let entries: Vec<_> = fs::read_dir(&dest)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(
+        entries.len(),
+        2,
+        "Expected 2 birthmark files to be generated"
+    );
 }
 
 #[test]
@@ -60,7 +67,7 @@ fn test_compare_command() {
     let temp_dir = tempdir().unwrap();
     let birthmarks_dir = temp_dir.path().join("birthmarks");
     let similarities_dir = temp_dir.path().join("similarities");
-    
+
     // First, extract
     Command::cargo_bin("oinkie")
         .unwrap()
@@ -74,8 +81,11 @@ fn test_compare_command() {
         .assert()
         .success();
 
-    let entries: Vec<_> = fs::read_dir(&birthmarks_dir).unwrap().map(|e| e.unwrap().path()).collect();
-    
+    let entries: Vec<_> = fs::read_dir(&birthmarks_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+
     // Now, compare
     let mut cmd = Command::cargo_bin("oinkie").unwrap();
     cmd.arg("compare")
@@ -91,8 +101,14 @@ fn test_compare_command() {
         .assert()
         .success();
 
-    let sim_entries: Vec<_> = fs::read_dir(&similarities_dir).unwrap().map(|e| e.unwrap().path()).collect();
-    assert!(!sim_entries.is_empty(), "Expected similarity files to be generated");
+    let sim_entries: Vec<_> = fs::read_dir(&similarities_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert!(
+        !sim_entries.is_empty(),
+        "Expected similarity files to be generated"
+    );
 }
 
 #[test]
@@ -103,7 +119,7 @@ fn test_run_command() {
     let mut cmd = Command::cargo_bin("oinkie").unwrap();
     cmd.arg("run")
         .arg("-a")
-        .arg("op-set-jaccard") 
+        .arg("op-set-jaccard")
         .arg("-s")
         .arg("all")
         .arg("-d")
@@ -112,9 +128,15 @@ fn test_run_command() {
         .arg("testdata/hello_world/pcodes/hello_gcc.json")
         .assert()
         .success();
-        
-    let sim_entries: Vec<_> = fs::read_dir(&similarities_dir).unwrap().map(|e| e.unwrap().path()).collect();
-    assert!(!sim_entries.is_empty(), "Expected similarity files to be generated");
+
+    let sim_entries: Vec<_> = fs::read_dir(&similarities_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert!(
+        !sim_entries.is_empty(),
+        "Expected similarity files to be generated"
+    );
 }
 
 #[test]
@@ -122,7 +144,7 @@ fn test_reaggregate_command() {
     let temp_dir = tempdir().unwrap();
     let birthmarks_dir = temp_dir.path().join("birthmarks");
     let similarities_dir = temp_dir.path().join("similarities");
-    
+
     // First, extract
     Command::cargo_bin("oinkie")
         .unwrap()
@@ -136,7 +158,10 @@ fn test_reaggregate_command() {
         .assert()
         .success();
 
-    let entries: Vec<_> = fs::read_dir(&birthmarks_dir).unwrap().map(|e| e.unwrap().path()).collect();
+    let entries: Vec<_> = fs::read_dir(&birthmarks_dir)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
 
     // Compare
     Command::cargo_bin("oinkie")

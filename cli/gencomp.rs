@@ -22,11 +22,11 @@ mod completions {
         let mut app = crate::cli::OinkieCommand::command();
         app.set_bin_name(appname);
 
-        generate_impl(Bash,       &mut app, outdir, format!("{appname}"));
-        generate_impl(Elvish,     &mut app, outdir, format!("{appname}.elv"));
-        generate_impl(Fish,       &mut app, outdir, format!("{appname}.fish"));
+        generate_impl(Bash, &mut app, outdir, appname.to_string());
+        generate_impl(Elvish, &mut app, outdir, format!("{appname}.elv"));
+        generate_impl(Fish, &mut app, outdir, format!("{appname}.fish"));
         generate_impl(PowerShell, &mut app, outdir, format!("{appname}.ps1"));
-        generate_impl(Zsh,        &mut app, outdir, format!("_{appname}"));
+        generate_impl(Zsh, &mut app, outdir, format!("_{appname}"));
     }
 }
 

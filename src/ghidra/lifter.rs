@@ -1,6 +1,6 @@
-use std::path::{Path, PathBuf};
-use crate::{Result, Error};
 use crate::lift::Lifter;
+use crate::{Error, Result};
+use std::path::{Path, PathBuf};
 
 pub const DEFAULT_GHIDRA_SCRIPT: &str = include_str!("../../lifter/scripts/HighPCodeLifter.java");
 
@@ -12,7 +12,11 @@ pub struct GhidraLifter {
 
 impl GhidraLifter {
     pub fn new(home: PathBuf, script: Option<PathBuf>, intermediate_dir: Option<PathBuf>) -> Self {
-        Self { home, script, intermediate_dir }
+        Self {
+            home,
+            script,
+            intermediate_dir,
+        }
     }
 }
 
@@ -20,32 +24,44 @@ impl Lifter for GhidraLifter {
     fn lift(&self, input: &Path, output: &Path) -> Result<()> {
         let analyze_headless = self.home.join("support/analyzeHeadless");
         if !analyze_headless.exists() {
-            return Err(Error::Parse(format!("Ghidra headless analyzer not found at {:?}", analyze_headless)));
+            return Err(Error::Parse(format!(
+                "Ghidra headless analyzer not found at {:?}",
+                analyze_headless
+            )));
         }
 
         let (script_path, _temp_dir) = if let Some(s) = &self.script {
             let s = std::fs::canonicalize(s).map_err(|e| Error::Io(s.clone(), e))?;
             (s, None)
         } else {
-            let temp_dir = tempfile::Builder::new().prefix("oinkie_script").tempdir().map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
+            let temp_dir = tempfile::Builder::new()
+                .prefix("oinkie_script")
+                .tempdir()
+                .map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
             let script_file = temp_dir.path().join("HighPCodeLifter.java");
             std::fs::write(&script_file, DEFAULT_GHIDRA_SCRIPT)
                 .map_err(|e| Error::Io(script_file.clone(), e))?;
             (script_file, Some(temp_dir))
         };
-        let script_dir = script_path.parent()
+        let script_dir = script_path
+            .parent()
             .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
-        let script_name = script_path.file_name()
+        let script_name = script_path
+            .file_name()
             .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
 
         let (proj_dir, _temp_proj_dir) = if let Some(i) = &self.intermediate_dir {
             (i.to_path_buf(), None)
         } else {
-            let temp_proj = tempfile::Builder::new().prefix("oinkie_proj").tempdir().map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
+            let temp_proj = tempfile::Builder::new()
+                .prefix("oinkie_proj")
+                .tempdir()
+                .map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
             (temp_proj.path().to_path_buf(), Some(temp_proj))
         };
 
-        let proj_name = input.file_name()
+        let proj_name = input
+            .file_name()
             .and_then(|n| n.to_str())
             .ok_or_else(|| Error::Parse(format!("Invalid input path: {:?}", input)))?;
         // the working directory of the Ghidra process is the project directory,
@@ -53,23 +69,32 @@ impl Lifter for GhidraLifter {
         let input = std::fs::canonicalize(input).map_err(|e| Error::Io(input.to_path_buf(), e))?;
 
         let mut command = std::process::Command::new(&analyze_headless);
-        command.arg(&proj_dir)
-               .arg(proj_name)
-               .arg("-import").arg(&input)
-               .arg("-scriptPath").arg(script_dir)
-               .arg("-postScript").arg(script_name)
-               // The lifter script writes "{program name}.json" into the working
-               // directory of the Ghidra process. Run it inside the project
-               // directory so that concurrent lifts of same-named binaries do not
-               // race on a single path in the user's current directory.
-               .current_dir(&proj_dir);
+        command
+            .arg(&proj_dir)
+            .arg(proj_name)
+            .arg("-import")
+            .arg(&input)
+            .arg("-scriptPath")
+            .arg(script_dir)
+            .arg("-postScript")
+            .arg(script_name)
+            // The lifter script writes "{program name}.json" into the working
+            // directory of the Ghidra process. Run it inside the project
+            // directory so that concurrent lifts of same-named binaries do not
+            // race on a single path in the user's current directory.
+            .current_dir(&proj_dir);
 
         log::info!("Executing Ghidra: {:?}", command);
-        let output_res = command.output().map_err(|e| Error::Io(analyze_headless, e))?;
+        let output_res = command
+            .output()
+            .map_err(|e| Error::Io(analyze_headless, e))?;
         if !output_res.status.success() {
             let stderr = String::from_utf8_lossy(&output_res.stderr);
             let stdout = String::from_utf8_lossy(&output_res.stdout);
-            return Err(Error::Parse(format!("Ghidra failed with status {}.\nSTDOUT: {}\nSTDERR: {}", output_res.status, stdout, stderr)));
+            return Err(Error::Parse(format!(
+                "Ghidra failed with status {}.\nSTDOUT: {}\nSTDERR: {}",
+                output_res.status, stdout, stderr
+            )));
         }
 
         // Move the generated JSON to the destination
@@ -83,7 +108,10 @@ impl Lifter for GhidraLifter {
                 let _ = std::fs::remove_file(&generated_json);
             }
         } else {
-            return Err(Error::Parse(format!("Expected Ghidra to generate {:?}, but it was not found.", generated_json)));
+            return Err(Error::Parse(format!(
+                "Expected Ghidra to generate {:?}, but it was not found.",
+                generated_json
+            )));
         }
 
         Ok(())
@@ -130,7 +158,9 @@ mod tests {
     fn test_find_ghidra_home_with_env() {
         // Backup the env
         let old_env = env::var("GHIDRA_HOME").ok();
-        unsafe { env::set_var("GHIDRA_HOME", "/env/ghidra/home"); }
+        unsafe {
+            env::set_var("GHIDRA_HOME", "/env/ghidra/home");
+        }
 
         let result = find_ghidra_home(None);
         assert!(result.is_ok());
@@ -138,9 +168,13 @@ mod tests {
 
         // Restore env
         if let Some(val) = old_env {
-            unsafe { env::set_var("GHIDRA_HOME", val); }
+            unsafe {
+                env::set_var("GHIDRA_HOME", val);
+            }
         } else {
-            unsafe { env::remove_var("GHIDRA_HOME"); }
+            unsafe {
+                env::remove_var("GHIDRA_HOME");
+            }
         }
     }
 
@@ -148,7 +182,9 @@ mod tests {
     fn test_find_ghidra_home_not_found() {
         // Backup the env
         let old_env = env::var("GHIDRA_HOME").ok();
-        unsafe { env::remove_var("GHIDRA_HOME"); }
+        unsafe {
+            env::remove_var("GHIDRA_HOME");
+        }
 
         let result = find_ghidra_home(None);
         // It might find it in standard paths on some systems, so we can't definitively assert error
@@ -157,7 +193,9 @@ mod tests {
 
         // Restore env
         if let Some(val) = old_env {
-            unsafe { env::set_var("GHIDRA_HOME", val); }
+            unsafe {
+                env::set_var("GHIDRA_HOME", val);
+            }
         }
     }
 
@@ -187,7 +225,7 @@ mod tests {
         match result {
             Err(Error::Parse(msg)) => {
                 assert!(msg.contains("Ghidra headless analyzer not found at"));
-            },
+            }
             _ => panic!("Expected Error::Parse"),
         }
     }
