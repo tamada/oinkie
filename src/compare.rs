@@ -127,8 +127,8 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
             self.similarity()
         )
         .map_err(io_err)?;
-        writeln!(out, "left,{}", self.rows.csv_info()).map_err(io_err)?;
-        writeln!(out, "right,{}", self.columns.csv_info()).map_err(io_err)?;
+        writeln!(out, "left,{}", self.columns.csv_info()).map_err(io_err)?;
+        writeln!(out, "right,{}", self.rows.csv_info()).map_err(io_err)?;
         let b1_names = self.columns.names();
         let b2_names = self.rows.names();
         write!(
@@ -1250,12 +1250,8 @@ mod tests {
 
         let content = std::fs::read_to_string(&dest).unwrap();
         assert!(content.starts_with("result,"));
-        // NOTE: Comparison::new takes (columns, rows) and compare_birthmarks
-        // passes (b1, b2), while store writes the "left" record from `rows`.
-        // The stored "left" is therefore the *second* birthmark, and "right"
-        // the first. This asserts the behaviour as it currently stands.
-        assert!(content.contains("\nleft,birthmark,right,"));
-        assert!(content.contains("\nright,birthmark,left,"));
+        assert!(content.contains("\nleft,birthmark,left,"));
+        assert!(content.contains("\nright,birthmark,right,"));
         assert!(content.contains("\nmatrix,,"));
         // one line per row element, each prefixed with its index
         assert_eq!(
