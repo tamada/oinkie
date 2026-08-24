@@ -4,10 +4,13 @@ version = "0.3.0"
 description = "Birthmarking toolkit for Ghidra P-Code"
 edition = "2024"
 
+[features]
+gencomp = [ "dep:clap_complete" ]
+
 [dependencies]
 chrono = { version = "0.4.44", features = [ "serde" ] }
 clap = { version = "4.6.1", features = [ "derive" ] }
-clap_complete = "4.6.5"
+clap_complete = { version = "4.6.5", optional = true }
 csv = "1.4.0"
 env_logger = "0.11.10"
 indicatif = "0.18.4"
@@ -32,3 +35,8 @@ path = "cli/main.rs"
 [dev-dependencies]
 assert_cmd = "2.2.2"
 predicates = "3.1.4"
+
+[[bin]]
+name = "gencomp"
+path = "cli/gencomp.rs"
+required-features = [ "gencomp" ]
