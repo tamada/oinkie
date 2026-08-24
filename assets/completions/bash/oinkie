@@ -131,7 +131,7 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__extract)
-            opts="-d -b -S -B -h --dest --birthmark-type --skip --binary-type --help [JSON_FILES]..."
+            opts="-d -b -S -h --dest --birthmark-type --skip --help [JSON_FILES]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -151,14 +151,6 @@ _oinkie() {
                     ;;
                 -b)
                     COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-uni-gram-seq op-bi-gram-seq op-tri-gram-seq op-quad-gram-seq op-penta-gram-seq op-hexa-gram-seq op-hepta-gram-seq op-octa-gram-seq op-uni-gram-freq op-bi-gram-freq op-tri-gram-freq op-quad-gram-freq op-penta-gram-freq op-hexa-gram-freq op-hepta-gram-freq op-octa-gram-freq op-uni-gram-set op-bi-gram-set op-tri-gram-set op-quad-gram-set op-penta-gram-set op-hexa-gram-set op-hepta-gram-set op-octa-gram-set" -- "${cur}"))
-                    return 0
-                    ;;
-                --binary-type)
-                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
-                    return 0
-                    ;;
-                -B)
-                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -338,11 +330,11 @@ _oinkie() {
                     return 0
                     ;;
                 --lifter-type)
-                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "ghidra angr ida-pro binary-ninja" -- "${cur}"))
                     return 0
                     ;;
                 -l)
-                    COMPREPLY=($(compgen -W "ghidra llvm binary-ninja" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "ghidra angr ida-pro binary-ninja" -- "${cur}"))
                     return 0
                     ;;
                 --home)

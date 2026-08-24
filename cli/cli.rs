@@ -166,14 +166,6 @@ impl LiftOpts {
     }
 }
 
-#[derive(Debug, clap::Parser, ValueEnum, Clone)]
-#[clap(rename_all = "kebab-case")]
-pub enum BinaryType {
-    Ghidra,
-    Llvm,
-    BinaryNinja,
-}
-
 #[derive(Debug, clap::Parser)]
 pub struct ExtractOpts {
     #[clap(
@@ -199,9 +191,6 @@ The full birthmark types cann be found by running 'oinkie info'.")]
         help = "Skip the resultant birthmark file is already exists"
     )]
     skip: bool,
-
-    #[clap(short = 'B', long, value_enum, value_name = "BINARY_TYPE", default_value_t = BinaryType::Ghidra, ignore_case = true, help = "Type of binary. Current version only supports Ghidra JSON format")]
-    binary_type: BinaryType,
 
     #[clap(
         index = 1,
@@ -246,7 +235,7 @@ pub struct ReaggregateOpts {
         value_name = "METHOD",
         ignore_case = true,
         help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
-Available: 
+Available:
 - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
              maximizing the total similarity score.
 - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
@@ -299,7 +288,7 @@ pub struct CompareOpts {
         value_name = "METHOD",
         ignore_case = true,
         help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
-Available: 
+Available:
 - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
              maximizing the total similarity score.
 - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
@@ -389,7 +378,7 @@ pub struct RunOpts {
         value_name = "METHOD",
         ignore_case = true,
         help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
-Available: 
+Available:
 - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
              maximizing the total similarity score.
 - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the

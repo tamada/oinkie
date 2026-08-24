@@ -42,7 +42,7 @@ jobs:
           VERSION: ${{ needs.start.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          notes="docs/release-notes/v${VERSION}.md"
+          notes=".github/release-notes/v${VERSION}.md"
           if [ ! -f "$notes" ]; then
             echo "::error::$notes not found. Every release needs an upgrade note; add the file and re-run this job."
             exit 1
@@ -110,7 +110,7 @@ jobs:
           mkdir -p "dist/$ASSET_NAME"
           cp "target/${TARGET}/release/${APPNAME}" "dist/$ASSET_NAME/"
           cp README.md LICENSE "dist/$ASSET_NAME/"
-          cp -r completions "dist/$ASSET_NAME/"
+          cp -r assets/completions "dist/$ASSET_NAME/"
           tar cvfz "dist/${ASSET_NAME}.tar.gz" -C dist "$ASSET_NAME"
 
       - name: Upload assets

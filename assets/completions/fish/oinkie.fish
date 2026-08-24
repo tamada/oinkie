@@ -36,7 +36,8 @@ complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this 
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s d -l dest -d 'Specify the directory for putting the resultant JSON files for the lifted P-code (default: \'./pcodes\' directory)' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s l -l lifter-type -d 'Specify the lifter type' -r -f -a "ghidra\t''
-llvm\t''
+angr\t''
+ida-pro\t''
 binary-ninja\t''"
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s H -l home -d 'Specify the path to the home directory of the lifter (e.g., GHIDRA_HOME for Ghidra). If not specified, the environment variable (e.g., GHIDRA_HOME) or default paths are searched.' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s i -l intermediate -d 'Directory to keep intermediate files like Ghidra project directories. If not specified, a temporary directory is used and deleted.' -r -F
@@ -74,9 +75,6 @@ op-penta-gram-set\t'the set of 5-grams of operations in a program'
 op-hexa-gram-set\t'the set of 6-grams of operations in a program'
 op-hepta-gram-set\t'the set of 7-grams of operations in a program'
 op-octa-gram-set\t'the set of 8-grams of operations in a program'"
-complete -c oinkie -n "__fish_oinkie_using_subcommand extract" -s B -l binary-type -d 'Type of binary. Current version only supports Ghidra JSON format' -r -f -a "ghidra\t''
-llvm\t''
-binary-ninja\t''"
 complete -c oinkie -n "__fish_oinkie_using_subcommand extract" -s S -l skip -d 'Skip the resultant birthmark file is already exists'
 complete -c oinkie -n "__fish_oinkie_using_subcommand extract" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s a -l algorithm -d 'Specify the similarity calculation algorithm.' -r -f -a "cosine\t'Cosine similarity based on term frequency vectors. Available: seq and freq'
@@ -87,7 +85,7 @@ levenshtein\t'Levenshtein distance. Available: seq'
 lcs\t'Longest Common Subsequence (LCS). Available: seq'
 simpson\t'Simpson\'s coefficient. Available: seq, set and freq'
 weighted-jaccard\t'Weighted Jaccard index based on term frequency vectors. Available: seq and freq'"
-complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available:  - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.' -r
+complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s s -l strategy -d 'Specify the pairing strategy for comparing files.' -r -f -a "all-and-self\t'All possible combinations including self-comparisons ($_nC_2 + n$). Used for full matrix visualization or comprehensive heatmaps'
 all\t'Compares all possible combinations ($_nC_2$). Used for comprehensive validation of accuracy (False Positive / True Positive)'
 self-coverage\t'Compares each file with itself ($n$). Used for sanity checks to ensure identical files yield a similarity score of 1.0'
@@ -97,7 +95,7 @@ last-vs-others\t'Compares a specific reference file against all other files ($n-
 complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s d -l dest -d 'Specify the destination directory for the comparing results' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s S -l skip -d 'Skip if the similarity file already exists for the pair of birthmarks'
 complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s h -l help -d 'Print help (see more with \'--help\')'
-complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available:  - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.' -r
+complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s d -l dest-file -d 'Specify the result CSV file of the comparing results to reaggregate. The file contains the birthmark-wise similarity score list.' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s a -l analysis -d 'Similarity algorithm to use' -r -f -a "fc-freq-cosine\t''
@@ -171,7 +169,7 @@ adjacent\t'Compares only adjacent pairs in the list ($n-1$). Useful for comparin
 first-vs-others\t'Compares a specific reference file against all other files ($n-1$). Compares first item and all other items. Useful for comparing a baseline version against multiple variants'
 last-vs-others\t'Compares a specific reference file against all other files ($n-1$). Compares the last item and all other items. Useful for comparing a baseline version against multiple variants'"
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s d -l dest -d 'Destination path for the output CSV file (default: \'similarities\' directory' -r -F
-complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available:  - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn).' -r
+complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn).' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s S -l skip -d 'Skip if the similarity file already exists for the pair of birthmarks'
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c oinkie -n "__fish_oinkie_using_subcommand gencomp" -s h -l help -d 'Print help'
