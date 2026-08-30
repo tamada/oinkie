@@ -333,61 +333,39 @@ impl TryFrom<&str> for AnalysisType {
 impl TryFrom<String> for AnalysisType {
     type Error = Error;
 
+    /// Parses `{birthmark}-{algorithm}`, for example `op-3gram-set-dice`.
+    ///
+    /// Only the algorithm name is read here; everything before it is handed to
+    /// [`BirthmarkType::try_from`], which is the parser that owns that half.
+    /// Splitting on the last hyphen is safe because no algorithm name contains
+    /// one — `weightedjaccard` is deliberately a single word.
     fn try_from(name: String) -> Result<Self> {
-        let s = name.to_lowercase();
-        if s == "op-freq-cosine" {
-            Ok(AnalysisType::new(BirthmarkType::OpFreq, Algorithm::Cosine))
-        } else if s == "op-set-dice" {
-            Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Dice))
-        } else if s == "op-freq-euclidean" {
-            Ok(AnalysisType::new(
-                BirthmarkType::OpFreq,
-                Algorithm::Euclidean,
-            ))
-        } else if s == "op-set-jaccard" {
-            Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Jaccard))
-        } else if s == "op-seq-levenshtein" {
-            Ok(AnalysisType::new(
-                BirthmarkType::OpSeq,
-                Algorithm::Levenshtein,
-            ))
-        } else if s == "op-set-simpson" {
-            Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Simpson))
-        } else if s == "op-freq-weightedjaccard" {
-            Ok(AnalysisType::new(
-                BirthmarkType::OpFreq,
-                Algorithm::WeightedJaccard,
-            ))
-        } else if let Some((bt, c)) = parse_kgram_and_algorithm(s) {
-            Ok(AnalysisType::new(bt, c))
-        } else {
-            Err(Error::BirthmarkType(name))
-        }
+        let lowered = name.to_lowercase();
+        let (birthmark, algorithm) = lowered
+            .rsplit_once('-')
+            .ok_or_else(|| Error::BirthmarkType(name.clone()))?;
+        let birthmark = BirthmarkType::try_from(birthmark)?;
+        let algorithm =
+            parse_algorithm(algorithm).ok_or_else(|| Error::BirthmarkType(name.clone()))?;
+        Ok(AnalysisType::new(birthmark, algorithm))
     }
 }
 
-fn parse_kgram_and_algorithm(name: String) -> Option<(BirthmarkType, Algorithm)> {
-    if let Some(s) = name.strip_prefix("op-") {
-        let s = s.to_string();
-        if let Some(s) = s.strip_suffix("-cosine") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Cosine))
-        } else if let Some(s) = s.strip_suffix("-dice") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Dice))
-        } else if let Some(s) = s.strip_suffix("-euclidean") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Euclidean))
-        } else if let Some(s) = s.strip_suffix("-jaccard") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Jaccard))
-        } else if let Some(s) = s.strip_suffix("-levenshtein") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Levenshtein))
-        } else if let Some(s) = s.strip_suffix("-simpson") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Simpson))
-        } else if let Some(s) = s.strip_suffix("-weightedjaccard") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::WeightedJaccard))
-        } else {
-            None
-        }
-    } else {
-        None
+/// The algorithm half of an analysis name. Kept as an explicit table rather
+/// than derived from `ValueEnum`, whose kebab-case would render
+/// `WeightedJaccard` as `weighted-jaccard` and break the split on the last
+/// hyphen.
+fn parse_algorithm(name: &str) -> Option<Algorithm> {
+    match name {
+        "cosine" => Some(Algorithm::Cosine),
+        "dice" => Some(Algorithm::Dice),
+        "euclidean" => Some(Algorithm::Euclidean),
+        "jaccard" => Some(Algorithm::Jaccard),
+        "lcs" => Some(Algorithm::Lcs),
+        "levenshtein" => Some(Algorithm::Levenshtein),
+        "simpson" => Some(Algorithm::Simpson),
+        "weightedjaccard" => Some(Algorithm::WeightedJaccard),
+        _ => None,
     }
 }
 
@@ -530,8 +508,18 @@ mod tests {
             "op-freq-euclidean",
             "op-set-jaccard",
             "op-seq-levenshtein",
+            "op-seq-lcs",
             "op-set-simpson",
             "op-freq-weightedjaccard",
+            // the fc- family reaches BirthmarkType::try_from by the same route
+            "fc-freq-cosine",
+            "fc-set-dice",
+            "fc-freq-euclidean",
+            "fc-set-jaccard",
+            "fc-seq-levenshtein",
+            "fc-seq-lcs",
+            "fc-set-simpson",
+            "fc-freq-weightedjaccard",
         ];
         for name in names {
             assert!(AnalysisType::try_from(name).is_ok(), "name: {name}");
@@ -556,6 +544,10 @@ mod tests {
                 "op-6gram-freq-weightedjaccard",
                 BirthmarkType::OpKgramFreq(6),
             ),
+            ("op-3gram-seq-lcs", BirthmarkType::OpKgramSeq(3)),
+            // delegation removes the k <= 6 ceiling the CLI enum imposes
+            ("op-9gram-freq-cosine", BirthmarkType::OpKgramFreq(9)),
+            ("op-12gram-set-jaccard", BirthmarkType::OpKgramSet(12)),
         ];
         for (name, expected) in cases {
             let at = AnalysisType::try_from(name).unwrap_or_else(|e| panic!("{name}: {e}"));
@@ -570,6 +562,41 @@ mod tests {
             "unknown",
             "op-2gram-set-unknown",
             "fc-set-jaccard-extra",
+        ] {
+            assert!(AnalysisType::try_from(name).is_err(), "name: {name}");
+        }
+    }
+
+    /// The algorithm name is the only part read here; everything before the
+    /// last hyphen must come back exactly as BirthmarkType::try_from resolves
+    /// it on its own.
+    #[test]
+    fn test_analysis_type_delegates_the_birthmark_half() {
+        for birthmark in [
+            "op-seq",
+            "op-set",
+            "op-freq",
+            "fc-seq",
+            "fc-set",
+            "fc-freq",
+            "op-4gram-seq",
+        ] {
+            let expected =
+                BirthmarkType::try_from(birthmark).unwrap_or_else(|e| panic!("{birthmark}: {e}"));
+            let name = format!("{birthmark}-jaccard");
+            let at = AnalysisType::try_from(name.clone()).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(at.birthmark, expected, "name: {name}");
+        }
+    }
+
+    /// A birthmark half that BirthmarkType rejects must fail the whole parse,
+    /// rather than being reported as an unknown analysis name.
+    #[test]
+    fn test_analysis_type_reports_a_bad_birthmark_half() {
+        for name in [
+            "op-nonsense-jaccard",
+            "xx-set-jaccard",
+            "op-0.5gram-set-dice",
         ] {
             assert!(AnalysisType::try_from(name).is_err(), "name: {name}");
         }
