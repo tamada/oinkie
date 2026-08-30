@@ -51,7 +51,13 @@ impl Lifter for GhidraLifter {
             .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
 
         let (proj_dir, _temp_proj_dir) = if let Some(i) = &self.intermediate_dir {
-            (i.to_path_buf(), None)
+            // Created because every other destination directory in the CLI is,
+            // and canonicalized because this path is passed to Ghidra as an
+            // argument while also being its working directory — left relative,
+            // Ghidra would resolve it a second time against itself.
+            std::fs::create_dir_all(i).map_err(|e| Error::Io(i.clone(), e))?;
+            let i = std::fs::canonicalize(i).map_err(|e| Error::Io(i.clone(), e))?;
+            (i, None)
         } else {
             let temp_proj = tempfile::Builder::new()
                 .prefix("oinkie_proj")
