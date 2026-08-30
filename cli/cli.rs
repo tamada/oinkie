@@ -400,8 +400,8 @@ impl RunOpts {
         &self.dest
     }
 
-    pub fn analysis_type(&self) -> AnalysisType {
-        (&self.analysis).into()
+    pub fn analysis_type(&self) -> Result<AnalysisType> {
+        (&self.analysis).try_into()
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = (&PathBuf, &PathBuf)> + Send + '_> {
@@ -501,14 +501,21 @@ pub(crate) enum Analysis {
     Op6gramFreqWeightedjaccard,
 }
 
-impl From<Analysis> for AnalysisType {
-    fn from(v: Analysis) -> Self {
-        AnalysisType::from(&v)
+impl TryFrom<Analysis> for AnalysisType {
+    type Error = Error;
+
+    fn try_from(v: Analysis) -> Result<Self> {
+        AnalysisType::try_from(&v)
     }
 }
 
-impl From<&Analysis> for AnalysisType {
-    fn from(value: &Analysis) -> Self {
+// Every pairing listed here is the canonical one for its algorithm, so none of
+// these can fail; the Result comes from AnalysisType::new, which validates so
+// that the pairing cannot be built wrongly from anywhere.
+impl TryFrom<&Analysis> for AnalysisType {
+    type Error = Error;
+
+    fn try_from(value: &Analysis) -> Result<Self> {
         match value {
             Analysis::FcFreqCosine => AnalysisType::new(BirthmarkType::FcFreq, Algorithm::Cosine),
             Analysis::FcSetDice => AnalysisType::new(BirthmarkType::FcSet, Algorithm::Dice),

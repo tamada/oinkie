@@ -39,7 +39,7 @@ impl TryFrom<&str> for BirthmarkType {
 }
 
 impl BirthmarkType {
-    pub(crate) fn shape(&self) -> Shape {
+    pub fn shape(&self) -> Shape {
         match self {
             BirthmarkType::FcSeq | BirthmarkType::OpSeq | BirthmarkType::OpKgramSeq(_) => {
                 Shape::Seq
@@ -53,9 +53,17 @@ impl BirthmarkType {
         }
     }
 
+    /// Whether this birthmark's shape is the one the algorithm computes over.
+    /// Anything else is converted by the comparator first, so a pairing that
+    /// does not match either reproduces another pairing's numbers under a
+    /// misleading name or scores nothing at all.
+    pub fn pairs_with(&self, algorithm: &Algorithm) -> bool {
+        self.shape() == algorithm.shape()
+    }
+
     /// The same birthmark family in another shape, used to name the pairing a
     /// rejected analysis should have used.
-    pub(crate) fn with_shape(&self, shape: Shape) -> BirthmarkType {
+    pub fn with_shape(&self, shape: Shape) -> BirthmarkType {
         match (self, shape) {
             (BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq, s) => match s {
                 Shape::Seq => BirthmarkType::FcSeq,
@@ -353,11 +361,17 @@ pub struct AnalysisType {
 }
 
 impl AnalysisType {
-    pub fn new(bt: BirthmarkType, algorithm: Algorithm) -> Self {
-        Self {
+    /// Fails when the algorithm does not operate on the birthmark's shape.
+    /// Validating here rather than only in `try_from` means the check cannot
+    /// be walked around by constructing the pair directly.
+    pub fn new(bt: BirthmarkType, algorithm: Algorithm) -> Result<Self> {
+        if !bt.pairs_with(&algorithm) {
+            return Err(Error::IncompatibleAnalysis(bt, algorithm));
+        }
+        Ok(Self {
             birthmark: bt,
             comparator: algorithm.comparator(),
-        }
+        })
     }
 
     pub fn comparator(&self) -> &Comparator {
@@ -390,13 +404,7 @@ impl TryFrom<String> for AnalysisType {
         let birthmark = BirthmarkType::try_from(birthmark)?;
         let algorithm =
             parse_algorithm(algorithm).ok_or_else(|| Error::BirthmarkType(name.clone()))?;
-        // Anything but the canonical shape is converted by the comparator
-        // before it computes, so it would quietly return the canonical
-        // pairing's numbers under a name that promises something else.
-        if birthmark.shape() != algorithm_spec(&algorithm).1 {
-            return Err(Error::IncompatibleAnalysis(birthmark, algorithm));
-        }
-        Ok(AnalysisType::new(birthmark, algorithm))
+        AnalysisType::new(birthmark, algorithm)
     }
 }
 
@@ -405,14 +413,14 @@ impl TryFrom<String> for AnalysisType {
 /// an algorithm with a different shape silently produces the same numbers as
 /// the canonical pairing, or none at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Shape {
+pub enum Shape {
     Seq,
     Set,
     Freq,
 }
 
 impl Shape {
-    pub(crate) fn description(&self) -> &'static str {
+    pub fn description(&self) -> &'static str {
         match self {
             Shape::Seq => "sequences",
             Shape::Set => "sets",
@@ -421,29 +429,11 @@ impl Shape {
     }
 }
 
-/// The CLI spelling of an algorithm and the shape it operates on, in one
-/// table so that the parser, the validation and the error message cannot
-/// drift apart. Written out rather than derived from `ValueEnum`, whose
-/// kebab-case would render `WeightedJaccard` as `weighted-jaccard` and put a
-/// hyphen inside a name that has to be split off by its last one.
-pub(crate) fn algorithm_spec(algorithm: &Algorithm) -> (&'static str, Shape) {
-    match algorithm {
-        Algorithm::Cosine => ("cosine", Shape::Freq),
-        Algorithm::Dice => ("dice", Shape::Set),
-        Algorithm::Euclidean => ("euclidean", Shape::Freq),
-        Algorithm::Jaccard => ("jaccard", Shape::Set),
-        Algorithm::Lcs => ("lcs", Shape::Seq),
-        Algorithm::Levenshtein => ("levenshtein", Shape::Seq),
-        Algorithm::Simpson => ("simpson", Shape::Set),
-        Algorithm::WeightedJaccard => ("weightedjaccard", Shape::Freq),
-    }
-}
-
 fn parse_algorithm(name: &str) -> Option<Algorithm> {
     use clap::ValueEnum;
     Algorithm::value_variants()
         .iter()
-        .find(|a| algorithm_spec(a).0 == name)
+        .find(|a| a.cli_name() == name)
         .cloned()
 }
 
@@ -718,7 +708,7 @@ mod tests {
         use clap::ValueEnum;
         for prefix in ["op", "fc", "op-4gram"] {
             for algorithm in Algorithm::value_variants() {
-                let (algorithm_name, shape) = algorithm_spec(algorithm);
+                let (algorithm_name, shape) = (algorithm.cli_name(), algorithm.shape());
                 let shape_name = match shape {
                     Shape::Seq => "seq",
                     Shape::Set => "set",
@@ -726,6 +716,47 @@ mod tests {
                 };
                 let name = format!("{prefix}-{shape_name}-{algorithm_name}");
                 assert!(AnalysisType::try_from(name.clone()).is_ok(), "name: {name}");
+            }
+        }
+    }
+
+    /// pairs_with is the check new and try_from share, so it must agree with
+    /// both: the shapes that match are exactly the pairings they accept.
+    #[test]
+    fn test_pairs_with_agrees_with_construction() {
+        use clap::ValueEnum;
+        let birthmarks = [
+            BirthmarkType::OpSeq,
+            BirthmarkType::OpSet,
+            BirthmarkType::OpFreq,
+            BirthmarkType::FcSeq,
+            BirthmarkType::FcSet,
+            BirthmarkType::FcFreq,
+            BirthmarkType::OpKgramSeq(3),
+            BirthmarkType::OpKgramSet(3),
+            BirthmarkType::OpKgramFreq(3),
+        ];
+        for birthmark in birthmarks {
+            for algorithm in Algorithm::value_variants() {
+                let paired = birthmark.pairs_with(algorithm);
+                assert_eq!(
+                    paired,
+                    birthmark.shape() == algorithm.shape(),
+                    "{birthmark}/{}",
+                    algorithm.cli_name()
+                );
+                assert_eq!(
+                    AnalysisType::new(birthmark.clone(), algorithm.clone()).is_ok(),
+                    paired,
+                    "new disagrees with pairs_with for {birthmark}/{}",
+                    algorithm.cli_name()
+                );
+                let name = format!("{birthmark}-{}", algorithm.cli_name());
+                assert_eq!(
+                    AnalysisType::try_from(name.clone()).is_ok(),
+                    paired,
+                    "try_from disagrees with pairs_with for {name}"
+                );
             }
         }
     }

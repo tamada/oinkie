@@ -48,12 +48,12 @@ impl std::fmt::Display for Error {
             Error::BirthmarkType(t) => write!(f, "{t}: unknown birthmark type"),
             Error::Csv(e) => write!(f, "CSV error: {}", e),
             Error::IncompatibleAnalysis(bt, algorithm) => {
-                let (name, shape) = crate::birthmarks::algorithm_spec(algorithm);
+                let name = algorithm.cli_name();
                 write!(
                     f,
                     "{bt}-{name}: {name} operates on {}; use {}-{name}",
-                    shape.description(),
-                    bt.with_shape(shape)
+                    algorithm.shape().description(),
+                    bt.with_shape(algorithm.shape())
                 )
             }
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),

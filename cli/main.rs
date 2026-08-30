@@ -24,7 +24,7 @@ where
 
 fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let start = Instant::now();
-    let atype = opts.analysis_type();
+    let atype = opts.analysis_type()?;
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(comparing_count * 3);
