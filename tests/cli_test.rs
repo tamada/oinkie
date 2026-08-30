@@ -191,3 +191,67 @@ fn test_reaggregate_command() {
 
     assert!(dest_file.exists());
 }
+
+/// The path given to `-i` is handed to Ghidra as its project location and is
+/// also used as the working directory of the Ghidra process. A relative path
+/// must therefore be resolved before the process starts, or Ghidra resolves it
+/// a second time against itself and looks for `irs/irs`.
+#[test]
+fn test_lift_command_with_relative_intermediate_dir() {
+    // Ghidra rejects any path element starting with '.', and tempdir() names
+    // its directories ".tmpXXXX", so the project location needs a plain prefix.
+    let temp_dir = tempfile::Builder::new()
+        .prefix("oinkie_test")
+        .tempdir()
+        .unwrap();
+    let input = fs::canonicalize("testdata/hello_world/bin/hello_clang").unwrap();
+    let dest = temp_dir.path().join("lifted");
+    fs::create_dir(temp_dir.path().join("irs")).unwrap();
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .current_dir(temp_dir.path())
+        .arg("lift")
+        .arg("-i")
+        .arg("irs")
+        .arg("-d")
+        .arg(&dest)
+        .arg(&input)
+        .assert()
+        .success();
+
+    assert!(
+        !temp_dir.path().join("irs").join("irs").exists(),
+        "the -i path was resolved twice"
+    );
+    assert!(dest.join("hello_clang.json").exists());
+}
+
+/// Every other destination directory in the CLI is created for the user, and
+/// the temporary directory used when `-i` is omitted exists by construction.
+/// A path passed to `-i` should be no different.
+#[test]
+fn test_lift_command_creates_the_intermediate_dir() {
+    // See the note above: the project location must not sit under a dot-directory.
+    let temp_dir = tempfile::Builder::new()
+        .prefix("oinkie_test")
+        .tempdir()
+        .unwrap();
+    let input = fs::canonicalize("testdata/hello_world/bin/hello_clang").unwrap();
+    let dest = temp_dir.path().join("lifted");
+    let intermediate = temp_dir.path().join("does/not/exist/yet");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("lift")
+        .arg("-i")
+        .arg(&intermediate)
+        .arg("-d")
+        .arg(&dest)
+        .arg(&input)
+        .assert()
+        .success();
+
+    assert!(intermediate.is_dir(), "the -i directory was not created");
+    assert!(dest.join("hello_clang.json").exists());
+}
