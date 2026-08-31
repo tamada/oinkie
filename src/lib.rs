@@ -69,7 +69,7 @@ impl std::fmt::Display for Error {
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),
             Error::NoCallOperations(path, ir) => write!(
                 f,
-                "{}: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or the {ir} lifter does not recognise its own call opcode",
+                "{}: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or oinkie's reader for {ir} does not recognise that representation's call operations",
                 path.display()
             ),
             Error::Io(path, e) => write!(f, "IO error for {}: {}", path.display(), e),
