@@ -389,9 +389,18 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
     }
 }
 
-/// What to say before lifting several files at once, or `None` when nothing
-/// will actually run in parallel -- either because `--jobs` is 1 or because
-/// there is only one file to lift.
+/// How many lifts will actually run at once.
+///
+/// Asking for more jobs than there are files does not produce more
+/// concurrency, so the smaller of the two is the real answer. Deriving it once
+/// keeps the notice and the branch below from disagreeing about whether
+/// anything is running in parallel.
+fn effective_jobs(requested: usize, files: usize) -> usize {
+    requested.min(files.max(1))
+}
+
+/// What to say before lifting several files at once, or `None` when only one
+/// lift will run at a time.
 ///
 /// Ghidra compiles its SLEIGH language definitions on first use and caches
 /// them inside its own installation, so concurrent lifts against an
@@ -400,13 +409,17 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
 /// regardless, so it arrives as a missing output rather than as an error.
 /// Once the cache is built it cannot happen again, which is why this is a
 /// notice rather than a refusal.
-fn parallel_lift_notice(jobs: usize, files: usize) -> Option<String> {
-    (jobs > 1 && files > 1).then(|| {
+///
+/// Broken across lines rather than left as one: CI logs and narrow terminals
+/// truncate, and the sentence that says what to do about it is at the end.
+fn parallel_lift_notice(jobs: usize) -> Option<String> {
+    (jobs > 1).then(|| {
         format!(
-            "notice: lifting up to {jobs} files at a time. Ghidra builds its language cache on first \
-             use, inside its own installation, and parallel lifts can corrupt a cache that has \
-             not been built yet -- reported as a missing output, not as an error. If Ghidra was \
-             installed recently, lift one file without -j first."
+            "notice: lifting up to {jobs} files at a time.\n\
+             Ghidra builds its language cache on first use, inside its own installation,\n\
+             and parallel lifts can corrupt a cache that has not been built yet --\n\
+             reported as a missing output, not as an error.\n\
+             If Ghidra was installed recently, lift one file without -j first."
         )
     })
 }
@@ -440,15 +453,18 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
                 "Lifted JSON for {:?} already exists. Skipping lifting.",
                 path
             );
-            return Ok(e1.elapsed());
+        } else {
+            lifter.lift(path, &dest_file)?;
         }
-        lifter.lift(path, &dest_file)?;
+        // Counted whether it was lifted or skipped: the bar measures inputs
+        // dealt with, and a --skip run that left it short of the total looked
+        // like it had stopped early.
         pb.inc(1);
         Ok(e1.elapsed())
     };
 
-    let jobs = opts.jobs();
-    if let Some(notice) = parallel_lift_notice(jobs, opts.len()) {
+    let jobs = effective_jobs(opts.jobs(), opts.len());
+    if let Some(notice) = parallel_lift_notice(jobs) {
         eprintln!("{notice}");
     }
 
@@ -456,9 +472,9 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
     let r = if jobs == 1 {
         opts.iter().map(lift_one).collect::<Result<Vec<_>>>()
     } else {
-        // A pool rather than the global one, so that --jobs bounds how many
-        // decompiler processes exist at once rather than merely how many
-        // rayon tasks are in flight.
+        // A pool of our own rather than rayon's global one, whose size is the
+        // machine's core count. --jobs has to bound decompiler processes, not
+        // rayon tasks.
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(jobs)
             .build()
@@ -640,7 +656,10 @@ mod tests {
             panic!("Expected Lift command");
         };
         assert_eq!(lift_opts.jobs(), 1);
-        assert_eq!(parallel_lift_notice(lift_opts.jobs(), 8), None);
+        assert_eq!(
+            parallel_lift_notice(effective_jobs(lift_opts.jobs(), 8)),
+            None
+        );
     }
 
     #[test]
@@ -651,12 +670,29 @@ mod tests {
             panic!("Expected Lift command");
         };
         assert_eq!(lift_opts.jobs(), 4);
-        let notice = parallel_lift_notice(lift_opts.jobs(), 8).expect("asking for 4 must say why");
+        let notice = parallel_lift_notice(effective_jobs(lift_opts.jobs(), 8))
+            .expect("asking for 4 must say why");
         assert!(notice.contains("4 files at a time"), "{notice}");
         assert!(notice.contains("language cache"), "{notice}");
+        assert!(
+            notice.lines().count() > 1,
+            "the notice must survive a narrow terminal: {notice}"
+        );
+    }
 
-        // One file cannot race with itself, so nothing is said about it.
-        assert_eq!(parallel_lift_notice(lift_opts.jobs(), 1), None);
+    /// Asking for more jobs than there are files buys nothing, so it is not
+    /// claimed in the notice and does not build a pool below.
+    #[test]
+    fn test_jobs_are_capped_by_the_number_of_files() {
+        assert_eq!(effective_jobs(4, 2), 2);
+        assert_eq!(effective_jobs(4, 1), 1);
+        assert_eq!(effective_jobs(1, 8), 1);
+        // Nothing to lift is still one pass over an empty list, not zero jobs.
+        assert_eq!(effective_jobs(4, 0), 1);
+
+        assert_eq!(parallel_lift_notice(effective_jobs(4, 1)), None);
+        let notice = parallel_lift_notice(effective_jobs(4, 2)).unwrap();
+        assert!(notice.contains("2 files at a time"), "{notice}");
     }
 
     /// Zero jobs lifts nothing, so it is rejected at parse time rather than
