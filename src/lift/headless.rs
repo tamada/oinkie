@@ -105,7 +105,7 @@ impl Headless<'_> {
             )));
         }
 
-        self.take_output(&invocation, output)
+        self.take_output(&invocation, output, &result)
     }
 
     /// Writes the built-in script to a temporary directory unless the user
@@ -183,14 +183,29 @@ impl Headless<'_> {
     }
 
     /// Moves the JSON the script wrote to where the caller asked for it.
-    fn take_output(&self, invocation: &Invocation, output: &Path) -> Result<()> {
+    ///
+    /// A tool can exit successfully and still have written nothing: Ghidra's
+    /// headless analyzer reports success even when the post-script throws. Its
+    /// own output is then the only account of what happened, so the error
+    /// carries it rather than reporting an absent file and discarding the
+    /// reason it is absent.
+    fn take_output(
+        &self,
+        invocation: &Invocation,
+        output: &Path,
+        result: &std::process::Output,
+    ) -> Result<()> {
         let generated = invocation
             .work_dir
             .join(format!("{}.json", invocation.name));
         if !generated.exists() {
             return Err(Error::Parse(format!(
-                "Expected {} to generate {:?}, but it was not found.",
-                self.tool, generated
+                "Expected {} to generate {:?}, but it was not found. {} exited successfully, so its own output is the only account of why:\nSTDOUT: {}\nSTDERR: {}",
+                self.tool,
+                generated,
+                self.tool,
+                tail(&String::from_utf8_lossy(&result.stdout)),
+                tail(&String::from_utf8_lossy(&result.stderr)),
             )));
         }
         // rename fails across file systems, which a temporary directory on
@@ -200,6 +215,22 @@ impl Headless<'_> {
             let _ = std::fs::remove_file(&generated);
         }
         Ok(())
+    }
+}
+
+/// The last few lines of a tool's output.
+///
+/// A headless decompiler writes hundreds of progress lines; the reason it
+/// stopped is at the end, and the rest would bury it.
+fn tail(text: &str) -> String {
+    const LINES: usize = 20;
+    let text = text.trim_end();
+    let mut kept: Vec<&str> = text.lines().rev().take(LINES).collect();
+    kept.reverse();
+    if text.lines().count() > LINES {
+        format!("(last {LINES} lines)\n{}", kept.join("\n"))
+    } else {
+        kept.join("\n")
     }
 }
 
@@ -312,11 +343,59 @@ mod tests {
 
         match headless(None, None).lift(&input, &dir.path().join("out.json"), |_| vec![]) {
             Err(Error::Parse(msg)) => assert!(
-                msg.contains("sample.bin.json") && msg.contains("test"),
+                msg.contains("sample.bin.json") && msg.contains("STDOUT"),
                 "unhelpful message: {msg}"
             ),
             other => panic!("expected a missing-output error, got {:?}", other.err()),
         }
+    }
+
+    /// A tool that exits successfully and writes nothing leaves its own output
+    /// as the only account of why, so the error has to carry it. Ghidra's
+    /// headless analyzer does exactly this when its post-script throws.
+    #[test]
+    fn test_a_missing_result_carries_what_the_tool_said() {
+        let dir = tempfile::Builder::new()
+            .prefix("oinkie_t")
+            .tempdir()
+            .unwrap();
+        let input = dir.path().join("sample.bin");
+        std::fs::write(&input, b"binary").unwrap();
+
+        // echo exits 0 and writes to stdout instead of to a file, which is the
+        // shape of the failure: success, no result, and a reason only it knows.
+        let mut h = headless(None, None);
+        h.program = Path::new("/bin/echo");
+        match h.lift(&input, &dir.path().join("out.json"), |_| {
+            vec!["the script threw".into()]
+        }) {
+            Err(Error::Parse(msg)) => assert!(
+                msg.contains("the script threw"),
+                "the tool's own output was dropped: {msg}"
+            ),
+            other => panic!("expected a missing-output error, got {:?}", other.err()),
+        }
+    }
+
+    #[test]
+    fn test_tail_keeps_the_end_and_says_so() {
+        let short = (1..=3)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(tail(&short), "1\n2\n3");
+
+        let long = (1..=30)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let tailed = tail(&long);
+        assert!(tailed.starts_with("(last 20 lines)"), "{tailed}");
+        assert!(tailed.ends_with("\n30"), "{tailed}");
+        assert!(
+            !tailed.contains("\n10\n"),
+            "kept more than the last 20: {tailed}"
+        );
     }
 
     /// The output is moved even when the working directory is on another file
