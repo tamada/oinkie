@@ -26,6 +26,8 @@ pub enum Error {
     IncompatibleAnalysis(BirthmarkType, crate::prelude::Algorithm),
     /// Two birthmarks lifted to different intermediate representations.
     IrMismatch(crate::lift::Ir, crate::lift::Ir),
+    /// An `fc-*` birthmark was asked of a program holding no call at all.
+    NoCallOperations(PathBuf, crate::lift::Ir),
     InvalidPcode(u32),
     Io(PathBuf, std::io::Error),
     Json(PathBuf, serde_json::Error),
@@ -63,6 +65,11 @@ impl std::fmt::Display for Error {
                 "cannot compare {a} against {b}: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond"
             ),
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),
+            Error::NoCallOperations(path, ir) => write!(
+                f,
+                "{}: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or the {ir} lifter does not recognise its own call opcode",
+                path.display()
+            ),
             Error::Io(path, e) => write!(f, "IO error for {}: {}", path.display(), e),
             Error::Json(file, e) => write!(f, "{}: JSON error: {}", file.display(), e),
             Error::LapJV(e) => write!(f, "LapJV error: {}", e),
@@ -109,6 +116,23 @@ pub trait Op {
 
     /// returns the inputs of the operation, e.g., the source registers or memory locations.
     fn inputs(&self) -> &[String];
+
+    /// returns whether this operation transfers control to another function,
+    /// which is what the `fc-*` birthmarks are built from.
+    ///
+    /// Each intermediate representation spells its call differently — P-Code
+    /// writes `CALL`, the Hex-Rays microcode `m_call`, Binary Ninja's LLIL
+    /// `LLIL_CALL` — and some name more than one. Deciding here rather than in
+    /// [`crate::extractor`] keeps that vocabulary with the lifter that owns
+    /// it.
+    ///
+    /// This method deliberately has no default. A `false` default would let a
+    /// new lifter compile while matching no operation at all, and an `fc-*`
+    /// birthmark that matched nothing is not merely useless: two empty
+    /// birthmarks score as a perfect match, so unrelated programs would be
+    /// reported as identical. Requiring the method makes that a build failure
+    /// instead of a wrong answer.
+    fn is_call(&self) -> bool;
 
     /// returns the output of the operation, e.g., the destination register or memory location.
     fn ret(&self) -> Option<&str>;

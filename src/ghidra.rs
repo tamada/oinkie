@@ -59,6 +59,19 @@ impl crate::Op for Op {
         self.out.as_deref()
     }
 
+    fn is_call(&self) -> bool {
+        // CALLOTHER is not among these: it is Ghidra's escape hatch for
+        // instruction semantics its model does not cover, and its first
+        // operand indexes a table of user-defined operations rather than
+        // naming a function.
+        //
+        // CALLIND is, because it is a call. Its target lives in a register or
+        // a temporary, so `symbol_key` yields nothing for it and it
+        // contributes to no birthmark today; including it keeps the predicate
+        // an answer about P-Code rather than about what happens to resolve.
+        matches!(self.op, PcodeOp::Call | PcodeOp::Callind)
+    }
+
     fn symbol_key(&self) -> Option<String> {
         // Only a call into ram names an address the symbol table could carry;
         // a target held in a register or a temporary is resolved at run time
@@ -214,6 +227,39 @@ mod tests {
         assert_eq!(op2.mnemonic(), "COPY");
         assert_eq!(op2.inputs().len(), 1);
         assert_eq!(op2.ret(), Some("(unique, 0x10000009, 8)"));
+    }
+
+    fn op(kind: PcodeOp) -> super::Op {
+        super::Op {
+            op: kind,
+            out: None,
+            inputs: vec!["(ram, 0x100000480, 8)".to_string()],
+        }
+    }
+
+    /// Which opcode is a call is P-Code's own business, so the answer lives
+    /// with the P-Code operation rather than with the extractor that consumes
+    /// it. CALLOTHER is Ghidra's escape hatch for instruction semantics its
+    /// model does not cover — its first operand indexes a table of
+    /// user-defined operations, not a function — so it is not a call.
+    #[test]
+    fn test_is_call_recognises_the_call_opcodes() {
+        assert!(op(PcodeOp::Call).is_call(), "CALL is a call");
+        assert!(op(PcodeOp::Callind).is_call(), "CALLIND is a call");
+        for other in [
+            PcodeOp::Callother,
+            PcodeOp::Copy,
+            PcodeOp::Branch,
+            PcodeOp::Cbranch,
+            PcodeOp::Branchind,
+            PcodeOp::Return,
+        ] {
+            assert!(
+                !op(other).is_call(),
+                "{} is not a call",
+                op(other).mnemonic()
+            );
+        }
     }
 
     #[test]
