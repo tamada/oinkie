@@ -58,6 +58,17 @@ impl crate::Op for Op {
     fn ret(&self) -> Option<&str> {
         self.out.as_deref()
     }
+
+    fn symbol_key(&self) -> Option<String> {
+        // Only a call into ram names an address the symbol table could carry;
+        // a target held in a register or a temporary is resolved at run time
+        // and has no name to find here.
+        let target: Value = self.inputs.first()?.parse().ok()?;
+        match target.storage {
+            StorageType::Ram => Some(format!("0x{:x}", target.address)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

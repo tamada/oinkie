@@ -169,7 +169,8 @@ where
 fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<String> {
     f.iter()
         .filter(|op| op.mnemonic() == "CALL")
-        .filter_map(|op| op.inputs().first().and_then(|addr| p.symbol(addr)))
+        .filter_map(|op| op.symbol_key())
+        .filter_map(|key| p.symbol(&key))
         .map(|s| s.to_string())
         .collect()
 }
@@ -252,6 +253,49 @@ mod tests {
         let path = Path::new("non_existent_file.xyz");
         let result = get_hash(path);
         assert!(result.is_err());
+    }
+
+    /// The fc-* family is built from the symbols a function calls. The call
+    /// operand names its target in the lifter's own notation, which is not the
+    /// form the symbol table is keyed by, so the two have to be reconciled
+    /// before the lookup — otherwise every call is discarded and the birthmark
+    /// comes out empty.
+    #[test]
+    fn test_extract_function_calls_resolves_the_symbol() {
+        let program: Program<crate::ghidra::Op> =
+            std::path::Path::new("testdata/hello_world/pcodes/hello_clang.json")
+                .try_into()
+                .expect("failed to load the fixture");
+        let function = program.iter().next().expect("fixture has no function");
+
+        let calls = extract_function_calls(function, &program);
+        assert_eq!(
+            calls,
+            vec!["_printf".to_string()],
+            "the fixture calls _printf exactly once"
+        );
+    }
+
+    /// Two empty sets are identical, so an fc-* birthmark that resolves nothing
+    /// makes unrelated programs look like a perfect match. Guard the property
+    /// that makes the emptiness dangerous, not just the emptiness.
+    #[test]
+    fn test_fc_birthmarks_are_not_empty() {
+        for fixture in [
+            "testdata/hello_world/pcodes/hello_clang.json",
+            "testdata/hello_world/pcodes/hello_gcc.json",
+        ] {
+            let program: Program<crate::ghidra::Op> = std::path::Path::new(fixture)
+                .try_into()
+                .unwrap_or_else(|e| panic!("{fixture}: {e}"));
+            let birthmark = Extractor::new(BirthmarkType::FcSet)
+                .extract_each(&program)
+                .unwrap_or_else(|e| panic!("{fixture}: {e}"));
+            assert!(
+                birthmark.elements.iter().any(|e| !e.is_empty()),
+                "{fixture}: every fc-set element is empty"
+            );
+        }
     }
 
     #[test]
