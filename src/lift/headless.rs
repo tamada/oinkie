@@ -452,6 +452,7 @@ mod tests {
     /// the effect is that `--home ghidra_rel` passes the caller's own
     /// existence check and then fails to spawn with "No such file or
     /// directory" naming a path that does exist.
+    #[cfg(unix)]
     #[test]
     fn test_a_relative_program_is_resolved_before_the_directory_changes() {
         let dir = tempfile::Builder::new()
@@ -463,8 +464,15 @@ mod tests {
 
         // Under the crate root, so the path can be written relative to the
         // current directory; target/ is ignored by git and always present.
+        //
+        // A symlink rather than a copy: writing an executable while sibling
+        // tests are forking lets a child inherit the still-open write
+        // descriptor, and the exec then fails with ETXTBSY. That is a
+        // property of staging the file, not of what is being tested.
         let relative = PathBuf::from("target").join("oinkie_relative_program_test");
-        std::fs::copy("/bin/echo", &relative).expect("could not stage a relative program");
+        let _ = std::fs::remove_file(&relative);
+        std::os::unix::fs::symlink("/bin/echo", &relative)
+            .expect("could not stage a relative program");
 
         let mut h = headless(None, None);
         h.program = &relative;
