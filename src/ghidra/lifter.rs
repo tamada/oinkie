@@ -1,4 +1,5 @@
 use crate::lift::Lifter;
+use crate::lift::headless::Headless;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
@@ -30,132 +31,42 @@ impl Lifter for GhidraLifter {
             )));
         }
 
-        let (script_path, _temp_dir) = if let Some(s) = &self.script {
-            let s = std::fs::canonicalize(s).map_err(|e| Error::Io(s.clone(), e))?;
-            (s, None)
-        } else {
-            let temp_dir = tempfile::Builder::new()
-                .prefix("oinkie_script")
-                .tempdir()
-                .map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
-            let script_file = temp_dir.path().join("HighPCodeLifter.java");
-            std::fs::write(&script_file, DEFAULT_GHIDRA_SCRIPT)
-                .map_err(|e| Error::Io(script_file.clone(), e))?;
-            (script_file, Some(temp_dir))
-        };
-        let script_dir = script_path
-            .parent()
-            .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
-        let script_name = script_path
-            .file_name()
-            .ok_or_else(|| Error::Parse(format!("Invalid script path: {:?}", script_path)))?;
-
-        let (proj_dir, _temp_proj_dir) = if let Some(i) = &self.intermediate_dir {
-            // Created because every other destination directory in the CLI is,
-            // and canonicalized because this path is passed to Ghidra as an
-            // argument while also being its working directory — left relative,
-            // Ghidra would resolve it a second time against itself.
-            std::fs::create_dir_all(i).map_err(|e| Error::Io(i.clone(), e))?;
-            let i = std::fs::canonicalize(i).map_err(|e| Error::Io(i.clone(), e))?;
-            (i, None)
-        } else {
-            let temp_proj = tempfile::Builder::new()
-                .prefix("oinkie_proj")
-                .tempdir()
-                .map_err(|e| Error::Io(PathBuf::from("temp"), e))?;
-            (temp_proj.path().to_path_buf(), Some(temp_proj))
-        };
-
-        let proj_name = input
-            .file_name()
-            .and_then(|n| n.to_str())
-            .ok_or_else(|| Error::Parse(format!("Invalid input path: {:?}", input)))?;
-        // the working directory of the Ghidra process is the project directory,
-        // so relative paths must be resolved beforehand
-        let input = std::fs::canonicalize(input).map_err(|e| Error::Io(input.to_path_buf(), e))?;
-
-        let mut command = std::process::Command::new(&analyze_headless);
-        command
-            .arg(&proj_dir)
-            .arg(proj_name)
-            .arg("-import")
-            .arg(&input)
-            .arg("-scriptPath")
-            .arg(script_dir)
-            .arg("-postScript")
-            .arg(script_name)
-            // The lifter script writes "{program name}.json" into the working
-            // directory of the Ghidra process. Run it inside the project
-            // directory so that concurrent lifts of same-named binaries do not
-            // race on a single path in the user's current directory.
-            .current_dir(&proj_dir);
-
-        log::info!("Executing Ghidra: {:?}", command);
-        let output_res = command
-            .output()
-            .map_err(|e| Error::Io(analyze_headless, e))?;
-        if !output_res.status.success() {
-            let stderr = String::from_utf8_lossy(&output_res.stderr);
-            let stdout = String::from_utf8_lossy(&output_res.stdout);
-            return Err(Error::Parse(format!(
-                "Ghidra failed with status {}.\nSTDOUT: {}\nSTDERR: {}",
-                output_res.status, stdout, stderr
-            )));
+        Headless {
+            tool: "Ghidra",
+            program: &analyze_headless,
+            script: self.script.as_deref(),
+            default_script: ("HighPCodeLifter.java", DEFAULT_GHIDRA_SCRIPT),
+            // Ghidra keeps its project here as well as working in it, which is
+            // why the option exists; the working directory itself is what
+            // every headless lifter needs.
+            work_dir: self.intermediate_dir.as_deref(),
         }
-
-        // Move the generated JSON to the destination
-        let generated_json = proj_dir.join(format!("{}.json", proj_name));
-        if generated_json.exists() {
-            // rename fails across file systems (e.g., temp dir on another
-            // volume); fall back to copy + remove in that case
-            if std::fs::rename(&generated_json, output).is_err() {
-                std::fs::copy(&generated_json, output)
-                    .map_err(|e| Error::Io(output.to_path_buf(), e))?;
-                let _ = std::fs::remove_file(&generated_json);
-            }
-        } else {
-            return Err(Error::Parse(format!(
-                "Expected Ghidra to generate {:?}, but it was not found.",
-                generated_json
-            )));
-        }
-
-        Ok(())
+        .lift(input, output, |i| {
+            vec![
+                i.work_dir.clone().into_os_string(),
+                i.name.clone().into(),
+                "-import".into(),
+                i.input.clone().into_os_string(),
+                "-scriptPath".into(),
+                i.script_dir.clone().into_os_string(),
+                "-postScript".into(),
+                i.script_name.clone(),
+            ]
+        })
     }
-}
-
-pub fn find_ghidra_home(home_opt: Option<&Path>) -> Result<PathBuf> {
-    if let Some(h) = home_opt {
-        return Ok(h.to_path_buf());
-    }
-    if let Ok(h) = std::env::var("GHIDRA_HOME") {
-        return Ok(PathBuf::from(h));
-    }
-
-    let candidates = [
-        "/opt/homebrew/opt/ghidra/libexec",
-        "/usr/local/opt/ghidra/libexec",
-        "/opt/ghidra/libexec",
-    ];
-    for c in candidates {
-        let p = PathBuf::from(c);
-        if p.exists() {
-            return Ok(p);
-        }
-    }
-    Err(Error::Parse("GHIDRA_HOME not found. Please specify it via --home option or GHIDRA_HOME environment variable.".to_string()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lift::LifterType;
     use std::env;
     use tempfile::tempdir;
 
     #[test]
     fn test_find_ghidra_home_with_opt() {
         let opt_path = PathBuf::from("/custom/ghidra/home");
-        let result = find_ghidra_home(Some(&opt_path));
+        let result = LifterType::Ghidra.find_home(Some(&opt_path));
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), opt_path);
     }
@@ -168,7 +79,7 @@ mod tests {
             env::set_var("GHIDRA_HOME", "/env/ghidra/home");
         }
 
-        let result = find_ghidra_home(None);
+        let result = LifterType::Ghidra.find_home(None);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), PathBuf::from("/env/ghidra/home"));
 
@@ -192,7 +103,7 @@ mod tests {
             env::remove_var("GHIDRA_HOME");
         }
 
-        let result = find_ghidra_home(None);
+        let result = LifterType::Ghidra.find_home(None);
         // It might find it in standard paths on some systems, so we can't definitively assert error
         // unless we know the system doesn't have it. But we can check it doesn't crash.
         let _ = result;

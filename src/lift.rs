@@ -3,6 +3,8 @@ use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+pub(crate) mod headless;
+
 pub trait Lifter {
     fn lift(&self, input: &Path, output: &Path) -> Result<()>;
 }
@@ -78,6 +80,105 @@ impl std::str::FromStr for Ir {
     }
 }
 
+/// How a backend's installation is found.
+///
+/// The three steps are the same for every tool -- what the user passed, then
+/// an environment variable, then the places it is usually installed -- and
+/// only the names differ, so the names are the data and the search is written
+/// once.
+pub struct HomeSpec {
+    /// The tool's name, for messages.
+    pub tool: &'static str,
+    /// The environment variable oinkie reads.
+    ///
+    /// This is oinkie's own convention rather than something the tools
+    /// define: Ghidra's own installer sets `GHIDRA_INSTALL_DIR`, not
+    /// `GHIDRA_HOME`. Naming the others the same way keeps the convention
+    /// guessable.
+    pub env: &'static str,
+    /// Where to look when the variable is unset.
+    ///
+    /// Empty for a backend nobody has installed and checked. A guessed path
+    /// that happens to exist is worse than asking, because it is found
+    /// silently and only fails later, somewhere less obvious.
+    pub candidates: &'static [&'static str],
+}
+
+impl LifterType {
+    /// The tool's name as it should appear in messages.
+    pub fn name(&self) -> &'static str {
+        match self {
+            LifterType::Ghidra => "Ghidra",
+            LifterType::Angr => "angr",
+            LifterType::IDAPro => "IDA Pro",
+            LifterType::BinaryNinja => "Binary Ninja",
+        }
+    }
+
+    /// Where this backend's installation is looked for, or `None` for one that
+    /// has no installation directory to find.
+    ///
+    /// angr is the `None`: it is a Python library, imported rather than
+    /// installed somewhere oinkie could point at. It is here as the reminder
+    /// that the shape does not fit every backend.
+    pub fn home_spec(&self) -> Option<HomeSpec> {
+        match self {
+            LifterType::Ghidra => Some(HomeSpec {
+                tool: self.name(),
+                env: "GHIDRA_HOME",
+                candidates: &[
+                    "/opt/homebrew/opt/ghidra/libexec",
+                    "/usr/local/opt/ghidra/libexec",
+                    "/opt/ghidra/libexec",
+                ],
+            }),
+            LifterType::Angr => None,
+            LifterType::IDAPro => Some(HomeSpec {
+                tool: self.name(),
+                env: "IDA_HOME",
+                candidates: &[],
+            }),
+            LifterType::BinaryNinja => Some(HomeSpec {
+                tool: self.name(),
+                env: "BINARY_NINJA_HOME",
+                candidates: &[],
+            }),
+        }
+    }
+
+    /// Finds this backend's installation: what the user passed, then the
+    /// environment variable, then the usual locations.
+    pub fn find_home(&self, home_opt: Option<&Path>) -> Result<PathBuf> {
+        if let Some(h) = home_opt {
+            return Ok(h.to_path_buf());
+        }
+        let Some(spec) = self.home_spec() else {
+            return Err(crate::Error::Parse(format!(
+                "{} has no installation directory to find, so --home means nothing for it",
+                self.name()
+            )));
+        };
+        if let Ok(h) = std::env::var(spec.env) {
+            return Ok(PathBuf::from(h));
+        }
+        for c in spec.candidates {
+            let p = PathBuf::from(c);
+            if p.exists() {
+                return Ok(p);
+            }
+        }
+        let looked_in = if spec.candidates.is_empty() {
+            String::new()
+        } else {
+            format!(", or install it in one of: {}", spec.candidates.join(", "))
+        };
+        Err(crate::Error::Parse(format!(
+            "{} not found. Specify it with --home, set {}{looked_in}",
+            spec.tool, spec.env
+        )))
+    }
+}
+
 pub struct LifterBuilder {
     lifter_type: LifterType,
     home: Option<PathBuf>,
@@ -113,7 +214,7 @@ impl LifterBuilder {
     pub fn build(self) -> Result<Box<dyn Lifter + Sync>> {
         match self.lifter_type {
             LifterType::Ghidra => {
-                let home = find_ghidra_home(self.home.as_deref())?;
+                let home = self.lifter_type.find_home(self.home.as_deref())?;
                 Ok(Box::new(crate::ghidra::lifter::GhidraLifter::new(
                     home,
                     self.script,
@@ -131,8 +232,4 @@ impl LifterBuilder {
             )),
         }
     }
-}
-
-pub fn find_ghidra_home(home_opt: Option<&Path>) -> Result<PathBuf> {
-    crate::ghidra::lifter::find_ghidra_home(home_opt)
 }

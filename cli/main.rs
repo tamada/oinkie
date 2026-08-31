@@ -553,7 +553,7 @@ mod tests {
     #[test]
     fn test_find_ghidra_home_from_opt() {
         let opt = PathBuf::from("/custom/path");
-        let result = oinkie::lift::find_ghidra_home(Some(&opt)).unwrap();
+        let result = LifterType::Ghidra.find_home(Some(&opt)).unwrap();
         assert_eq!(result, opt);
     }
 
@@ -562,11 +562,31 @@ mod tests {
         unsafe {
             std::env::set_var("GHIDRA_HOME", "/env/path");
         }
-        let result = oinkie::lift::find_ghidra_home(None).unwrap();
+        let result = LifterType::Ghidra.find_home(None).unwrap();
         assert_eq!(result, PathBuf::from("/env/path"));
         unsafe {
             std::env::remove_var("GHIDRA_HOME");
         }
+    }
+
+    /// The three backends that are not implemented still have to say what to
+    /// set, since a message naming GHIDRA_HOME for Binary Ninja is worse than
+    /// no message at all.
+    #[test]
+    fn test_each_backend_names_its_own_environment_variable() {
+        for (lifter, env) in [
+            (LifterType::Ghidra, "GHIDRA_HOME"),
+            (LifterType::IDAPro, "IDA_HOME"),
+            (LifterType::BinaryNinja, "BINARY_NINJA_HOME"),
+        ] {
+            let spec = lifter.home_spec().expect("this backend has an install dir");
+            assert_eq!(spec.env, env, "{}", lifter.name());
+        }
+        // angr is imported rather than installed, so --home means nothing for
+        // it and the error says so instead of naming a variable.
+        assert!(LifterType::Angr.home_spec().is_none());
+        let err = LifterType::Angr.find_home(None).unwrap_err().to_string();
+        assert!(err.contains("angr"), "unhelpful message: {err}");
     }
 
     #[test]
