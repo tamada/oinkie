@@ -107,8 +107,20 @@ pub trait Op {
     /// returns the output of the operation, e.g., the destination register or memory location.
     fn ret(&self) -> Option<&str>;
 
-    /// returns this operation's target rendered as the program's symbol table
-    /// keys it, or `None` when the target is not something a symbol could name.
+    /// returns this operation's first operand rendered as the program's symbol
+    /// table keys it, so that [`crate::program::Program::symbol`] can resolve
+    /// it, or `None` when that operand cannot name a symbol.
+    ///
+    /// Callers choose which operations to ask — the only caller today asks
+    /// calls, to build the `fc-*` birthmarks — so an implementation need not
+    /// inspect the opcode itself.
+    ///
+    /// Returning `None` for a target no symbol could name is the part that
+    /// matters. An indirect call through a register or a temporary is
+    /// resolved at run time and has no name to find; a key that cannot match
+    /// would be indistinguishable from a lookup that legitimately found
+    /// nothing, which is how the `fc-*` family came to be silently empty
+    /// before this method existed.
     ///
     /// The operand notation is the lifter's own — Ghidra writes
     /// `"(ram, 0x100000480, 8)"` while its symbol table is keyed
