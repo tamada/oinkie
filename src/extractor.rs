@@ -87,6 +87,16 @@ impl Extractor {
     pub fn extract_each<T: crate::Op>(&self, p: &Program<T>) -> Result<Birthmark> {
         extract_birthmark_op(p, &self.bt)
     }
+
+    /// Extracts from a program read without naming its operation type.
+    ///
+    /// The birthmark is the same either way; this only spares the caller from
+    /// deciding which lifter produced the file, which the file already says.
+    pub fn extract_any(&self, p: &crate::program::AnyProgram) -> Result<Birthmark> {
+        match p {
+            crate::program::AnyProgram::GhidraPcode(p) => self.extract_each(p),
+        }
+    }
 }
 
 fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Result<Birthmark> {

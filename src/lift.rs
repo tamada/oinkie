@@ -44,6 +44,17 @@ pub enum Ir {
     IdaMicrocode,
 }
 
+impl Ir {
+    /// The representations this build can actually read a lifted file in.
+    ///
+    /// [`Ir`] names representations ahead of the code that reads them, so the
+    /// two lists are not the same and the difference is what
+    /// [`crate::Error::UnsupportedIr`] reports.
+    pub fn readable() -> &'static [Ir] {
+        &[Ir::GhidraPcode]
+    }
+}
+
 impl std::fmt::Display for Ir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

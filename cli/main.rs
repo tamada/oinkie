@@ -3,7 +3,6 @@ mod info;
 
 use clap::{Parser, ValueEnum};
 use indicatif::ProgressBar;
-use oinkie::ghidra::Op;
 use oinkie::prelude::*;
 use rayon::prelude::*;
 use std::io::Write;
@@ -20,6 +19,15 @@ where
     let d = s.elapsed().as_millis();
     log::info!("Loading {path:?} done in {d} msec");
     Ok(item)
+}
+
+/// Reads a lifted program, letting the file say which representation it holds
+/// rather than assuming Ghidra's.
+fn load_program(path: &Path) -> Result<AnyProgram> {
+    let s = Instant::now();
+    let program = AnyProgram::load(path)?;
+    log::info!("Loading {path:?} done in {} msec", s.elapsed().as_millis());
+    Ok(program)
 }
 
 fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
@@ -47,11 +55,11 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                 read_result_file(&dest_file, i, path1, path2)
             } else {
                 pbar.set_message(format!("Loading program from {:?}", path1.display()));
-                let mut p1: Program<Op> = load(path1.to_path_buf())?;
+                let mut p1 = load_program(path1)?;
                 p1.set_json_path(path1.to_path_buf());
                 pbar.inc(1);
                 pbar.set_message(format!("Loading program from {:?}", path2.display()));
-                let mut p2: Program<Op> = load(path2.to_path_buf())?;
+                let mut p2 = load_program(path2)?;
                 p2.set_json_path(path2.to_path_buf());
                 pbar.inc(1);
                 pbar.set_message(format!(
@@ -59,7 +67,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                     i + 1,
                     comparing_count
                 ));
-                let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
+                let result = atype.comparator().compare_any(&p1, &p2, aggregator)?;
                 pbar.inc(1);
                 result.store(&dest_file)?;
                 Ok(CompareResult::new(
@@ -319,8 +327,8 @@ fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> 
         );
         return Ok(());
     }
-    let p: Program<Op> = path.try_into()?;
-    let birthmarks = extractor.extract_each(&p)?;
+    let p = load_program(path)?;
+    let birthmarks = extractor.extract_any(&p)?;
     let json =
         serde_json::to_string_pretty(&birthmarks).map_err(|e| Error::Json(dest_path.clone(), e))?;
     std::fs::write(&dest_path, json).map_err(|e| Error::Io(dest_path.clone(), e))?;
