@@ -137,9 +137,11 @@ pub struct Metadata {
     /// The representation the program was lifted to, carried over so that two
     /// birthmarks can be told apart by more than their type.
     ///
-    /// Defaulted for the same reason the field on `Program` is: every
-    /// birthmark that can predate it was extracted from Ghidra's P-Code,
-    /// because no other lifter has existed.
+    /// Defaulted as a fallback for the same reason the field on `Program` is:
+    /// every birthmark this crate wrote before the field existed came from
+    /// Ghidra's P-Code, since no other lifter has existed. It is not a
+    /// deduction — a file that simply omits the field reads the same way —
+    /// but anything written since carries it.
     #[serde(default)]
     pub ir: crate::lift::Ir,
 }
@@ -183,10 +185,11 @@ impl Metadata {
             let duration = items[5]
                 .parse::<u64>()
                 .map_err(|e| Error::Parse(format!("invalid duration: {}", e)))?;
+            // Ir::from_str already reports what was wrong and in this
+            // Error type, so wrapping it again would only prefix a second
+            // "Parse error:" onto the same sentence.
             let ir = match items.get(6) {
-                Some(text) => text
-                    .parse()
-                    .map_err(|e| Error::Parse(format!("invalid ir: {e}")))?,
+                Some(text) => text.parse()?,
                 None => crate::lift::Ir::default(),
             };
             Ok(Self {
