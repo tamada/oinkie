@@ -12,12 +12,16 @@ pub struct Program<T> {
     path: PathBuf,
     /// Which intermediate representation the operations below are written in.
     ///
-    /// Defaulted rather than required so that files lifted before the field
-    /// existed still load. The default is not a guess: Ghidra is the only
-    /// lifter that has ever been implemented, so every file that can predate
-    /// this field was produced by it. Once a second lifter ships, its output
-    /// carries the field, and the default only ever applies to files that
-    /// really are Ghidra's.
+    /// Defaulted rather than required, so that files lifted before the field
+    /// existed still load. Every such file was produced by Ghidra, since no
+    /// other lifter has been implemented, so the default is right for all of
+    /// them.
+    ///
+    /// It is a fallback, not a deduction: nothing here can tell a historical
+    /// Ghidra file from a hand-written or third-party one that simply omits
+    /// the field, and both will read as Ghidra's. Anything written by this
+    /// crate carries the field, so the fallback only has to cover files it
+    /// did not write.
     #[serde(default)]
     ir: crate::lift::Ir,
     symbols: FxHashMap<String, String>,
