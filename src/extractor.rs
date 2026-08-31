@@ -140,6 +140,7 @@ fn build_metadata<T>(
         extracted_at,
         duration,
         birthmark_type: bt,
+        ir: p.ir(),
     }
 }
 

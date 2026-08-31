@@ -25,8 +25,11 @@ pub enum LifterType {
 /// at: whether two birthmarks can be compared, and which `Op` type can read
 /// the file.
 ///
-/// Only one variant exists because only one lifter does. Each new lifter adds
-/// its own, and one that offers a choice of level adds one per level.
+/// Variants are declared ahead of the lifters that produce them, the way
+/// [`LifterType`] already declares backends that are not implemented yet.
+/// Binary Ninja is absent on purpose: it lifts to LLIL, MLIL or HLIL, and
+/// which of those is worth using has to be settled by measurement rather than
+/// named in advance.
 #[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 #[clap(rename_all = "kebab-case")]
@@ -35,12 +38,31 @@ pub enum Ir {
     /// yields, rather than raw lifted P-Code.
     #[default]
     GhidraPcode,
+    /// The Hex-Rays microcode, the representation IDA Pro's decompiler works
+    /// in. Unlike Binary Ninja's, there is only one of it, so it can be named
+    /// before the lifter that reads it exists.
+    IdaMicrocode,
 }
 
 impl std::fmt::Display for Ir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Ir::GhidraPcode => write!(f, "ghidra-pcode"),
+            Ir::IdaMicrocode => write!(f, "ida-microcode"),
+        }
+    }
+}
+
+impl std::str::FromStr for Ir {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "ghidra-pcode" => Ok(Ir::GhidraPcode),
+            "ida-microcode" => Ok(Ir::IdaMicrocode),
+            _ => Err(crate::Error::Parse(format!(
+                "{s}: unknown intermediate representation"
+            ))),
         }
     }
 }

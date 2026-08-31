@@ -134,17 +134,26 @@ pub struct Metadata {
     )]
     pub duration: std::time::Duration,
     pub birthmark_type: BirthmarkType,
+    /// The representation the program was lifted to, carried over so that two
+    /// birthmarks can be told apart by more than their type.
+    ///
+    /// Defaulted for the same reason the field on `Program` is: every
+    /// birthmark that can predate it was extracted from Ghidra's P-Code,
+    /// because no other lifter has existed.
+    #[serde(default)]
+    pub ir: crate::lift::Ir,
 }
 
 impl Metadata {
     pub fn csv_info(&self) -> String {
         format!(
-            "birthmark,{},{},{},{},{}",
+            "birthmark,{},{},{},{},{},{}",
             crate::compare::escape_csv_string(&self.file_name),
             crate::compare::escape_csv_string(&self.path.display().to_string()),
             self.birthmark_type,
             self.extracted_at.to_rfc3339(),
-            self.duration.as_nanos()
+            self.duration.as_nanos(),
+            self.ir
         )
     }
 
@@ -156,9 +165,12 @@ impl Metadata {
         if let Some(result) = r.into_records().next() {
             let record = result.map_err(Error::Csv)?;
             let items = record.iter().collect::<Vec<_>>();
-            if items.len() != 6 {
+            // Six is a record written before the ir field existed; seven is
+            // one written since. Both are read, for the same reason the JSON
+            // field is defaulted.
+            if items.len() != 6 && items.len() != 7 {
                 return Err(Error::Parse(format!(
-                    "expected 6 items in metadata, got {}",
+                    "expected 6 or 7 items in metadata, got {}",
                     items.len()
                 )));
             }
@@ -171,12 +183,19 @@ impl Metadata {
             let duration = items[5]
                 .parse::<u64>()
                 .map_err(|e| Error::Parse(format!("invalid duration: {}", e)))?;
+            let ir = match items.get(6) {
+                Some(text) => text
+                    .parse()
+                    .map_err(|e| Error::Parse(format!("invalid ir: {e}")))?,
+                None => crate::lift::Ir::default(),
+            };
             Ok(Self {
                 file_name,
                 path,
                 birthmark_type,
                 extracted_at,
                 duration: Duration::from_nanos(duration),
+                ir,
             })
         } else {
             Err(Error::Parse(format!("invalid metadata line: {line}")))
@@ -235,8 +254,36 @@ impl Birthmark {
         self.json_path = Some(path);
     }
 
+    /// Explains why these two cannot be compared, when they cannot.
+    ///
+    /// A birthmark is only meaningful against another built the same way. The
+    /// type has always had to match; the representation now does too, because
+    /// two lifters describe the same instruction with different operations,
+    /// and comparing across them measures the disagreement between the tools
+    /// rather than anything about the programs.
+    ///
+    /// The `fc-*` family is the one that could eventually cross this line: it
+    /// holds symbol names read from the binary rather than operations read
+    /// from the IR, so two tools should recover much the same set. It is
+    /// refused all the same, because the spellings still differ between tools
+    /// (`_printf` against `printf`) and nothing normalises them yet. Relaxing
+    /// this is worth doing once that normalisation exists and a second lifter
+    /// can be used to measure whether the result is worth trusting.
+    pub fn check_comparable_with(&self, other: &Birthmark) -> Result<()> {
+        if self.metadata.ir != other.metadata.ir {
+            return Err(Error::IrMismatch(self.metadata.ir, other.metadata.ir));
+        }
+        if self.metadata.birthmark_type != other.metadata.birthmark_type {
+            return Err(Error::Mismatch(
+                self.metadata.birthmark_type.clone(),
+                other.metadata.birthmark_type.clone(),
+            ));
+        }
+        Ok(())
+    }
+
     pub fn comparable_with(&self, other: &Birthmark) -> bool {
-        self.metadata.birthmark_type == other.metadata.birthmark_type
+        self.check_comparable_with(other).is_ok()
     }
 
     pub fn name(&self) -> &str {
@@ -470,6 +517,7 @@ mod tests {
             extracted_at: chrono::Utc::now(),
             duration: Duration::from_nanos(42),
             birthmark_type: BirthmarkType::OpSeq,
+            ir: crate::lift::Ir::GhidraPcode,
         };
         let parsed =
             Metadata::parse(&metadata.csv_info()).expect("failed to parse escaped metadata");
@@ -497,7 +545,28 @@ mod tests {
     #[test]
     fn test_parse_metadata_rejects_wrong_field_count() {
         let err = Metadata::parse("birthmark,name,path").unwrap_err();
-        assert!(matches!(err, Error::Parse(msg) if msg.contains("expected 6 items")));
+        assert!(matches!(err, Error::Parse(msg) if msg.contains("expected 6 or 7 items")));
+    }
+
+    /// A record written before the ir field existed still parses, and reads as
+    /// Ghidra's P-Code — the only representation any of them can hold.
+    #[test]
+    fn test_parse_metadata_without_ir() {
+        let metadata = Metadata::parse(
+            "birthmark,bzip2,/tmp/bzip2,op-seq,2026-04-17T04:57:55.385904+00:00,4462500",
+        )
+        .expect("a six-field record must still parse");
+        assert_eq!(metadata.ir, crate::lift::Ir::GhidraPcode);
+    }
+
+    #[test]
+    fn test_parse_metadata_rejects_an_unknown_ir() {
+        assert!(
+            Metadata::parse(
+                "birthmark,b,/tmp/b,op-seq,2026-04-17T04:57:55+00:00,1,not-a-representation"
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -807,6 +876,7 @@ mod tests {
                 extracted_at: chrono::Utc::now(),
                 duration: Duration::from_nanos(7),
                 birthmark_type: BirthmarkType::OpSeq,
+                ir: crate::lift::Ir::GhidraPcode,
             },
             elements: vec![Elements {
                 name: "main".to_string(),
@@ -841,6 +911,44 @@ mod tests {
         assert!(b1.comparable_with(&b2));
         b2.metadata.birthmark_type = BirthmarkType::OpSet;
         assert!(!b1.comparable_with(&b2));
+    }
+
+    /// A representation mismatch must be reported as such. Before this, the
+    /// two were indistinguishable: any refusal came back as a type mismatch,
+    /// and a comparison across representations was not refused at all.
+    #[test]
+    fn test_refuses_a_comparison_across_representations() {
+        let b1 = sample_birthmark();
+        let mut b2 = sample_birthmark();
+        b2.metadata.ir = crate::lift::Ir::IdaMicrocode;
+
+        match b1.check_comparable_with(&b2) {
+            Err(Error::IrMismatch(..)) => {}
+            Err(e) => panic!("expected an IrMismatch, got: {e}"),
+            Ok(()) => panic!("a comparison across representations must be refused"),
+        }
+        assert!(!b1.comparable_with(&b2));
+    }
+
+    /// The type check still reports a type mismatch rather than being
+    /// swallowed by the new one.
+    #[test]
+    fn test_still_refuses_a_mismatched_type() {
+        let b1 = sample_birthmark();
+        let mut b2 = sample_birthmark();
+        b2.metadata.birthmark_type = BirthmarkType::OpSet;
+
+        match b1.check_comparable_with(&b2) {
+            Err(Error::Mismatch(..)) => {}
+            Err(e) => panic!("expected a Mismatch, got: {e}"),
+            Ok(()) => panic!("a mismatched type must be refused"),
+        }
+    }
+
+    #[test]
+    fn test_allows_the_same_representation_and_type() {
+        let b = sample_birthmark();
+        assert!(b.check_comparable_with(&b).is_ok());
     }
 
     #[test]
