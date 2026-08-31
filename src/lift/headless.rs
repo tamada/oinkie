@@ -86,15 +86,21 @@ impl Headless<'_> {
         let (work_dir, _work_tmp) = self.resolve_work_dir()?;
         let invocation = Self::resolve(input, work_dir, script)?;
 
-        let mut command = std::process::Command::new(self.program);
+        // The child changes directory before it execs, so a relative program
+        // path is resolved against the working directory rather than the
+        // caller's -- Rust documents the behaviour as platform-specific and
+        // unstable. A relative `--home` therefore passes the caller's own
+        // existence check and then fails to spawn.
+        let program = std::fs::canonicalize(self.program)
+            .map_err(|e| Error::Io(self.program.to_path_buf(), e))?;
+
+        let mut command = std::process::Command::new(&program);
         command
             .args(args(&invocation))
             .current_dir(&invocation.work_dir);
 
         log::info!("Executing {}: {:?}", self.tool, command);
-        let result = command
-            .output()
-            .map_err(|e| Error::Io(self.program.to_path_buf(), e))?;
+        let result = command.output().map_err(|e| Error::Io(program, e))?;
         if !result.status.success() {
             return Err(Error::Parse(format!(
                 "{} failed with status {}.\nSTDOUT: {}\nSTDERR: {}",
@@ -212,7 +218,17 @@ impl Headless<'_> {
         // another volume reaches every time; fall back to copy + remove.
         if std::fs::rename(&generated, output).is_err() {
             std::fs::copy(&generated, output).map_err(|e| Error::Io(output.to_path_buf(), e))?;
-            let _ = std::fs::remove_file(&generated);
+            // The result is already where the caller asked for it, so failing
+            // here would throw away a lift that succeeded over a file we could
+            // not tidy up -- and in a batch, take every other lift with it.
+            // Worth saying, not worth failing for.
+            if let Err(e) = std::fs::remove_file(&generated) {
+                log::warn!(
+                    "copied to {} but could not remove {}: {e}",
+                    output.display(),
+                    generated.display()
+                );
+            }
         }
         Ok(())
     }
@@ -427,6 +443,41 @@ mod tests {
         assert!(
             !work.join("sample.bin.json").exists(),
             "the result was copied rather than moved"
+        );
+    }
+
+    /// A relative program path is resolved against the *child's* working
+    /// directory, which is the tool's scratch directory rather than the
+    /// caller's. Rust documents that as platform-specific and unstable, and
+    /// the effect is that `--home ghidra_rel` passes the caller's own
+    /// existence check and then fails to spawn with "No such file or
+    /// directory" naming a path that does exist.
+    #[test]
+    fn test_a_relative_program_is_resolved_before_the_directory_changes() {
+        let dir = tempfile::Builder::new()
+            .prefix("oinkie_t")
+            .tempdir()
+            .unwrap();
+        let input = dir.path().join("sample.bin");
+        std::fs::write(&input, b"binary").unwrap();
+
+        // Under the crate root, so the path can be written relative to the
+        // current directory; target/ is ignored by git and always present.
+        let relative = PathBuf::from("target").join("oinkie_relative_program_test");
+        std::fs::copy("/bin/echo", &relative).expect("could not stage a relative program");
+
+        let mut h = headless(None, None);
+        h.program = &relative;
+        let err = h
+            .lift(&input, &dir.path().join("out.json"), |_| vec![])
+            .expect_err("echo writes no JSON, so this cannot succeed");
+        let _ = std::fs::remove_file(&relative);
+
+        // The tool ran: it failed for having produced nothing, not for being
+        // unfindable.
+        assert!(
+            matches!(&err, Error::Parse(m) if m.contains("STDOUT")),
+            "the program was not resolved before the directory changed: {err}"
         );
     }
 
