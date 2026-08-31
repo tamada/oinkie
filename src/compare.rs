@@ -387,6 +387,35 @@ impl std::fmt::Display for Algorithm {
 }
 
 impl Algorithm {
+    /// The CLI spelling of this algorithm and the shape it operates on, in one
+    /// table so that the parser, the validation and the error message cannot
+    /// drift apart. Written out rather than derived from `ValueEnum`, whose
+    /// kebab-case would render `WeightedJaccard` as `weighted-jaccard` and put
+    /// a hyphen inside a name that has to be split off by its last one.
+    fn spec(&self) -> (&'static str, Shape) {
+        match self {
+            Algorithm::Cosine => ("cosine", Shape::Freq),
+            Algorithm::Dice => ("dice", Shape::Set),
+            Algorithm::Euclidean => ("euclidean", Shape::Freq),
+            Algorithm::Jaccard => ("jaccard", Shape::Set),
+            Algorithm::Lcs => ("lcs", Shape::Seq),
+            Algorithm::Levenshtein => ("levenshtein", Shape::Seq),
+            Algorithm::Simpson => ("simpson", Shape::Set),
+            Algorithm::WeightedJaccard => ("weightedjaccard", Shape::Freq),
+        }
+    }
+
+    /// The birthmark shape this algorithm computes over. Anything else it is
+    /// handed is converted to this first, which is why a pairing that does not
+    /// match is rejected rather than quietly re-encoded.
+    pub fn shape(&self) -> Shape {
+        self.spec().1
+    }
+
+    pub(crate) fn cli_name(&self) -> &'static str {
+        self.spec().0
+    }
+
     pub fn comparator(&self) -> Comparator {
         self.into()
     }

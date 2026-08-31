@@ -38,6 +38,57 @@ impl TryFrom<&str> for BirthmarkType {
     }
 }
 
+impl BirthmarkType {
+    pub fn shape(&self) -> Shape {
+        match self {
+            BirthmarkType::FcSeq | BirthmarkType::OpSeq | BirthmarkType::OpKgramSeq(_) => {
+                Shape::Seq
+            }
+            BirthmarkType::FcSet | BirthmarkType::OpSet | BirthmarkType::OpKgramSet(_) => {
+                Shape::Set
+            }
+            BirthmarkType::FcFreq | BirthmarkType::OpFreq | BirthmarkType::OpKgramFreq(_) => {
+                Shape::Freq
+            }
+        }
+    }
+
+    /// Whether this birthmark's shape is the one the algorithm computes over.
+    /// Anything else is converted by the comparator first, so a pairing that
+    /// does not match either reproduces another pairing's numbers under a
+    /// misleading name or scores nothing at all.
+    pub fn pairs_with(&self, algorithm: &Algorithm) -> bool {
+        self.shape() == algorithm.shape()
+    }
+
+    /// The same birthmark family in another shape, used to name the pairing a
+    /// rejected analysis should have used.
+    pub fn with_shape(&self, shape: Shape) -> BirthmarkType {
+        match (self, shape) {
+            (BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq, s) => match s {
+                Shape::Seq => BirthmarkType::FcSeq,
+                Shape::Set => BirthmarkType::FcSet,
+                Shape::Freq => BirthmarkType::FcFreq,
+            },
+            (
+                BirthmarkType::OpKgramSeq(k)
+                | BirthmarkType::OpKgramSet(k)
+                | BirthmarkType::OpKgramFreq(k),
+                s,
+            ) => match s {
+                Shape::Seq => BirthmarkType::OpKgramSeq(*k),
+                Shape::Set => BirthmarkType::OpKgramSet(*k),
+                Shape::Freq => BirthmarkType::OpKgramFreq(*k),
+            },
+            (_, s) => match s {
+                Shape::Seq => BirthmarkType::OpSeq,
+                Shape::Set => BirthmarkType::OpSet,
+                Shape::Freq => BirthmarkType::OpFreq,
+            },
+        }
+    }
+}
+
 impl Display for BirthmarkType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -310,11 +361,17 @@ pub struct AnalysisType {
 }
 
 impl AnalysisType {
-    pub fn new(bt: BirthmarkType, algorithm: Algorithm) -> Self {
-        Self {
+    /// Fails when the algorithm does not operate on the birthmark's shape.
+    /// Validating here rather than only in `try_from` means the check cannot
+    /// be walked around by constructing the pair directly.
+    pub fn new(bt: BirthmarkType, algorithm: Algorithm) -> Result<Self> {
+        if !bt.pairs_with(&algorithm) {
+            return Err(Error::IncompatibleAnalysis(bt, algorithm));
+        }
+        Ok(Self {
             birthmark: bt,
             comparator: algorithm.comparator(),
-        }
+        })
     }
 
     pub fn comparator(&self) -> &Comparator {
@@ -333,62 +390,51 @@ impl TryFrom<&str> for AnalysisType {
 impl TryFrom<String> for AnalysisType {
     type Error = Error;
 
+    /// Parses `{birthmark}-{algorithm}`, for example `op-3gram-set-dice`.
+    ///
+    /// Only the algorithm name is read here; everything before it is handed to
+    /// [`BirthmarkType::try_from`], which is the parser that owns that half.
+    /// Splitting on the last hyphen is safe because no algorithm name contains
+    /// one — `weightedjaccard` is deliberately a single word.
     fn try_from(name: String) -> Result<Self> {
-        let s = name.to_lowercase();
-        if s == "op-freq-cosine" {
-            Ok(AnalysisType::new(BirthmarkType::OpFreq, Algorithm::Cosine))
-        } else if s == "op-set-dice" {
-            Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Dice))
-        } else if s == "op-freq-euclidean" {
-            Ok(AnalysisType::new(
-                BirthmarkType::OpFreq,
-                Algorithm::Euclidean,
-            ))
-        } else if s == "op-set-jaccard" {
-            Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Jaccard))
-        } else if s == "op-seq-levenshtein" {
-            Ok(AnalysisType::new(
-                BirthmarkType::OpSeq,
-                Algorithm::Levenshtein,
-            ))
-        } else if s == "op-set-simpson" {
-            Ok(AnalysisType::new(BirthmarkType::OpSet, Algorithm::Simpson))
-        } else if s == "op-freq-weightedjaccard" {
-            Ok(AnalysisType::new(
-                BirthmarkType::OpFreq,
-                Algorithm::WeightedJaccard,
-            ))
-        } else if let Some((bt, c)) = parse_kgram_and_algorithm(s) {
-            Ok(AnalysisType::new(bt, c))
-        } else {
-            Err(Error::BirthmarkType(name))
+        let lowered = name.to_lowercase();
+        let (birthmark, algorithm) = lowered
+            .rsplit_once('-')
+            .ok_or_else(|| Error::BirthmarkType(name.clone()))?;
+        let birthmark = BirthmarkType::try_from(birthmark)?;
+        let algorithm =
+            parse_algorithm(algorithm).ok_or_else(|| Error::BirthmarkType(name.clone()))?;
+        AnalysisType::new(birthmark, algorithm)
+    }
+}
+
+/// The representation a birthmark takes. Every algorithm operates on exactly
+/// one of these, converting anything else it is handed — which is why pairing
+/// an algorithm with a different shape silently produces the same numbers as
+/// the canonical pairing, or none at all.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Shape {
+    Seq,
+    Set,
+    Freq,
+}
+
+impl Shape {
+    pub fn description(&self) -> &'static str {
+        match self {
+            Shape::Seq => "sequences",
+            Shape::Set => "sets",
+            Shape::Freq => "frequency vectors",
         }
     }
 }
 
-fn parse_kgram_and_algorithm(name: String) -> Option<(BirthmarkType, Algorithm)> {
-    if let Some(s) = name.strip_prefix("op-") {
-        let s = s.to_string();
-        if let Some(s) = s.strip_suffix("-cosine") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Cosine))
-        } else if let Some(s) = s.strip_suffix("-dice") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Dice))
-        } else if let Some(s) = s.strip_suffix("-euclidean") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Euclidean))
-        } else if let Some(s) = s.strip_suffix("-jaccard") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Jaccard))
-        } else if let Some(s) = s.strip_suffix("-levenshtein") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Levenshtein))
-        } else if let Some(s) = s.strip_suffix("-simpson") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::Simpson))
-        } else if let Some(s) = s.strip_suffix("-weightedjaccard") {
-            parse_kgram(s).map(|bt| (bt, Algorithm::WeightedJaccard))
-        } else {
-            None
-        }
-    } else {
-        None
-    }
+fn parse_algorithm(name: &str) -> Option<Algorithm> {
+    use clap::ValueEnum;
+    Algorithm::value_variants()
+        .iter()
+        .find(|a| a.cli_name() == name)
+        .cloned()
 }
 
 fn parse_kgram(name: &str) -> Option<BirthmarkType> {
@@ -530,8 +576,18 @@ mod tests {
             "op-freq-euclidean",
             "op-set-jaccard",
             "op-seq-levenshtein",
+            "op-seq-lcs",
             "op-set-simpson",
             "op-freq-weightedjaccard",
+            // the fc- family reaches BirthmarkType::try_from by the same route
+            "fc-freq-cosine",
+            "fc-set-dice",
+            "fc-freq-euclidean",
+            "fc-set-jaccard",
+            "fc-seq-levenshtein",
+            "fc-seq-lcs",
+            "fc-set-simpson",
+            "fc-freq-weightedjaccard",
         ];
         for name in names {
             assert!(AnalysisType::try_from(name).is_ok(), "name: {name}");
@@ -556,6 +612,10 @@ mod tests {
                 "op-6gram-freq-weightedjaccard",
                 BirthmarkType::OpKgramFreq(6),
             ),
+            ("op-3gram-seq-lcs", BirthmarkType::OpKgramSeq(3)),
+            // delegation removes the k <= 6 ceiling the CLI enum imposes
+            ("op-9gram-freq-cosine", BirthmarkType::OpKgramFreq(9)),
+            ("op-12gram-set-jaccard", BirthmarkType::OpKgramSet(12)),
         ];
         for (name, expected) in cases {
             let at = AnalysisType::try_from(name).unwrap_or_else(|e| panic!("{name}: {e}"));
@@ -572,6 +632,132 @@ mod tests {
             "fc-set-jaccard-extra",
         ] {
             assert!(AnalysisType::try_from(name).is_err(), "name: {name}");
+        }
+    }
+
+    /// The algorithm name is the only part read here; everything before the
+    /// last hyphen must come back exactly as BirthmarkType::try_from resolves
+    /// it on its own.
+    #[test]
+    fn test_analysis_type_delegates_the_birthmark_half() {
+        // each birthmark is paired with an algorithm of its own shape, so that
+        // this test observes the delegation rather than the validation
+        for (birthmark, algorithm) in [
+            ("op-seq", "lcs"),
+            ("op-set", "jaccard"),
+            ("op-freq", "cosine"),
+            ("fc-seq", "levenshtein"),
+            ("fc-set", "dice"),
+            ("fc-freq", "euclidean"),
+            ("op-4gram-seq", "lcs"),
+        ] {
+            let expected =
+                BirthmarkType::try_from(birthmark).unwrap_or_else(|e| panic!("{birthmark}: {e}"));
+            let name = format!("{birthmark}-{algorithm}");
+            let at = AnalysisType::try_from(name.clone()).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(at.birthmark, expected, "name: {name}");
+        }
+    }
+
+    /// A birthmark half that BirthmarkType rejects must fail the whole parse,
+    /// rather than being reported as an unknown analysis name.
+    #[test]
+    fn test_analysis_type_reports_a_bad_birthmark_half() {
+        for name in [
+            "op-nonsense-jaccard",
+            "xx-set-jaccard",
+            "op-0.5gram-set-dice",
+        ] {
+            assert!(AnalysisType::try_from(name).is_err(), "name: {name}");
+        }
+    }
+
+    /// Each algorithm converts whatever shape it is handed into the one it
+    /// operates on, so a non-canonical pairing either reproduces the canonical
+    /// one's numbers under a misleading name or scores nothing at all. Both
+    /// are rejected, and the message names the pairing that was meant.
+    #[test]
+    fn test_analysis_type_rejects_non_canonical_pairings() {
+        let cases = [
+            ("op-seq-euclidean", "use op-freq-euclidean"),
+            ("op-set-levenshtein", "use op-seq-levenshtein"),
+            ("op-freq-lcs", "use op-seq-lcs"),
+            ("fc-seq-jaccard", "use fc-set-jaccard"),
+            // the suggestion keeps the k of the birthmark it was given
+            ("op-3gram-seq-euclidean", "use op-3gram-freq-euclidean"),
+        ];
+        for (name, expected) in cases {
+            match AnalysisType::try_from(name) {
+                Err(e @ Error::IncompatibleAnalysis(..)) => {
+                    let rendered = e.to_string();
+                    assert!(
+                        rendered.contains(expected),
+                        "name: {name}, rendered: {rendered}"
+                    );
+                }
+                Err(e) => panic!("{name}: unexpected error: {e}"),
+                Ok(_) => panic!("{name}: expected the pairing to be rejected"),
+            }
+        }
+    }
+
+    /// The canonical pairing of every algorithm must survive validation, in
+    /// each birthmark family.
+    #[test]
+    fn test_analysis_type_accepts_every_canonical_pairing() {
+        use clap::ValueEnum;
+        for prefix in ["op", "fc", "op-4gram"] {
+            for algorithm in Algorithm::value_variants() {
+                let (algorithm_name, shape) = (algorithm.cli_name(), algorithm.shape());
+                let shape_name = match shape {
+                    Shape::Seq => "seq",
+                    Shape::Set => "set",
+                    Shape::Freq => "freq",
+                };
+                let name = format!("{prefix}-{shape_name}-{algorithm_name}");
+                assert!(AnalysisType::try_from(name.clone()).is_ok(), "name: {name}");
+            }
+        }
+    }
+
+    /// pairs_with is the check new and try_from share, so it must agree with
+    /// both: the shapes that match are exactly the pairings they accept.
+    #[test]
+    fn test_pairs_with_agrees_with_construction() {
+        use clap::ValueEnum;
+        let birthmarks = [
+            BirthmarkType::OpSeq,
+            BirthmarkType::OpSet,
+            BirthmarkType::OpFreq,
+            BirthmarkType::FcSeq,
+            BirthmarkType::FcSet,
+            BirthmarkType::FcFreq,
+            BirthmarkType::OpKgramSeq(3),
+            BirthmarkType::OpKgramSet(3),
+            BirthmarkType::OpKgramFreq(3),
+        ];
+        for birthmark in birthmarks {
+            for algorithm in Algorithm::value_variants() {
+                let paired = birthmark.pairs_with(algorithm);
+                assert_eq!(
+                    paired,
+                    birthmark.shape() == algorithm.shape(),
+                    "{birthmark}/{}",
+                    algorithm.cli_name()
+                );
+                assert_eq!(
+                    AnalysisType::new(birthmark.clone(), algorithm.clone()).is_ok(),
+                    paired,
+                    "new disagrees with pairs_with for {birthmark}/{}",
+                    algorithm.cli_name()
+                );
+                let name = format!("{birthmark}-{}", algorithm.cli_name());
+                assert_eq!(
+                    AnalysisType::try_from(name.clone()).is_ok(),
+                    paired,
+                    "try_from disagrees with pairs_with for {name}"
+                );
+            }
         }
     }
 
