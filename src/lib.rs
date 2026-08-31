@@ -106,6 +106,15 @@ pub trait Op {
 
     /// returns the output of the operation, e.g., the destination register or memory location.
     fn ret(&self) -> Option<&str>;
+
+    /// returns this operation's target rendered as the program's symbol table
+    /// keys it, or `None` when the target is not something a symbol could name.
+    ///
+    /// The operand notation is the lifter's own — Ghidra writes
+    /// `"(ram, 0x100000480, 8)"` while its symbol table is keyed
+    /// `"0x100000480"` — so reconciling the two belongs with the lifter that
+    /// produced both, not with the extractor that is generic over them.
+    fn symbol_key(&self) -> Option<String>;
 }
 
 pub trait Iterable {
