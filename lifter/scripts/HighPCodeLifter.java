@@ -29,6 +29,10 @@ public class HighPCodeLifter extends GhidraScript {
         jsonOutput.add("{");
         jsonOutput.add(String.format("  \"program\": \"%s\",", currentProgram.getName()));
         jsonOutput.add(String.format("  \"path\": \"%s\",", path));
+        // Names the intermediate representation, not the tool: one tool can
+        // produce several and they are not interchangeable. This is decompiler
+        // P-Code, from HighFunction, rather than raw lifted P-Code.
+        jsonOutput.add("  \"ir\": \"ghidra-pcode\",");
 
         List<String> functionBlocks = new ArrayList<>();
         Function func = getFirstFunction();

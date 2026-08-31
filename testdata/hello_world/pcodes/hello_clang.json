@@ -1,6 +1,7 @@
 {
   "program": "hello_clang",
   "path": "testdata/hello_world/bin/hello_clang",
+  "ir": "ghidra-pcode",
   "symbols": {
     "0x100000480": "_printf"
   },

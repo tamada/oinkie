@@ -16,6 +16,35 @@ pub enum LifterType {
     BinaryNinja,
 }
 
+/// The intermediate representation a lifted program is written in.
+///
+/// Named after the representation rather than the tool that produced it,
+/// because one tool can produce several and they are not interchangeable —
+/// Binary Ninja lifts to LLIL, MLIL or HLIL, each with its own vocabulary.
+/// What everything downstream needs to know is which vocabulary it is looking
+/// at: whether two birthmarks can be compared, and which `Op` type can read
+/// the file.
+///
+/// Only one variant exists because only one lifter does. Each new lifter adds
+/// its own, and one that offers a choice of level adds one per level.
+#[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+#[clap(rename_all = "kebab-case")]
+pub enum Ir {
+    /// Ghidra's P-Code, as refined by the decompiler — what `HighFunction`
+    /// yields, rather than raw lifted P-Code.
+    #[default]
+    GhidraPcode,
+}
+
+impl std::fmt::Display for Ir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Ir::GhidraPcode => write!(f, "ghidra-pcode"),
+        }
+    }
+}
+
 pub struct LifterBuilder {
     lifter_type: LifterType,
     home: Option<PathBuf>,

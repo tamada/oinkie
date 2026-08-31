@@ -1,6 +1,7 @@
 {
   "program": "hello_gcc",
   "path": "testdata/hello_world/bin/hello_gcc",
+  "ir": "ghidra-pcode",
   "symbols": {
     "0x100000580": "_printf"
   },

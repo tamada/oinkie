@@ -10,6 +10,16 @@ pub struct Program<T> {
     #[serde(rename = "program")]
     name: String,
     path: PathBuf,
+    /// Which intermediate representation the operations below are written in.
+    ///
+    /// Defaulted rather than required so that files lifted before the field
+    /// existed still load. The default is not a guess: Ghidra is the only
+    /// lifter that has ever been implemented, so every file that can predate
+    /// this field was produced by it. Once a second lifter ships, its output
+    /// carries the field, and the default only ever applies to files that
+    /// really are Ghidra's.
+    #[serde(default)]
+    ir: crate::lift::Ir,
     symbols: FxHashMap<String, String>,
     functions: Vec<Function<T>>,
     #[serde(skip)]
@@ -46,16 +56,23 @@ impl<T> Program<T> {
     pub fn new(
         name: String,
         path: PathBuf,
+        ir: crate::lift::Ir,
         symbols: FxHashMap<String, String>,
         functions: Vec<Function<T>>,
     ) -> Self {
         Self {
             name,
             path,
+            ir,
             symbols,
             functions,
             json_path: None,
         }
+    }
+
+    /// The intermediate representation these operations are written in.
+    pub fn ir(&self) -> crate::lift::Ir {
+        self.ir
     }
 
     pub fn name(&self) -> &str {
@@ -130,5 +147,78 @@ impl<T: crate::Op> Function<T> {
 
     pub fn ops_freq(&self) -> rustc_hash::FxHashMap<String, usize> {
         crate::extractor::seq_to_freq(self.ops().map(|s| s.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lift::Ir;
+
+    /// A file lifted before the field existed still loads, and is understood
+    /// as Ghidra's — which is not a guess, since no other lifter has ever
+    /// produced one.
+    #[test]
+    fn test_ir_defaults_to_ghidra_pcode_when_absent() {
+        let json = r#"{
+            "program": "sample",
+            "path": "bin/sample",
+            "symbols": {},
+            "functions": []
+        }"#;
+        let program: Program<crate::ghidra::Op> =
+            serde_json::from_str(json).expect("a file without the field must still load");
+        assert_eq!(program.ir(), Ir::GhidraPcode);
+    }
+
+    #[test]
+    fn test_ir_is_read_from_the_file() {
+        let json = r#"{
+            "program": "sample",
+            "path": "bin/sample",
+            "ir": "ghidra-pcode",
+            "symbols": {},
+            "functions": []
+        }"#;
+        let program: Program<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
+        assert_eq!(program.ir(), Ir::GhidraPcode);
+    }
+
+    #[test]
+    fn test_ir_survives_a_round_trip() {
+        let program: Program<crate::ghidra::Op> = Program::new(
+            "sample".to_string(),
+            PathBuf::from("bin/sample"),
+            Ir::GhidraPcode,
+            FxHashMap::default(),
+            vec![],
+        );
+        let json = serde_json::to_string(&program).unwrap();
+        assert!(
+            json.contains("\"ir\":\"ghidra-pcode\""),
+            "the field must be written, not only read: {json}"
+        );
+        let back: Program<crate::ghidra::Op> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.ir(), Ir::GhidraPcode);
+    }
+
+    /// The fixtures are real lifter output, so they must carry what the
+    /// current script writes.
+    #[test]
+    fn test_fixtures_record_their_ir() {
+        for fixture in [
+            "testdata/hello_world/pcodes/hello_clang.json",
+            "testdata/hello_world/pcodes/hello_gcc.json",
+        ] {
+            let program: Program<crate::ghidra::Op> = Path::new(fixture)
+                .try_into()
+                .unwrap_or_else(|e| panic!("{fixture}: {e}"));
+            assert_eq!(program.ir(), Ir::GhidraPcode, "fixture: {fixture}");
+            let raw = std::fs::read_to_string(fixture).unwrap();
+            assert!(
+                raw.contains("\"ir\""),
+                "{fixture}: the fixture predates the field and should be regenerated"
+            );
+        }
     }
 }
