@@ -37,10 +37,14 @@ where
 {
     type Error = Error;
 
+    /// Reads the file whole and parses the bytes, for the reason
+    /// [`AnyProgram::load`] already did it that way: serde_json's `IoRead`
+    /// takes one byte at a time, so `from_reader` on an unbuffered `File` is
+    /// one `read` syscall per byte — 3.3 s against 25 ms on a 10 MB lifted
+    /// file (#51).
     fn try_from(path: PathBuf) -> Result<Self> {
-        std::fs::File::open(&path)
-            .map_err(|e| Error::Io(path.clone(), e))
-            .and_then(|f| serde_json::from_reader(f).map_err(|e| Error::Json(path, e)))
+        let bytes = std::fs::read(&path).map_err(|e| Error::Io(path.clone(), e))?;
+        serde_json::from_slice(&bytes).map_err(|e| Error::Json(path, e))
     }
 }
 
@@ -393,6 +397,55 @@ mod tests {
         )
         .unwrap();
         assert!(matches!(AnyProgram::load(&path), Err(Error::Json(_, _))));
+    }
+
+    /// The loader reads the file whole and parses the bytes (#51). Reading it
+    /// whole is where a change of error semantics could hide, so the three
+    /// ways it fails are pinned: the file not being there is an IO error, and
+    /// both ways its *content* can be wrong are JSON errors.
+    ///
+    /// The last of the three is the one worth having. `read_to_string` +
+    /// `from_str` would look like the same thing and report `Error::Io` for
+    /// bytes that are not UTF-8, moving a fact about the file's content into
+    /// the category for the read failing.
+    #[test]
+    fn test_loading_a_program_reports_the_right_kind_of_failure() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let missing = dir.path().join("missing.json");
+        assert!(matches!(
+            Program::<crate::ghidra::Op>::try_from(missing),
+            Err(Error::Io(..))
+        ));
+
+        let broken = dir.path().join("broken.json");
+        std::fs::write(&broken, b"{ not json").unwrap();
+        assert!(matches!(
+            Program::<crate::ghidra::Op>::try_from(broken),
+            Err(Error::Json(..))
+        ));
+
+        let not_utf8 = dir.path().join("not-utf8.json");
+        std::fs::write(&not_utf8, b"{\"program\": \"\xff\xfe\"}").unwrap();
+        assert!(matches!(
+            Program::<crate::ghidra::Op>::try_from(not_utf8),
+            Err(Error::Json(..))
+        ));
+    }
+
+    /// Reading the file whole must not change what is parsed out of it. The
+    /// fixture is real lifter output, so this compares the loader against
+    /// parsing the same text directly.
+    #[test]
+    fn test_reading_the_file_whole_parses_what_the_text_says() {
+        let fixture = Path::new("testdata/hello_world/pcodes/hello_clang.json");
+        let loaded: Program<crate::ghidra::Op> = fixture.try_into().unwrap();
+        let parsed: Program<crate::ghidra::Op> =
+            serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
+        assert_eq!(loaded.name(), parsed.name());
+        assert_eq!(loaded.ir(), parsed.ir());
+        assert_eq!(loaded.len(), parsed.len());
+        assert_eq!(loaded.path(), parsed.path());
     }
 
     /// The fixtures are real lifter output, so they must carry what the

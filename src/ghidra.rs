@@ -174,9 +174,10 @@ mod tests {
 
     #[test]
     fn parse_pcode_json() {
-        let file = std::fs::File::open("testdata/hello_world/pcodes/hello_clang.json")
-            .expect("Failed to open JSON file");
-        let r: Program<super::Op> = serde_json::from_reader(file).expect("Failed to parse JSON");
+        // Through the loader rather than `from_reader` on a bare `File`, so
+        // that the pattern #51 removed is not left here to be copied.
+        let path = std::path::PathBuf::from("testdata/hello_world/pcodes/hello_clang.json");
+        let r: Program<super::Op> = path.try_into().expect("Failed to parse JSON");
         assert_eq!(r.name(), "hello_clang");
         assert_eq!(
             r.path(),
@@ -232,8 +233,9 @@ mod tests {
 
     #[test]
     fn parse_pcode_json2() {
-        let file = std::fs::File::open("testdata/hello_world/pcodes/hello_gcc.json")
-            .expect("Failed to open JSON file");
-        let _r: Program<super::Op> = serde_json::from_reader(file).expect("Failed to parse JSON");
+        // Through the loader rather than `from_reader` on a bare `File`, so
+        // that the pattern #51 removed is not left here to be copied.
+        let path = std::path::PathBuf::from("testdata/hello_world/pcodes/hello_gcc.json");
+        let _r: Program<super::Op> = path.try_into().expect("Failed to parse JSON");
     }
 }
