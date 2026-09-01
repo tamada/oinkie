@@ -1380,10 +1380,9 @@ mod tests {
             ),
         ];
         for (json, named) in refused {
-            let Err(e) = serde_json::from_str::<Data>(json) else {
-                panic!("a contradicted frequency must not pick one: {json}");
-            };
-            let msg = e.to_string();
+            let msg = serde_json::from_str::<Data>(json)
+                .expect_err("a contradicted frequency must not pick one")
+                .to_string();
             assert!(msg.contains("ambiguous"), "{json}: {msg}");
             assert!(msg.contains(named), "does not say which one: {msg}");
         }
@@ -1421,10 +1420,9 @@ mod tests {
     #[test]
     fn test_a_frequency_that_is_not_a_map_says_what_was_expected() {
         for json in [r#"{"Freq":[]}"#, r#"{"Freq":"COPY"}"#] {
-            let Err(e) = serde_json::from_str::<Data>(json) else {
-                panic!("{json} is not a frequency map");
-            };
-            let msg = e.to_string();
+            let msg = serde_json::from_str::<Data>(json)
+                .expect_err("this is not a frequency map")
+                .to_string();
             assert!(msg.contains("invalid type"), "{json}: {msg}");
             assert!(
                 msg.contains("expected a map of operations to how often each occurs"),
