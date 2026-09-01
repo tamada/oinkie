@@ -1416,6 +1416,23 @@ mod tests {
         assert_eq!(m["RETURN"], 1);
     }
 
+    /// The custom visitor has to say what it wanted, or a file with the wrong
+    /// shape reports "invalid type: sequence, expected " and stops there.
+    #[test]
+    fn test_a_frequency_that_is_not_a_map_says_what_was_expected() {
+        for json in [r#"{"Freq":[]}"#, r#"{"Freq":"COPY"}"#] {
+            let Err(e) = serde_json::from_str::<Data>(json) else {
+                panic!("{json} is not a frequency map");
+            };
+            let msg = e.to_string();
+            assert!(msg.contains("invalid type"), "{json}: {msg}");
+            assert!(
+                msg.contains("expected a map of operations to how often each occurs"),
+                "{json}: {msg}"
+            );
+        }
+    }
+
     /// A list is a weaker container than the map it stands for: it can say
     /// the same thing twice. Collecting would take the last one, so a file
     /// claiming a k-gram occurred 3 times and again 5 times would load as 5
