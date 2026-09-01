@@ -172,3 +172,218 @@ pub trait Iterable {
     type Item;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lift::Ir;
+    use crate::prelude::Algorithm;
+
+    /// Adding a variant makes this stop compiling, which is the reminder to
+    /// add it to `rendered_errors` below as well. There is no way to
+    /// enumerate an enum's variants, so an exhaustive match is the closest a
+    /// test can get to noticing that it has fallen behind.
+    fn variant_name(e: &Error) -> &'static str {
+        match e {
+            Error::Array(_) => "Array",
+            Error::BirthmarkType(_) => "BirthmarkType",
+            Error::Clap(_) => "Clap",
+            Error::Csv(_) => "Csv",
+            Error::IncompatibleAnalysis(_, _) => "IncompatibleAnalysis",
+            Error::IrMismatch(_, _) => "IrMismatch",
+            Error::NoCallOperations(_, _) => "NoCallOperations",
+            Error::UnsupportedIr(_, _) => "UnsupportedIr",
+            Error::InvalidPcode(_) => "InvalidPcode",
+            Error::Io(_, _) => "Io",
+            Error::Json(_, _) => "Json",
+            Error::LapJV(_) => "LapJV",
+            Error::Mismatch(_, _) => "Mismatch",
+            Error::Parse(_) => "Parse",
+            Error::ParseFloat(_, _) => "ParseFloat",
+            Error::ParseInt(_, _) => "ParseInt",
+            Error::ShapeError(_) => "ShapeError",
+        }
+    }
+
+    /// One of each variant, paired with what it has to read as.
+    ///
+    /// The foreign errors are obtained rather than constructed — `csv::Error`
+    /// and `lapjv::LapJVError` have no public constructor — so each is
+    /// produced by the smallest operation that fails that way.
+    ///
+    /// Where a variant wraps one of them, the expectation is built from that
+    /// error's own `to_string` rather than from its wording pasted in. What
+    /// is being tested is this crate's half — the prefix, and that the inner
+    /// message is carried at all — and pinning `serde_json`'s phrasing would
+    /// turn a dependency bump into a test failure that says nothing.
+    fn rendered_errors() -> Vec<(Error, String)> {
+        let csv_err = csv::ReaderBuilder::new()
+            .has_headers(false)
+            .from_reader("a,b\nc\n".as_bytes())
+            .records()
+            .nth(1)
+            .unwrap()
+            .unwrap_err();
+        let lapjv_err = lapjv::lapjv(&ndarray::Array2::<f64>::zeros((2, 3))).unwrap_err();
+        let json_err = serde_json::from_str::<i32>("nope").unwrap_err();
+        let float_err = "x".parse::<f64>().unwrap_err();
+        let int_err = "x".parse::<i32>().unwrap_err();
+        let shape_err = ndarray::Array2::from_shape_vec((2, 2), vec![1.0]).unwrap_err();
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
+        let clap_err = clap::Error::raw(clap::error::ErrorKind::InvalidValue, "boom");
+
+        let (csv_msg, lapjv_msg, json_msg) = (
+            csv_err.to_string(),
+            lapjv_err.to_string(),
+            json_err.to_string(),
+        );
+        let (float_msg, int_msg, shape_msg) = (
+            float_err.to_string(),
+            int_err.to_string(),
+            shape_err.to_string(),
+        );
+        let (io_msg, clap_msg) = (io_err.to_string(), clap_err.to_string());
+
+        vec![
+            (
+                Error::Array(vec![
+                    Error::Parse("first".to_string()),
+                    Error::Parse("second".to_string()),
+                ]),
+                // numbered, and from one rather than zero: this is read by a
+                // person counting which of their inputs failed
+                "Multiple errors:\n  1. Parse error: first\n  2. Parse error: second".to_string(),
+            ),
+            (
+                Error::BirthmarkType("nonsense".to_string()),
+                "nonsense: unknown birthmark type".to_string(),
+            ),
+            (
+                // clap's own Display already begins "error: ", so this
+                // variant reads "Clap error: error: ...". Left as it is
+                // rather than quietly tidied: it is what ships today, and
+                // `main` prints the wrapped clap error directly instead of
+                // going through here, so nobody meets it on the usual path.
+                Error::Clap(clap_err),
+                format!("Clap error: {clap_msg}"),
+            ),
+            (Error::Csv(csv_err), format!("CSV error: {csv_msg}")),
+            (
+                Error::IncompatibleAnalysis(BirthmarkType::OpSeq, Algorithm::Euclidean),
+                "op-seq-euclidean: euclidean operates on frequency vectors; use op-freq-euclidean"
+                    .to_string(),
+            ),
+            (
+                Error::IrMismatch(Ir::GhidraPcode, Ir::IdaMicrocode),
+                "cannot compare ghidra-pcode against ida-microcode: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond".to_string(),
+            ),
+            (
+                Error::NoCallOperations(PathBuf::from("bin/sample"), Ir::GhidraPcode),
+                "bin/sample: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or oinkie's reader for ghidra-pcode does not recognise that representation's call operations".to_string(),
+            ),
+            (
+                Error::UnsupportedIr(PathBuf::from("foreign.json"), Ir::IdaMicrocode),
+                "foreign.json: no reader for ida-microcode; this build can read ghidra-pcode"
+                    .to_string(),
+            ),
+            (
+                Error::InvalidPcode(9999),
+                "invalid pcode: 9999".to_string(),
+            ),
+            (
+                Error::Io(PathBuf::from("missing.json"), io_err),
+                format!("IO error for missing.json: {io_msg}"),
+            ),
+            (
+                Error::Json(PathBuf::from("broken.json"), json_err),
+                format!("broken.json: JSON error: {json_msg}"),
+            ),
+            (Error::LapJV(lapjv_err), format!("LapJV error: {lapjv_msg}")),
+            (
+                Error::Mismatch(BirthmarkType::OpSeq, BirthmarkType::OpKgramSet(3)),
+                "Mismatched birthmark types: op-seq and op-3gram-set".to_string(),
+            ),
+            (
+                Error::Parse("something went wrong".to_string()),
+                "Parse error: something went wrong".to_string(),
+            ),
+            (
+                Error::ParseFloat("x".to_string(), float_err),
+                format!("x: Parse float error {float_msg}"),
+            ),
+            (
+                Error::ParseInt("x".to_string(), int_err),
+                format!("x: Parse int error {int_msg}"),
+            ),
+            (Error::ShapeError(shape_err), format!("Shape error: {shape_msg}")),
+        ]
+    }
+
+    #[test]
+    fn test_every_error_says_what_it_is() {
+        for (err, expected) in rendered_errors() {
+            assert_eq!(err.to_string(), expected, "{}", variant_name(&err));
+        }
+    }
+
+    #[test]
+    fn test_no_variant_is_in_the_table_twice() {
+        let mut names = rendered_errors()
+            .iter()
+            .map(|(e, _)| variant_name(e))
+            .collect::<Vec<_>>();
+        let total = names.len();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), total, "a variant is covered twice: {names:?}");
+    }
+
+    /// The numbering is the part worth pinning. `Array` is what a run over
+    /// many inputs produces, and "the third one failed" is the only thing the
+    /// reader can act on.
+    #[test]
+    fn test_a_group_of_errors_numbers_its_children_from_one() {
+        let e = Error::Array(vec![
+            Error::Parse("a".to_string()),
+            Error::Parse("b".to_string()),
+            Error::Parse("c".to_string()),
+        ]);
+        let rendered = e.to_string();
+        assert!(rendered.contains("\n  1. Parse error: a"), "{rendered}");
+        assert!(rendered.contains("\n  3. Parse error: c"), "{rendered}");
+        assert!(!rendered.contains("0."), "numbered from zero: {rendered}");
+    }
+
+    #[test]
+    fn test_no_errors_is_not_an_error() {
+        let r: Result<Vec<i32>> = Error::vec_result_to_result_vec(vec![Ok(1), Ok(2)]);
+        assert_eq!(r.unwrap(), vec![1, 2]);
+        assert_eq!(Error::error_or("kept", vec![]).unwrap(), "kept");
+    }
+
+    /// A single failure is reported as itself. Wrapping it would put
+    /// "Multiple errors:" in front of one error, and the caller would have to
+    /// unwrap a group to find out there was nothing to group.
+    #[test]
+    fn test_one_error_is_not_wrapped_in_a_group() {
+        let r: Result<Vec<i32>> =
+            Error::vec_result_to_result_vec(vec![Ok(1), Err(Error::Parse("only".to_string()))]);
+        let err = r.unwrap_err();
+        assert_eq!(variant_name(&err), "Parse");
+        assert_eq!(err.to_string(), "Parse error: only");
+    }
+
+    #[test]
+    fn test_several_errors_are_grouped_and_none_is_dropped() {
+        let r: Result<Vec<i32>> = Error::vec_result_to_result_vec(vec![
+            Err(Error::Parse("first".to_string())),
+            Ok(1),
+            Err(Error::Parse("second".to_string())),
+        ]);
+        let err = r.unwrap_err();
+        assert_eq!(variant_name(&err), "Array");
+        let rendered = err.to_string();
+        assert!(rendered.contains("first"), "{rendered}");
+        assert!(rendered.contains("second"), "{rendered}");
+    }
+}

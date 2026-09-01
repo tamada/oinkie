@@ -633,6 +633,98 @@ mod tests {
         assert!(err.contains("angr"), "unhelpful message: {err}");
     }
 
+    /// A similarity CSV as `compare` writes one, written to a temp file so
+    /// that `read_result_file` can be exercised directly.
+    ///
+    /// Through the CLI it is only reachable with `--skip` over a directory
+    /// left by an earlier run, which is why every one of its error paths was
+    /// uncovered (#28): the end-to-end tests never take the branch, and none
+    /// of them arranges a *malformed* leftover.
+    fn read_result(body: &str) -> Result<CompareResult> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("00000.csv");
+        std::fs::write(&path, body).unwrap();
+        read_result_file(&path, 7, Path::new("a.json"), Path::new("b.json"))
+    }
+
+    const A_WHOLE_RESULT: &str = "result,28083,0.75\n\
+        left,program,hello_clang,bin/hello_clang,1,1,pcodes/hello_clang.json\n\
+        right,program,hello_gcc,bin/hello_gcc,1,1,pcodes/hello_gcc.json\n\
+        matrix,,entry\n\
+        0,entry,0.75\n";
+
+    #[test]
+    fn test_a_stored_result_is_read_back_whole() {
+        let cr = read_result(A_WHOLE_RESULT).unwrap();
+        // the index is the caller's, not the file's: the file is named for it
+        assert_eq!(cr.index, 7);
+        assert_eq!(cr.similarity, 0.75);
+        assert_eq!(cr.path1, PathBuf::from("bin/hello_clang"));
+        assert_eq!(cr.path2, PathBuf::from("bin/hello_gcc"));
+        assert_eq!(cr.duration, Duration::from_nanos(28083));
+    }
+
+    /// The paths come from the `left` and `right` records rather than from
+    /// the arguments, which is what makes a `--skip` rerun agree with a fresh
+    /// one about which file was on which side.
+    #[test]
+    fn test_the_pair_is_read_from_the_file_not_from_the_arguments() {
+        let cr = read_result(A_WHOLE_RESULT).unwrap();
+        assert_ne!(cr.path1, PathBuf::from("a.json"));
+        assert_ne!(cr.path2, PathBuf::from("b.json"));
+    }
+
+    #[test]
+    fn test_a_malformed_stored_result_says_what_is_wrong_with_it() {
+        let cases = [
+            (
+                "result,28083\nleft,,,x\nright,,,y\n",
+                "Invalid result line format",
+            ),
+            (
+                "result,notanumber,0.75\nleft,,,x\nright,,,y\n",
+                "Parse int error",
+            ),
+            (
+                "result,28083,notafloat\nleft,,,x\nright,,,y\n",
+                "Failed to parse similarity value",
+            ),
+            (
+                "result,28083,0.75\nright,,,y\n",
+                "Birthmark paths not found",
+            ),
+            ("result,28083,0.75\nleft,,,x\n", "Birthmark paths not found"),
+            ("", "Birthmark paths not found"),
+        ];
+        for (body, expected) in cases {
+            let Err(e) = read_result(body) else {
+                panic!("should have been refused: {body:?}");
+            };
+            assert!(
+                e.to_string().contains(expected),
+                "{body:?} gave {e}, expected something containing {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_a_result_file_that_is_not_there_is_an_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("00000.csv");
+        let Err(e) = read_result_file(&missing, 0, Path::new("a"), Path::new("b")) else {
+            panic!("a missing file should not read");
+        };
+        assert!(e.to_string().starts_with("IO error for"), "{e}");
+    }
+
+    /// `oinkie info` prints each algorithm's clap help with two `unwrap()`s,
+    /// so an algorithm added without a doc comment panics the command rather
+    /// than printing a blank line. Calling it is the guard.
+    #[test]
+    fn test_info_prints_every_algorithm_without_panicking() {
+        assert!(perform_info().is_ok());
+    }
+
     fn run_analysis(name: &str) -> Result<AnalysisType> {
         let opts = cli::OinkieOpts::try_parse_from(vec!["oinkie", "run", "-a", name, "x.json"])
             .map_err(Error::Clap)?;

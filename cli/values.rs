@@ -32,12 +32,6 @@ impl Analysis {
     }
 }
 
-impl std::fmt::Display for Analysis {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 #[derive(Clone)]
 pub struct AnalysisParser;
 
@@ -110,18 +104,108 @@ fn invalid_value(cmd: &clap::Command, e: oinkie::Error) -> clap::Error {
     clap::Error::raw(ErrorKind::InvalidValue, format!("{e}\n")).with_cmd(cmd)
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use clap::builder::TypedValueParser;
-    use std::os::unix::ffi::OsStrExt;
+
+    fn advertised<P: TypedValueParser>(parser: &P) -> Vec<PossibleValue> {
+        parser
+            .possible_values()
+            .expect("the option offers a list")
+            .collect()
+    }
+
+    /// What clap advertises is what the library generated, not a copy of it.
+    /// The two hand-written lists this replaced went stale in three
+    /// directions at once (#25), so the assertion is that nothing is
+    /// restated here.
+    #[test]
+    fn test_the_offered_analyses_are_the_ones_the_library_generates() {
+        let offered = advertised(&AnalysisParser)
+            .iter()
+            .map(|pv| pv.get_name().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            offered,
+            AnalysisType::advertised_names().collect::<Vec<_>>()
+        );
+        assert!(offered.contains(&"op-3gram-set-dice".to_string()));
+    }
+
+    #[test]
+    fn test_the_offered_birthmarks_are_the_ones_the_library_generates() {
+        let offered = advertised(&BirthmarkTypeParser);
+        let expected = BirthmarkType::advertised().collect::<Vec<_>>();
+        assert_eq!(offered.len(), expected.len());
+        for (pv, bt) in offered.iter().zip(expected) {
+            assert_eq!(pv.get_name(), bt.to_string());
+            // the help is what `--help` and the shells show beside the name
+            assert_eq!(pv.get_help().map(|h| h.to_string()), Some(bt.description()));
+        }
+    }
+
+    /// Both options take a name the library parses, and the list is only
+    /// what gets suggested: a k past the end of it is still accepted.
+    #[test]
+    fn test_a_name_past_the_end_of_the_list_still_parses() {
+        let cmd = clap::Command::new("oinkie");
+        let name = format!("op-{}gram-set-dice", oinkie::prelude::MAX_ADVERTISED_K + 1);
+        assert!(
+            !advertised(&AnalysisParser)
+                .iter()
+                .any(|pv| pv.get_name() == name)
+        );
+        assert!(
+            AnalysisParser
+                .parse_ref(&cmd, None, OsStr::new(name.as_str()))
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_a_name_the_library_refuses_is_refused_here() {
+        let cmd = clap::Command::new("oinkie");
+        for (name, expected) in [
+            ("nonsense", "unknown birthmark type"),
+            ("op-seq-euclidean", "use op-freq-euclidean"),
+        ] {
+            let Err(e) = AnalysisParser.parse_ref(&cmd, None, OsStr::new(name)) else {
+                panic!("{name} should be refused");
+            };
+            assert!(e.to_string().contains(expected), "{name}: {e}");
+        }
+        let Err(e) = BirthmarkTypeParser.parse_ref(&cmd, None, OsStr::new("op-tri-gram-set"))
+        else {
+            panic!("the old spelling should be refused");
+        };
+        assert!(e.to_string().contains("unknown birthmark type"), "{e}");
+    }
+
+    #[test]
+    fn test_a_name_the_library_accepts_comes_back_parsed() {
+        let cmd = clap::Command::new("oinkie");
+        let a = AnalysisParser
+            .parse_ref(&cmd, None, OsStr::new("op-3gram-set-dice"))
+            .unwrap();
+        assert_eq!(
+            a.analysis_type().unwrap().birthmark,
+            BirthmarkType::OpKgramSet(3)
+        );
+        let bt = BirthmarkTypeParser
+            .parse_ref(&cmd, None, OsStr::new("op-3gram-set"))
+            .unwrap();
+        assert_eq!(bt, BirthmarkType::OpKgramSet(3));
+    }
 
     /// Both parsers refuse a non-UTF-8 value through the same helper, so the
     /// message has to name the vocabulary the value failed to be. It said
     /// "birthmark name" for both until a review caught it, which sent an
     /// `--analysis` reader looking in the wrong place.
+    #[cfg(unix)]
     #[test]
     fn test_a_non_utf8_value_is_refused_as_what_the_option_takes() {
+        use std::os::unix::ffi::OsStrExt;
         let cmd = clap::Command::new("oinkie");
         let bad = OsStr::from_bytes(b"op-\xff-set");
 
