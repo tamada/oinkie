@@ -423,7 +423,11 @@ impl Elements {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
-    Freq(FxHashMap<String, usize>),
+    /// An operation named twice is refused, for the reason
+    /// [`kgram_freq::deserialize`] gives: a count the file states twice is
+    /// ambiguous, and serde's derived map deserializer takes the last one
+    /// without saying so (#66).
+    Freq(#[serde(deserialize_with = "no_repeated_key")] FxHashMap<String, usize>),
     Seq(Vec<String>),
     Set(FxHashSet<String>),
     KgramSeq(Vec<Kgram>),
@@ -445,6 +449,53 @@ pub enum Data {
     /// mnemonic can ever contain one.
     KgramFreq(#[serde(with = "kgram_freq")] FxHashMap<Kgram, usize>),
     KgramSet(FxHashSet<Kgram>),
+}
+
+/// Reads a frequency map, refusing a key that appears twice.
+///
+/// serde's derived deserializer inserts in a loop, so `{"COPY": 3, "COPY": 5}`
+/// loads as 5 and nothing is said — a similarity computed from a count the
+/// file contradicts itself about. Nothing this crate writes can produce one,
+/// since it serializes from a map, so refusing costs no real file anything
+/// (#66).
+///
+/// Only the frequency shapes need this. A repeated element in a `Set` denotes
+/// the same set, and a repeated element in a `Seq` is what a sequence is for
+/// — neither is ambiguous. The problem is the contradiction, not the
+/// repetition.
+fn no_repeated_key<'de, D>(d: D) -> std::result::Result<FxHashMap<String, usize>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::{Error as _, MapAccess, Visitor};
+
+    struct Frequencies;
+
+    impl<'de> Visitor<'de> for Frequencies {
+        type Value = FxHashMap<String, usize>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a map of operations to how often each occurs")
+        }
+
+        fn visit_map<M>(self, mut entries: M) -> std::result::Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut map = FxHashMap::default();
+            while let Some((name, count)) = entries.next_entry::<String, usize>()? {
+                if map.contains_key(&name) {
+                    return Err(M::Error::custom(format!(
+                        "{name}: listed twice, so its frequency is ambiguous"
+                    )));
+                }
+                map.insert(name, count);
+            }
+            Ok(map)
+        }
+    }
+
+    d.deserialize_map(Frequencies)
 }
 
 /// `KgramFreq` as a list of pairs. See the variant for why.
@@ -1306,6 +1357,63 @@ mod tests {
                 [["INT_ADD", "COPY"], 2],
             ])
         );
+    }
+
+    /// The two frequency shapes agree about a contradiction, and the other
+    /// four correctly do not care.
+    ///
+    /// `Freq` used serde's derived map deserializer, which inserts in a loop,
+    /// so `{"COPY": 3, "COPY": 5}` loaded as 5 with nothing said — the same
+    /// hazard #59 removed from `KgramFreq`, in the family that already worked
+    /// (#66).
+    ///
+    /// The line is ambiguity, not repetition. A `Set` repeating an element
+    /// denotes the same set, so collapsing loses nothing; a `Seq` repeating
+    /// one is a sequence doing its job.
+    #[test]
+    fn test_only_a_contradicted_frequency_is_refused() {
+        let refused = [
+            (r#"{"Freq":{"COPY":3,"COPY":5}}"#, "COPY"),
+            (
+                r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
+                "CALL",
+            ),
+        ];
+        for (json, named) in refused {
+            let Err(e) = serde_json::from_str::<Data>(json) else {
+                panic!("a contradicted frequency must not pick one: {json}");
+            };
+            let msg = e.to_string();
+            assert!(msg.contains("ambiguous"), "{json}: {msg}");
+            assert!(msg.contains(named), "does not say which one: {msg}");
+        }
+
+        // Nothing is contradicted here, so nothing is refused.
+        let accepted = [
+            (r#"{"Set":["COPY","COPY"]}"#, 1),
+            (r#"{"KgramSet":[["CALL","COPY"],["CALL","COPY"]]}"#, 1),
+            (r#"{"Seq":["COPY","COPY"]}"#, 2),
+            (r#"{"KgramSeq":[["CALL","COPY"],["CALL","COPY"]]}"#, 2),
+        ];
+        for (json, len) in accepted {
+            let d: Data = serde_json::from_str(json).unwrap_or_else(|e| panic!("{json}: {e}"));
+            assert_eq!(d.len(), len, "{json}");
+        }
+    }
+
+    /// A frequency map that says each thing once is still read, and read
+    /// whole. Refusing a repeat must not turn into refusing a second key.
+    #[test]
+    fn test_a_frequency_map_with_distinct_keys_is_read_whole() {
+        let Data::Freq(m) =
+            serde_json::from_str::<Data>(r#"{"Freq":{"COPY":3,"CALL":5,"RETURN":1}}"#).unwrap()
+        else {
+            panic!("the shape changed");
+        };
+        assert_eq!(m.len(), 3);
+        assert_eq!(m["COPY"], 3);
+        assert_eq!(m["CALL"], 5);
+        assert_eq!(m["RETURN"], 1);
     }
 
     /// A list is a weaker container than the map it stands for: it can say
