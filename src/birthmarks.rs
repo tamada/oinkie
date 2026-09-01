@@ -423,10 +423,10 @@ impl Elements {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
-    /// An operation named twice is refused, for the reason
-    /// [`kgram_freq::deserialize`] gives: a count the file states twice is
-    /// ambiguous, and serde's derived map deserializer takes the last one
-    /// without saying so (#66).
+    /// An operation named more than once is refused, for the reason
+    /// [`Data::KgramFreq`] gives: a count the file states twice is ambiguous,
+    /// and serde's derived map deserializer takes the last one without saying
+    /// so (#66).
     Freq(#[serde(deserialize_with = "no_repeated_key")] FxHashMap<String, usize>),
     Seq(Vec<String>),
     Set(FxHashSet<String>),
@@ -486,7 +486,7 @@ where
             while let Some((name, count)) = entries.next_entry::<String, usize>()? {
                 if map.contains_key(&name) {
                     return Err(M::Error::custom(format!(
-                        "{name}: listed twice, so its frequency is ambiguous"
+                        "{name}: listed more than once, so its frequency is ambiguous"
                     )));
                 }
                 map.insert(name, count);
