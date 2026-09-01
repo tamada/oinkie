@@ -407,7 +407,9 @@ impl Algorithm {
         self.spec().1
     }
 
-    pub(crate) fn cli_name(&self) -> &'static str {
+    /// The spelling this algorithm has in an analysis name. Public because
+    /// the CLI builds its completion list from it.
+    pub fn cli_name(&self) -> &'static str {
         self.spec().0
     }
 

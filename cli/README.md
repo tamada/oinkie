@@ -81,7 +81,9 @@ Options:
           fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported.
           For example, 'op-seq' extracts the sequence of operations as a birthmark,
           while 'fc-freq' extracts the frequency of function calls.
-          The full birthmark types cann be found by running 'oinkie info'. [default: op-seq]
+          k-grams are written with the k in the name: 'op-3gram-set'. Any k parses, not
+          only the ones 'oinkie info' lists.
+          The full birthmark types can be found by running 'oinkie info'. [default: op-seq]
   -S, --skip
           Skip the resultant birthmark file is already exists
   -B, --binary-type <BINARY_TYPE>
@@ -163,8 +165,10 @@ Arguments:
   [FILES]...  Path to the JSON files
 
 Options:
-  -a, --analysis <ANALYSIS> 
-          Similarity algorithm to use [default: op-set-jaccard] [possible values: fc-freq-cosine, fc-set-dice, fc-freq-euclidean, fc-set-jaccard, fc-seq-levenshtein, fc-seq-lcs, fc-set-simpson, fc-freq-weightedjaccard, op-freq-cosine, op-set-dice, op-freq-euclidean, op-set-jaccard, op-seq-levenshtein, op-seq-lcs, op-set-simpson, op-freq-weightedjaccard, op1gram-set-dice, op1gram-set-jaccard, op1gram-set-simpson, op1gram-seq-levenshtein, op1gram-seq-lcs, op1gram-freq-cosine, op1gram-freq-euclidean, op1gram-freq-weightedjaccard, op2gram-set-dice, op2gram-set-jaccard, op2gram-set-simpson, op2gram-seq-levenshtein, op2gram-seq-lcs, op2gram-freq-cosine, op2gram-freq-euclidean, op2gram-freq-weightedjaccard, op3gram-set-dice, op3gram-set-jaccard, op3gram-set-simpson, op3gram-seq-levenshtein, op3gram-seq-lcs, op3gram-freq-cosine, op3gram-freq-euclidean, op3gram-freq-weightedjaccard, op4gram-set-dice, op4gram-set-jaccard, op4gram-set-simpson, op4gram-seq-levenshtein, op4gram-seq-lcs, op4gram-freq-cosine, op4gram-freq-euclidean, op4gram-freq-weightedjaccard, op5gram-set-dice, op5gram-set-jaccard, op5gram-set-simpson, op5gram-seq-levenshtein, op5gram-seq-lcs, op5gram-freq-cosine, op5gram-freq-euclidean, op5gram-freq-weightedjaccard, op6gram-set-dice, op6gram-set-jaccard, op6gram-set-simpson, op6gram-seq-levenshtein, op6gram-seq-lcs, op6gram-freq-cosine, op6gram-freq-euclidean, op6gram-freq-weightedjaccard]
+  -a, --analysis <ANALYSIS>
+          Analysis to run, as '{birthmark}-{algorithm}' -- for example 'op-set-jaccard' or 'op-3gram-freq-cosine'.
+          Run 'oinkie info' for the birthmarks and the algorithms they pair with. Any k
+          parses in a k-gram name, not only the ones listed. [default: op-set-jaccard]
   -s, --strategy <STRATEGY>
           Pairing strategy for file comparisons [default: all-and-self]
           [possible values: all-and-self, all, self-coverage, adjacent, first-vs-others]

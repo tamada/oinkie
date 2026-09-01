@@ -51,11 +51,13 @@ The format for `--analysis` strings is structured as:
 For instance:
 * `op-set-jaccard`: Extract opcode (`op`) as a unique set (`set`) and compare using Jaccard Similarity (`jaccard`).
 * `fc-freq-cosine`: Extract function calls (`fc`) as a frequency vector (`freq`) and compare using Cosine Similarity (`cosine`).
-* `op3gram-seq-levenshtein`: Extract opcode 3-grams as a sequence and compare using Levenshtein distance.
+* `op-3gram-seq-levenshtein`: Extract opcode 3-grams as a sequence and compare using Levenshtein distance.
 
 ### Full List of Supported Configurations
 You can use any valid combination of elements, structures, and matching algorithms. Run `oinkie info` or consult the `--help` command for a comprehensive list of all possible analysis parameters on your system. Typical options include:
 
 * `fc-freq-cosine`, `fc-set-dice`, `fc-freq-euclidean`, `fc-set-jaccard`, `fc-seq-levenshtein`, `fc-seq-lcs`, `fc-set-simpson`, `fc-freq-weightedjaccard`
 * `op-freq-cosine`, `op-set-dice`, `op-freq-euclidean`, `op-set-jaccard`, `op-seq-levenshtein`, `op-seq-lcs`, `op-set-simpson`, `op-freq-weightedjaccard`
-* \\(k\\)-gram variations (`op1gram` to `op6gram`) combined with `set`, `seq`, or `freq`, and matching algorithms.
+* \\(k\\)-gram variations (`op-1gram`, `op-2gram`, ...) combined with `set`, `seq`, or
+  `freq`, and matching algorithms. `oinkie info` and shell completion stop listing
+  at \\(k = 8\\), but any \\(k\\) is accepted: `op-12gram-set-jaccard` runs.

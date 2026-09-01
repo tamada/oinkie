@@ -114,6 +114,44 @@ fn test_extract_command() {
     );
 }
 
+/// `-b` names a birthmark the way the library does now. It used to be a
+/// `ValueEnum` whose clap names came from Rust identifiers, so a 3-gram was
+/// `op-tri-gram-set` on the command line, `op-3gram-set` everywhere else, and
+/// neither the docs' spelling nor the library's parsed (#25).
+///
+/// End to end rather than at the parser, because this is the half a user
+/// types: the new spelling has to reach an extracted file, and the old one
+/// has to fail rather than silently mean something else.
+#[test]
+fn test_extract_names_a_kgram_the_way_the_library_does() {
+    let temp_dir = tempdir().unwrap();
+    let dest = temp_dir.path().join("birthmarks");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("extract")
+        .arg("-d")
+        .arg(&dest)
+        .arg("-b")
+        .arg("op-3gram-set")
+        .arg("testdata/hello_world/pcodes/hello_clang.json")
+        .assert()
+        .success();
+    assert_eq!(fs::read_dir(&dest).unwrap().count(), 1);
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("extract")
+        .arg("-d")
+        .arg(temp_dir.path().join("unused"))
+        .arg("-b")
+        .arg("op-tri-gram-set")
+        .arg("testdata/hello_world/pcodes/hello_clang.json")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown birthmark type"));
+}
+
 #[test]
 fn test_compare_command() {
     let temp_dir = tempdir().unwrap();

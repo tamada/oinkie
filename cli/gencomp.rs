@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 
 mod cli;
-mod info;
+mod values;
 
 use clap::{Command, CommandFactory};
 use clap_complete::Shell;

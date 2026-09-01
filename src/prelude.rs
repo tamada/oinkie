@@ -1,4 +1,6 @@
-pub use crate::birthmarks::{AnalysisType, BirthmarkType, Data, Kgram, Metadata, Shape};
+pub use crate::birthmarks::{
+    AnalysisType, BirthmarkType, Data, Kgram, MAX_ADVERTISED_K, Metadata, Shape,
+};
 pub use crate::birthmarks::{Birthmark, Elements};
 pub use crate::compare::{
     Aggregator, Algorithm, Comparator, Comparison, PairingStrategy, escape_csv_string,
