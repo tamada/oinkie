@@ -113,6 +113,16 @@ pub struct LiftOpts {
     script: Option<PathBuf>,
 
     #[clap(
+        short = 'j',
+        long,
+        default_value = "1",
+        value_name = "N",
+        value_parser = parse_jobs,
+        help = "Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in."
+    )]
+    jobs: std::num::NonZeroUsize,
+
+    #[clap(
         short = 'S',
         long,
         default_value_t = false,
@@ -126,6 +136,16 @@ pub struct LiftOpts {
         help = "Path to the binary or intermediate files to lift"
     )]
     files: Vec<PathBuf>,
+}
+
+/// Parses `--jobs`, rejecting zero in terms of the option rather than of the
+/// type behind it: clap's own message for `NonZeroUsize` is "number would be
+/// zero for non-zero type", which is about Rust and not about lifting.
+fn parse_jobs(s: &str) -> std::result::Result<std::num::NonZeroUsize, String> {
+    match s.parse::<usize>() {
+        Ok(n) => std::num::NonZeroUsize::new(n).ok_or_else(|| "must be at least 1".to_string()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 impl LiftOpts {
@@ -151,6 +171,11 @@ impl LiftOpts {
 
     pub fn is_skip(&self) -> bool {
         self.skip
+    }
+
+    /// How many files may be lifted at a time.
+    pub fn jobs(&self) -> usize {
+        self.jobs.get()
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &PathBuf> {
