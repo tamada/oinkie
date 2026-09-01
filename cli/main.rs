@@ -604,7 +604,14 @@ fn main() {
                 println!("{}", e.render().ansi());
                 0
             } else {
-                eprintln!("Error: {}", e);
+                // No "Error: " in front: clap's own message already begins
+                // "error: ", and prefixing it gave "Error: error: ..." (#62).
+                // The other arm keeps its prefix, since oinkie's own errors
+                // carry none.
+                //
+                // Display rather than `render().ansi()`, which would put
+                // colour codes into a redirected stderr.
+                eprintln!("{e}");
                 1
             }
         }
