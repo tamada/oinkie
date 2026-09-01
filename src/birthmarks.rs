@@ -427,9 +427,12 @@ pub enum Data {
     /// [`Data::KgramFreq`] gives: a count the file states twice is ambiguous,
     /// and serde's derived map deserializer takes the last one without saying
     /// so (#66).
-    Freq(#[serde(deserialize_with = "no_repeated_key")] FxHashMap<String, usize>),
+    Freq(
+        #[serde(serialize_with = "sorted_freq", deserialize_with = "no_repeated_key")]
+        FxHashMap<String, usize>,
+    ),
     Seq(Vec<String>),
-    Set(FxHashSet<String>),
+    Set(#[serde(serialize_with = "sorted_set")] FxHashSet<String>),
     KgramSeq(Vec<Kgram>),
     /// Written as a list of `[kgram, count]` pairs rather than as a JSON
     /// object.
@@ -448,7 +451,45 @@ pub enum Data {
     /// their files would stop reading. It also needs no separator, so no
     /// mnemonic can ever contain one.
     KgramFreq(#[serde(with = "kgram_freq")] FxHashMap<Kgram, usize>),
-    KgramSet(FxHashSet<Kgram>),
+    KgramSet(#[serde(serialize_with = "sorted_kgram_set")] FxHashSet<Kgram>),
+}
+
+/// A map and a set have no order of their own, so the one they are written in
+/// has to come from somewhere. Hash order comes from the insertion history and
+/// the hasher, which means two equal birthmarks can be written differently and
+/// a `rustc-hash` bump relays every file for no reason. Sorted, the bytes are
+/// a function of what the birthmark holds (#68).
+///
+/// `Seq` and `KgramSeq` are not here on purpose. Their order is the program's,
+/// and sorting them would not canonicalise the file — it would destroy the
+/// birthmark.
+fn sorted_freq<S>(map: &FxHashMap<String, usize>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut pairs = map.iter().collect::<Vec<_>>();
+    pairs.sort_unstable_by_key(|(name, _)| *name);
+    s.collect_map(pairs)
+}
+
+/// See [`sorted_freq`].
+fn sorted_set<S>(set: &FxHashSet<String>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut items = set.iter().collect::<Vec<_>>();
+    items.sort_unstable();
+    s.collect_seq(items)
+}
+
+/// See [`sorted_freq`].
+fn sorted_kgram_set<S>(set: &FxHashSet<Kgram>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut items = set.iter().collect::<Vec<_>>();
+    items.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    s.collect_seq(items)
 }
 
 /// Reads a frequency map, refusing a key that appears twice.
@@ -1356,6 +1397,74 @@ mod tests {
                 [["COPY", "RETURN"], 1],
                 [["INT_ADD", "COPY"], 2],
             ])
+        );
+    }
+
+    /// A map and a set have no order of their own, so what gets written has
+    /// to be decided. Hash order decides it by insertion history and by the
+    /// hasher, which means two equal birthmarks can be written differently
+    /// and a `rustc-hash` bump relays every file (#68).
+    ///
+    /// Built twice from the same elements in opposite orders: the bytes have
+    /// to match. Fifty elements rather than a handful, because `FxHash` is
+    /// not randomised and a small container's order can happen to be the
+    /// sorted one either way.
+    #[test]
+    fn test_what_has_no_order_is_written_in_one() {
+        let ops = (0..50).map(|i| format!("OP_{i:02}")).collect::<Vec<_>>();
+        let both_ways = |build: &dyn Fn(Vec<String>) -> Data| {
+            let forward = serde_json::to_string(&build(ops.clone())).unwrap();
+            let mut reversed = ops.clone();
+            reversed.reverse();
+            (forward, serde_json::to_string(&build(reversed)).unwrap())
+        };
+
+        let (a, b) = both_ways(&|v| {
+            let mut m = FxHashMap::default();
+            for op in v {
+                let count = op.len();
+                m.insert(op, count);
+            }
+            Data::Freq(m)
+        });
+        assert_eq!(a, b, "Freq");
+
+        let (a, b) = both_ways(&|v| Data::Set(v.into_iter().collect()));
+        assert_eq!(a, b, "Set");
+
+        let (a, b) = both_ways(&|v| {
+            Data::KgramSet(
+                v.into_iter()
+                    .map(|op| kgram(&[op.as_str(), "COPY"]))
+                    .collect(),
+            )
+        });
+        assert_eq!(a, b, "KgramSet");
+
+        let (a, b) = both_ways(&|v| {
+            let mut m = FxHashMap::default();
+            for op in v {
+                let count = op.len();
+                m.insert(kgram(&[op.as_str(), "COPY"]), count);
+            }
+            Data::KgramFreq(m)
+        });
+        assert_eq!(a, b, "KgramFreq");
+    }
+
+    /// A sequence is ordered data: its order is the program's, and sorting it
+    /// would not canonicalise the file but destroy the birthmark.
+    #[test]
+    fn test_a_sequence_keeps_the_order_it_was_extracted_in() {
+        let ops = vec!["RETURN".to_string(), "CALL".to_string(), "COPY".to_string()];
+        let json = serde_json::to_value(Data::Seq(ops.clone())).unwrap();
+        assert_eq!(json["Seq"], serde_json::json!(["RETURN", "CALL", "COPY"]));
+
+        let kgrams = vec![kgram(&["RETURN", "CALL"]), kgram(&["CALL", "COPY"])];
+        let json = serde_json::to_value(Data::KgramSeq(kgrams)).unwrap();
+        assert_eq!(
+            json["KgramSeq"],
+            serde_json::json!([["RETURN", "CALL"], ["CALL", "COPY"]])
         );
     }
 
