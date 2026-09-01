@@ -104,6 +104,48 @@ pub struct HomeSpec {
     pub candidates: &'static [&'static str],
 }
 
+impl HomeSpec {
+    /// Runs the search -- the environment variable, then the usual install
+    /// locations -- against a given environment and a given test for whether a
+    /// path exists.
+    ///
+    /// Both are handed in rather than read directly so that a test can
+    /// describe a machine instead of having to become one. The tests used to
+    /// set `GHIDRA_HOME` and put it back afterwards; the environment is
+    /// process-global, so two of them running at once in the same test binary
+    /// saw each other's writes, and in edition 2024 `set_var` is `unsafe`
+    /// precisely because a concurrent read of it is undefined behaviour rather
+    /// than merely a wrong answer (#24).
+    ///
+    /// It also makes the "not found" case testable at all. It could assert
+    /// nothing before, because the machine running the test might genuinely
+    /// have Ghidra at one of the candidates.
+    pub(crate) fn find_in(
+        &self,
+        env: impl Fn(&str) -> Option<String>,
+        exists: impl Fn(&Path) -> bool,
+    ) -> Result<PathBuf> {
+        if let Some(h) = env(self.env) {
+            return Ok(PathBuf::from(h));
+        }
+        for c in self.candidates {
+            let p = PathBuf::from(c);
+            if exists(&p) {
+                return Ok(p);
+            }
+        }
+        let looked_in = if self.candidates.is_empty() {
+            String::new()
+        } else {
+            format!(", or install it in one of: {}", self.candidates.join(", "))
+        };
+        Err(crate::Error::Parse(format!(
+            "{} not found. Specify it with --home, set {}{looked_in}",
+            self.tool, self.env
+        )))
+    }
+}
+
 impl LifterType {
     /// The tool's name as it should appear in messages.
     pub fn name(&self) -> &'static str {
@@ -158,24 +200,7 @@ impl LifterType {
                 self.name()
             )));
         };
-        if let Ok(h) = std::env::var(spec.env) {
-            return Ok(PathBuf::from(h));
-        }
-        for c in spec.candidates {
-            let p = PathBuf::from(c);
-            if p.exists() {
-                return Ok(p);
-            }
-        }
-        let looked_in = if spec.candidates.is_empty() {
-            String::new()
-        } else {
-            format!(", or install it in one of: {}", spec.candidates.join(", "))
-        };
-        Err(crate::Error::Parse(format!(
-            "{} not found. Specify it with --home, set {}{looked_in}",
-            spec.tool, spec.env
-        )))
+        spec.find_in(|k| std::env::var(k).ok(), |p| p.exists())
     }
 }
 
@@ -231,5 +256,99 @@ impl LifterBuilder {
                 "Binary Ninja lifter is not yet implemented.".to_string(),
             )),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The search never runs: `--home` is taken as given, without checking
+    /// that it exists, so that the error names the path the user actually
+    /// passed rather than a guess.
+    #[test]
+    fn test_the_home_the_user_passed_wins() {
+        let opt = PathBuf::from("/custom/ghidra/home");
+        assert_eq!(LifterType::Ghidra.find_home(Some(&opt)).unwrap(), opt);
+    }
+
+    #[test]
+    fn test_the_environment_variable_is_read_when_no_home_was_passed() {
+        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let home = spec
+            .find_in(
+                |k| (k == "GHIDRA_HOME").then(|| "/env/ghidra/home".to_string()),
+                |_| panic!("the usual locations were searched despite GHIDRA_HOME being set"),
+            )
+            .unwrap();
+        assert_eq!(home, PathBuf::from("/env/ghidra/home"));
+    }
+
+    /// An installed Ghidra does not override the one the user pointed at. The
+    /// `exists` above never runs, so this says the same thing from the other
+    /// side: with both available, the variable is what comes back.
+    #[test]
+    fn test_the_environment_variable_beats_an_installed_ghidra() {
+        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let home = spec
+            .find_in(|_| Some("/env/ghidra/home".to_string()), |_| true)
+            .unwrap();
+        assert_eq!(home, PathBuf::from("/env/ghidra/home"));
+    }
+
+    #[test]
+    fn test_the_usual_locations_are_searched_when_the_variable_is_unset() {
+        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let last = Path::new(spec.candidates.last().unwrap());
+        let home = spec.find_in(|_| None, |p| p == last).unwrap();
+        assert_eq!(home, last);
+    }
+
+    /// Two installations are a real situation on a Mac with both Homebrew
+    /// prefixes populated, and the order the candidates are listed in is the
+    /// answer to it.
+    #[test]
+    fn test_the_first_of_several_installations_wins() {
+        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let home = spec.find_in(|_| None, |_| true).unwrap();
+        assert_eq!(home, PathBuf::from(spec.candidates[0]));
+    }
+
+    /// This is what a machine with no Ghidra sees, and until the search took
+    /// its environment as a parameter it could not be asserted: the test ran
+    /// on a machine that might have Ghidra at one of the candidates, so it
+    /// checked only that nothing panicked.
+    #[test]
+    fn test_a_ghidra_that_is_nowhere_says_what_to_set_and_where_it_looked() {
+        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let err = spec.find_in(|_| None, |_| false).unwrap_err().to_string();
+        assert!(err.contains("--home"), "does not offer --home: {err}");
+        assert!(
+            err.contains("GHIDRA_HOME"),
+            "does not name the variable: {err}"
+        );
+        for c in spec.candidates {
+            assert!(err.contains(c), "does not say it looked in {c}: {err}");
+        }
+    }
+
+    /// A backend nobody has installed and checked has no candidates, and the
+    /// message has to stop after the variable rather than invite the user to
+    /// install it in one of nowhere.
+    #[test]
+    fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
+        let spec = LifterType::IDAPro.home_spec().unwrap();
+        let err = spec
+            .find_in(|_| None, |_| panic!("there is nothing to look at"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("IDA_HOME"),
+            "does not name the variable: {err}"
+        );
+        assert!(
+            !err.contains("install it in one of"),
+            "offers an empty list: {err}"
+        );
     }
 }

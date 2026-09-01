@@ -59,62 +59,10 @@ impl Lifter for GhidraLifter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lift::LifterType;
-    use std::env;
     use tempfile::tempdir;
 
-    #[test]
-    fn test_find_ghidra_home_with_opt() {
-        let opt_path = PathBuf::from("/custom/ghidra/home");
-        let result = LifterType::Ghidra.find_home(Some(&opt_path));
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), opt_path);
-    }
-
-    #[test]
-    fn test_find_ghidra_home_with_env() {
-        // Backup the env
-        let old_env = env::var("GHIDRA_HOME").ok();
-        unsafe {
-            env::set_var("GHIDRA_HOME", "/env/ghidra/home");
-        }
-
-        let result = LifterType::Ghidra.find_home(None);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PathBuf::from("/env/ghidra/home"));
-
-        // Restore env
-        if let Some(val) = old_env {
-            unsafe {
-                env::set_var("GHIDRA_HOME", val);
-            }
-        } else {
-            unsafe {
-                env::remove_var("GHIDRA_HOME");
-            }
-        }
-    }
-
-    #[test]
-    fn test_find_ghidra_home_not_found() {
-        // Backup the env
-        let old_env = env::var("GHIDRA_HOME").ok();
-        unsafe {
-            env::remove_var("GHIDRA_HOME");
-        }
-
-        let result = LifterType::Ghidra.find_home(None);
-        // It might find it in standard paths on some systems, so we can't definitively assert error
-        // unless we know the system doesn't have it. But we can check it doesn't crash.
-        let _ = result;
-
-        // Restore env
-        if let Some(val) = old_env {
-            unsafe {
-                env::set_var("GHIDRA_HOME", val);
-            }
-        }
-    }
+    // Where Ghidra's installation is looked for is tested in `crate::lift`,
+    // alongside the search itself.
 
     #[test]
     fn test_ghidra_lifter_new() {

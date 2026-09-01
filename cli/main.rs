@@ -614,18 +614,6 @@ mod tests {
         assert_eq!(result, opt);
     }
 
-    #[test]
-    fn test_find_ghidra_home_from_env() {
-        unsafe {
-            std::env::set_var("GHIDRA_HOME", "/env/path");
-        }
-        let result = LifterType::Ghidra.find_home(None).unwrap();
-        assert_eq!(result, PathBuf::from("/env/path"));
-        unsafe {
-            std::env::remove_var("GHIDRA_HOME");
-        }
-    }
-
     /// The three backends that are not implemented still have to say what to
     /// set, since a message naming GHIDRA_HOME for Binary Ninja is worse than
     /// no message at all.
