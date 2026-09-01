@@ -185,8 +185,9 @@ fn test_extract_names_a_kgram_the_way_the_library_does() {
 
 /// `op-*gram-freq` birthmarks could not be written at all: a k-gram is a list
 /// of operations, a JSON object's keys are strings, and `serde_json` refused
-/// the map outright (#59). Three of the families the CLI offers could not
-/// produce a file.
+/// the map outright (#59). Eight of the thirty birthmark types the CLI
+/// advertises — `op-1gram-freq` through `op-8gram-freq` — could not produce a
+/// file, and with them twenty-four of its eighty analyses.
 ///
 /// `op-2gram-freq` on this fixture rather than a larger k, because the bug
 /// hid behind emptiness: the fixture's one function has four operations, so

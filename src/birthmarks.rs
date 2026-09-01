@@ -432,9 +432,10 @@ pub enum Data {
     ///
     /// A JSON object's keys are strings, and a k-gram is a list of
     /// operations. `serde_json` refuses it — "key must be a string" — so
-    /// every non-empty `op-*gram-freq` birthmark failed at write time and
-    /// three of the families the CLI offers could not produce a file at all
-    /// (#59). It looked k-dependent only because a program with fewer than k
+    /// every non-empty `op-*gram-freq` birthmark failed at write time.
+    /// `op-1gram-freq` through `op-8gram-freq` — eight of the thirty
+    /// birthmark types the CLI advertises, and one of the three shapes a
+    /// k-gram comes in — could not produce a file at all (#59). It looked k-dependent only because a program with fewer than k
     /// operations yields an empty map, and an empty map has no key to refuse.
     ///
     /// A list of pairs rather than a stringified key, because the alternative
@@ -464,11 +465,30 @@ mod kgram_freq {
         pairs.serialize(s)
     }
 
+    /// A repeated k-gram is refused rather than resolved.
+    ///
+    /// The list is a map on disk, and collecting it would let the last pair
+    /// win silently — a file saying a k-gram occurred 3 times and again 5
+    /// times would load as 5, with a similarity computed from it and nothing
+    /// said. Nothing this crate writes can produce a duplicate, since it
+    /// serializes from a map, so a file holding one has been hand-edited or
+    /// corrupted, and guessing which count was meant is worse than stopping.
     pub(super) fn deserialize<'de, D>(d: D) -> Result<FxHashMap<Kgram, usize>, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(Vec::<(Kgram, usize)>::deserialize(d)?.into_iter().collect())
+        use serde::de::Error as _;
+        let mut map = FxHashMap::default();
+        for (kgram, count) in Vec::<(Kgram, usize)>::deserialize(d)? {
+            if map.contains_key(&kgram) {
+                return Err(D::Error::custom(format!(
+                    "[{}]: the same k-gram is listed twice, so its frequency is ambiguous",
+                    kgram.0.join(", ")
+                )));
+            }
+            map.insert(kgram, count);
+        }
+        Ok(map)
     }
 }
 
@@ -1223,8 +1243,8 @@ mod tests {
 
     /// A k-gram is a list of operations, and a JSON object's keys are
     /// strings, so `serde_json` refused the map outright — every non-empty
-    /// `op-*gram-freq` birthmark failed at write time and three of the CLI's
-    /// families could not produce a file at all (#59).
+    /// `op-*gram-freq` birthmark failed at write time, so eight of the thirty
+    /// birthmark types the CLI advertises could not produce a file (#59).
     ///
     /// A non-empty map is what makes this a test. An empty one has no key to
     /// refuse, which is why the bug looked as though it only affected small
@@ -1286,6 +1306,33 @@ mod tests {
                 [["INT_ADD", "COPY"], 2],
             ])
         );
+    }
+
+    /// A list is a weaker container than the map it stands for: it can say
+    /// the same thing twice. Collecting would take the last one, so a file
+    /// claiming a k-gram occurred 3 times and again 5 times would load as 5
+    /// and be scored, with nothing said about it.
+    ///
+    /// Nothing this crate writes can produce one — the pairs come from a map
+    /// — so refusing costs no real file anything.
+    #[test]
+    fn test_a_kgram_listed_twice_is_refused_rather_than_resolved() {
+        let once: Data =
+            serde_json::from_str(r#"{"KgramFreq":[[["CALL","COPY"],3]]}"#).expect("one is fine");
+        let Data::KgramFreq(m) = once else {
+            panic!("the shape changed");
+        };
+        assert_eq!(m[&kgram(&["CALL", "COPY"])], 3);
+
+        let twice = serde_json::from_str::<Data>(
+            r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
+        );
+        let Err(e) = twice else {
+            panic!("a k-gram listed twice must not silently pick one");
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("listed twice"), "{msg}");
+        assert!(msg.contains("CALL"), "does not say which one: {msg}");
     }
 
     /// Only `KgramFreq` changed. The fix could have been to make `Kgram`
