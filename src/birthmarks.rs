@@ -162,9 +162,20 @@ impl Display for BirthmarkType {
 impl TryFrom<PathBuf> for Birthmark {
     type Error = Error;
 
+    /// Read whole, then parsed from the bytes.
+    ///
+    /// `from_reader` on a bare `File` looks like the obvious thing and is a
+    /// trap: serde_json's `IoRead` takes one byte at a time, so an unbuffered
+    /// file is one `read` syscall per byte. On a 9 MB birthmark that is 2.7 s
+    /// against 15 ms here, and `compare` loads its inputs once per *pair*, so
+    /// the loader runs O(n²) times (#51).
+    ///
+    /// `from_slice` rather than `read_to_string` + `from_str`: bytes that are
+    /// not UTF-8 are the file's content being wrong, and stay a JSON error
+    /// rather than becoming an IO one.
     fn try_from(path: PathBuf) -> Result<Self> {
-        let file = std::fs::File::open(&path).map_err(|e| Error::Io(path.clone(), e))?;
-        serde_json::from_reader(file).map_err(|e| Error::Json(path, e))
+        let bytes = std::fs::read(&path).map_err(|e| Error::Io(path.clone(), e))?;
+        serde_json::from_slice(&bytes).map_err(|e| Error::Json(path, e))
     }
 }
 
@@ -1160,6 +1171,17 @@ mod tests {
         std::fs::write(&broken, b"{ not json").unwrap();
         assert!(matches!(
             Birthmark::try_from(broken).unwrap_err(),
+            Error::Json(..)
+        ));
+
+        // Bytes that are not UTF-8 are the file's content being wrong, not
+        // the read failing, so they come back as a JSON error. This is the
+        // difference between reading to bytes and reading to a String:
+        // `read_to_string` would report `Error::Io` here (#51).
+        let not_utf8 = dir.path().join("not-utf8.json");
+        std::fs::write(&not_utf8, b"{\"name\": \"\xff\xfe\"}").unwrap();
+        assert!(matches!(
+            Birthmark::try_from(not_utf8).unwrap_err(),
             Error::Json(..)
         ));
     }
