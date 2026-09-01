@@ -91,6 +91,17 @@ impl Extractor {
 
 fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Result<Birthmark> {
     let now = std::time::Instant::now();
+    // An fc-* birthmark of a program that calls nothing is empty, and two
+    // empty birthmarks score 1.0 against each other. Refusing here turns the
+    // most likely cause -- a lifter whose `is_call` recognises none of its own
+    // opcodes -- from a false positive into a message.
+    if matches!(
+        bt,
+        BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq
+    ) && !p.iter().any(|f| f.iter().any(|op| op.is_call()))
+    {
+        return Err(Error::NoCallOperations(p.path().to_path_buf(), p.ir()));
+    }
     let elements = p
         .iter()
         .map(|f| {
@@ -169,7 +180,7 @@ where
 
 fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<String> {
     f.iter()
-        .filter(|op| op.mnemonic() == "CALL")
+        .filter(|op| op.is_call())
         .filter_map(|op| op.symbol_key())
         .filter_map(|key| p.symbol(&key))
         .map(|s| s.to_string())
@@ -297,6 +308,64 @@ mod tests {
                 "{fixture}: every fc-set element is empty"
             );
         }
+    }
+
+    /// The danger in an fc-* birthmark is not that it is empty but that two
+    /// empty ones score as a perfect match, which in a theft-detection tool
+    /// reads as a positive. A program in which nothing at all is a call is
+    /// far more likely to mean the lifter does not recognise its own call
+    /// opcode than to mean the program makes no calls, so refuse rather than
+    /// hand back something that can only mislead.
+    #[test]
+    fn test_fc_extraction_refuses_a_program_without_calls() {
+        let json = r#"{
+            "program": "callless",
+            "path": "bin/callless",
+            "ir": "ghidra-pcode",
+            "symbols": {"0x100000480": "_printf"},
+            "functions": [
+                {"name": "leaf", "ops": [
+                    {"op": "COPY", "out": "(register, 0x4000, 8)", "inputs": ["(const, 0x0, 8)"]},
+                    {"op": "RETURN", "inputs": ["(const, 0x0, 8)"]}
+                ]}
+            ]
+        }"#;
+        let program: Program<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
+
+        for bt in [
+            BirthmarkType::FcSeq,
+            BirthmarkType::FcSet,
+            BirthmarkType::FcFreq,
+        ] {
+            let result = Extractor::new(bt.clone()).extract_each(&program);
+            assert!(
+                matches!(result, Err(Error::NoCallOperations(_, _))),
+                "{bt}: expected a refusal, got {:?}",
+                result.map(|b| b.elements.len())
+            );
+        }
+    }
+
+    /// The op-* families do not read calls at all, so the refusal above must
+    /// not spread to them.
+    #[test]
+    fn test_op_extraction_accepts_a_program_without_calls() {
+        let json = r#"{
+            "program": "callless",
+            "path": "bin/callless",
+            "symbols": {},
+            "functions": [
+                {"name": "leaf", "ops": [
+                    {"op": "RETURN", "inputs": ["(const, 0x0, 8)"]}
+                ]}
+            ]
+        }"#;
+        let program: Program<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
+        assert!(
+            Extractor::new(BirthmarkType::OpSeq)
+                .extract_each(&program)
+                .is_ok()
+        );
     }
 
     #[test]
