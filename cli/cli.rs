@@ -46,7 +46,7 @@ pub enum OinkieCommand {
 
     #[command(
         name = "lift",
-        about = "Lift binary files to P-code JSON files using a specified lifter"
+        about = "Lift binary files to JSON files of an intermediate representation, using a specified lifter"
     )]
     Lift(LiftOpts),
 
@@ -82,7 +82,7 @@ pub struct LiftOpts {
         long,
         default_value = "pcodes",
         value_name = "DIRECTORY",
-        help = "Specify the directory for putting the resultant JSON files for the lifted P-code (default: './pcodes' directory)"
+        help = "Specify the directory for putting the resultant JSON files of the lifted programs (default: './pcodes' directory)"
     )]
     dest: PathBuf,
 
@@ -93,7 +93,7 @@ pub struct LiftOpts {
         short = 'H',
         long,
         value_name = "HOME",
-        help = "Specify the path to the home directory of the lifter (e.g., GHIDRA_HOME for Ghidra). If not specified, the environment variable (e.g., GHIDRA_HOME) or default paths are searched."
+        help = "Path to the lifter's installation directory. If not specified, the lifter's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set."
     )]
     home: Option<PathBuf>,
 
@@ -101,14 +101,14 @@ pub struct LiftOpts {
         short = 'i',
         long = "intermediate",
         value_name = "DIRECTORY",
-        help = "Directory to keep intermediate files like Ghidra project directories. If not specified, a temporary directory is used and deleted."
+        help = "Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted."
     )]
     intermediate_dir: Option<PathBuf>,
 
     #[clap(
         long,
         value_name = "SCRIPT",
-        help = "Path to a custom lifting script. Interpretation depends on the lifter type. For Ghidra, it's the path to a Java script."
+        help = "Path to a custom lifting script, replacing the built-in one. The language is the lifter's own: Java for Ghidra. It must write {input file name}.json into its working directory."
     )]
     script: Option<PathBuf>,
 
