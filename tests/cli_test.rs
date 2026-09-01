@@ -47,6 +47,40 @@ fn test_lift_command() {
     assert!(out_file.exists(), "hello_clang.json was not generated");
 }
 
+/// Nothing inside the library can check that the environment variable is
+/// actually read: the search takes its environment as a parameter now, so
+/// that the tests stop writing to the process' own (#24), and a test that
+/// injects the lookup cannot also prove the real one is wired to it.
+///
+/// A child process can. `GHIDRA_HOME` is set for that process alone, which is
+/// hermetic in the way `set_var` never was, and pointing it at a directory
+/// with no `support/analyzeHeadless` makes the run fail while naming the path
+/// it was given -- so the assertion is that the value reached Ghidra's home,
+/// not merely that the run failed. No Ghidra starts, so this does not join
+/// the `ghidra` group.
+#[test]
+fn test_the_lifter_home_is_read_from_the_environment() {
+    let temp_dir = tempfile::Builder::new()
+        .prefix("oinkie_test")
+        .tempdir()
+        .unwrap();
+    let home = temp_dir.path().join("not-a-ghidra");
+    let dest = temp_dir.path().join("lifted");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .env("GHIDRA_HOME", &home)
+        .arg("lift")
+        .arg("-d")
+        .arg(&dest)
+        .arg("testdata/hello_world/bin/hello_clang")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            home.join("support/analyzeHeadless").to_str().unwrap(),
+        ));
+}
+
 #[test]
 fn test_extract_command() {
     let temp_dir = tempdir().unwrap();
