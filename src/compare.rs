@@ -217,12 +217,10 @@ trait BirthmarkComparator {
         b2: &'a Birthmark,
         aggregator: &Aggregator,
     ) -> Result<Comparison<'a, Birthmark>> {
-        if !b1.comparable_with(b2) {
-            return Err(Error::Mismatch(
-                b1.metadata.birthmark_type.clone(),
-                b2.metadata.birthmark_type.clone(),
-            ));
-        }
+        // Asking the birthmark rather than re-deriving the conditions here
+        // keeps the reason in the error: a mismatch of representation reads
+        // differently from a mismatch of type.
+        b1.check_comparable_with(b2)?;
         let p1_len = b1.elements.len();
         let p2_len = b2.elements.len();
         let size = std::cmp::max(p1_len, p2_len);
@@ -1177,6 +1175,7 @@ mod tests {
                 extracted_at: chrono::Utc::now(),
                 duration: std::time::Duration::from_nanos(1),
                 birthmark_type: BirthmarkType::OpSeq,
+                ir: crate::lift::Ir::GhidraPcode,
             },
             elements: funcs.iter().map(|(n, ops)| elements(n, seq(ops))).collect(),
             json_path: None,

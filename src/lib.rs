@@ -24,6 +24,8 @@ pub enum Error {
     Csv(csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
     IncompatibleAnalysis(BirthmarkType, crate::prelude::Algorithm),
+    /// Two birthmarks lifted to different intermediate representations.
+    IrMismatch(crate::lift::Ir, crate::lift::Ir),
     InvalidPcode(u32),
     Io(PathBuf, std::io::Error),
     Json(PathBuf, serde_json::Error),
@@ -56,6 +58,10 @@ impl std::fmt::Display for Error {
                     bt.with_shape(algorithm.shape())
                 )
             }
+            Error::IrMismatch(a, b) => write!(
+                f,
+                "cannot compare {a} against {b}: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond"
+            ),
             Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),
             Error::Io(path, e) => write!(f, "IO error for {}: {}", path.display(), e),
             Error::Json(file, e) => write!(f, "{}: JSON error: {}", file.display(), e),
