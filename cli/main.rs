@@ -89,6 +89,10 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
 /// Read the comparison result from the given CSV file and return a CompareResult struct.
 /// This function skips actual comparison and shorten the comparison time if the result file already exists.
 /// The CSV file is expected to have a line starting with "result," followed by the duration in nanoseconds and the similarity value, separated by commas.
+///
+/// "Expected" is enforced. Without the line there is no score to report, and
+/// returning one anyway meant reporting 0.0 -- a real answer, and the wrong
+/// one -- for a file an interrupted run left half written.
 fn read_result_file(
     dest_path: &Path,
     index: usize,
@@ -103,8 +107,12 @@ fn read_result_file(
 
     let mut original_path1 = PathBuf::new();
     let mut original_path2 = PathBuf::new();
-    let mut similarity = 0.0;
-    let mut duration_nanos = 0;
+    // An Option rather than a zeroed pair, so that "the file never said" is
+    // not spelled the same way as "the score was zero". It used to be the
+    // latter: a file holding the pair but no result line came back as a
+    // successful comparison scoring 0.0, which is what an interrupted run
+    // leaves behind and what --skip then reads.
+    let mut scored: Option<(u64, f64)> = None;
 
     for result in reader.records() {
         let record = result.map_err(Error::Csv)?;
@@ -116,16 +124,17 @@ fn read_result_file(
                         dest_path.display()
                     )));
                 }
-                duration_nanos = record[1]
+                let duration_nanos = record[1]
                     .parse()
                     .map_err(|e| Error::ParseInt(record[1].to_string(), e))?;
-                similarity = record[2].parse().map_err(|e| {
+                let similarity = record[2].parse().map_err(|e| {
                     Error::Parse(format!(
                         "Failed to parse similarity value in {}: {}",
                         dest_path.display(),
                         e
                     ))
                 })?;
+                scored = Some((duration_nanos, similarity));
             }
             Some("left") => {
                 if let Some(s) = record.get(3) {
@@ -141,6 +150,12 @@ fn read_result_file(
         }
     }
 
+    let Some((duration_nanos, similarity)) = scored else {
+        return Err(Error::Parse(format!(
+            "Result line not found in {}",
+            dest_path.display()
+        )));
+    };
     if original_path1.as_os_str().is_empty() || original_path2.as_os_str().is_empty() {
         return Err(Error::Parse(format!(
             "Birthmark paths not found in {}",
@@ -694,7 +709,10 @@ mod tests {
                 "Birthmark paths not found",
             ),
             ("result,28083,0.75\nleft,,,x\n", "Birthmark paths not found"),
-            ("", "Birthmark paths not found"),
+            // A file with the pair but no score. Reachable: a run interrupted
+            // part-way through writing leaves one, and --skip reads it.
+            ("left,,,x\nright,,,y\n", "Result line not found"),
+            ("", "Result line not found"),
         ];
         for (body, expected) in cases {
             let Err(e) = read_result(body) else {
