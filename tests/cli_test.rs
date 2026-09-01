@@ -86,6 +86,37 @@ fn test_the_lifter_home_is_read_from_the_environment() {
         ));
 }
 
+/// clap's own message begins "error: ", and `main` used to print it behind
+/// "Error: " -- so a mistyped flag came back as "Error: error: ..." (#62).
+/// oinkie's own errors carry no prefix of their own and keep theirs.
+///
+/// End to end because the doubling was in `main`, which no unit test reaches:
+/// fixing only the `Display` arm of `Error::Clap` would have changed nothing
+/// a user sees.
+#[test]
+fn test_a_usage_error_is_not_prefixed_twice() {
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("run")
+        .arg("--bogus-flag")
+        .assert()
+        .failure()
+        .stderr(predicate::str::starts_with("error: "))
+        .stderr(predicate::str::contains("Error: error:").not());
+
+    // and the other arm still says whose error it is
+    let temp_dir = tempdir().unwrap();
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("extract")
+        .arg("-d")
+        .arg(temp_dir.path().join("birthmarks"))
+        .arg("no-such-file.json")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Error: IO error for"));
+}
+
 #[test]
 fn test_extract_command() {
     let temp_dir = tempdir().unwrap();

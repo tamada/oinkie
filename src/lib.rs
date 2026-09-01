@@ -14,85 +14,94 @@ mod program;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-impl std::error::Error for Error {}
-
-#[derive(Debug)]
+/// The messages live on the variants rather than in a `Display` match, so
+/// that adding a variant and deciding how it reads are the same edit.
+///
+/// The wrapped errors are `#[source]` but not `#[from]`. `Io` and `Json`
+/// carry the path beside the error — which path failed is the useful half —
+/// so they could not be `#[from]` anyway, and for the rest an explicit
+/// `map_err(Error::Csv)` at the call site says more than a conversion hidden
+/// inside a `?`.
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("{}", render_group(.0))]
     Array(Vec<Self>),
+    #[error("{0}: unknown birthmark type")]
     BirthmarkType(String),
-    Clap(clap::Error),
-    Csv(csv::Error),
+    /// clap's own message already begins `error: `, so this adds no prefix of
+    /// its own. It used to read `Clap error: error: ...` (#62).
+    #[error("{0}")]
+    Clap(#[source] clap::Error),
+    #[error("CSV error: {0}")]
+    Csv(#[source] csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
+    #[error("{}", render_incompatible(.0, .1))]
     IncompatibleAnalysis(BirthmarkType, crate::prelude::Algorithm),
     /// Two birthmarks lifted to different intermediate representations.
+    #[error(
+        "cannot compare {0} against {1}: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond"
+    )]
     IrMismatch(crate::lift::Ir, crate::lift::Ir),
     /// An `fc-*` birthmark was asked of a program holding no call at all.
+    #[error(
+        "{path}: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or oinkie's reader for {ir} does not recognise that representation's call operations",
+        path = .0.display(),
+        ir = .1
+    )]
     NoCallOperations(PathBuf, crate::lift::Ir),
     /// A lifted file naming a representation this build cannot read.
+    #[error(
+        "{path}: no reader for {ir}; this build can read {readable}",
+        path = .0.display(),
+        ir = .1,
+        readable = render_readable()
+    )]
     UnsupportedIr(PathBuf, crate::lift::Ir),
+    #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
-    Io(PathBuf, std::io::Error),
-    Json(PathBuf, serde_json::Error),
-    LapJV(lapjv::LapJVError),
+    #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
+    Io(PathBuf, #[source] std::io::Error),
+    #[error("{path}: JSON error: {cause}", path = .0.display(), cause = .1)]
+    Json(PathBuf, #[source] serde_json::Error),
+    #[error("LapJV error: {0}")]
+    LapJV(#[source] lapjv::LapJVError),
+    #[error("Mismatched birthmark types: {0} and {1}")]
     Mismatch(BirthmarkType, BirthmarkType),
+    #[error("Parse error: {0}")]
     Parse(String),
-    ParseFloat(String, std::num::ParseFloatError),
-    ParseInt(String, std::num::ParseIntError),
-    ShapeError(ShapeError),
+    #[error("{0}: Parse float error {1}")]
+    ParseFloat(String, #[source] std::num::ParseFloatError),
+    #[error("{0}: Parse int error {1}")]
+    ParseInt(String, #[source] std::num::ParseIntError),
+    #[error("Shape error: {0}")]
+    ShapeError(#[source] ShapeError),
 }
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Error::Array(errs) => {
-                let _ = write!(f, "Multiple errors:");
-                for (i, err) in errs.iter().enumerate() {
-                    write!(f, "\n  {}. {}", i + 1, err)?;
-                }
-                Ok(())
-            }
-            Error::BirthmarkType(t) => write!(f, "{t}: unknown birthmark type"),
-            Error::Csv(e) => write!(f, "CSV error: {}", e),
-            Error::IncompatibleAnalysis(bt, algorithm) => {
-                let name = algorithm.cli_name();
-                write!(
-                    f,
-                    "{bt}-{name}: {name} operates on {}; use {}-{name}",
-                    algorithm.shape().description(),
-                    bt.with_shape(algorithm.shape())
-                )
-            }
-            Error::IrMismatch(a, b) => write!(
-                f,
-                "cannot compare {a} against {b}: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond"
-            ),
-            Error::InvalidPcode(code) => write!(f, "invalid pcode: {code}"),
-            Error::NoCallOperations(path, ir) => write!(
-                f,
-                "{}: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or oinkie's reader for {ir} does not recognise that representation's call operations",
-                path.display()
-            ),
-            Error::Io(path, e) => write!(f, "IO error for {}: {}", path.display(), e),
-            Error::Json(file, e) => write!(f, "{}: JSON error: {}", file.display(), e),
-            Error::LapJV(e) => write!(f, "LapJV error: {}", e),
-            Error::Mismatch(t1, t2) => write!(f, "Mismatched birthmark types: {} and {}", t1, t2),
-            Error::ParseFloat(s, e) => write!(f, "{s}: Parse float error {e}"),
-            Error::Parse(s) => write!(f, "Parse error: {}", s),
-            Error::ParseInt(s, e) => write!(f, "{s}: Parse int error {e}"),
-            Error::UnsupportedIr(path, ir) => write!(
-                f,
-                "{}: no reader for {ir}; this build can read {}",
-                path.display(),
-                crate::lift::Ir::readable()
-                    .iter()
-                    .map(|ir| ir.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            Error::Clap(e) => write!(f, "Clap error: {}", e),
-            Error::ShapeError(e) => write!(f, "Shape error: {}", e),
-        }
+/// Numbered from one, because this is read by someone counting which of their
+/// inputs failed.
+fn render_group(errs: &[Error]) -> String {
+    let mut s = String::from("Multiple errors:");
+    for (i, err) in errs.iter().enumerate() {
+        s.push_str(&format!("\n  {}. {}", i + 1, err));
     }
+    s
+}
+
+fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::prelude::Algorithm) -> String {
+    let name = algorithm.cli_name();
+    format!(
+        "{bt}-{name}: {name} operates on {}; use {}-{name}",
+        algorithm.shape().description(),
+        bt.with_shape(algorithm.shape())
+    )
+}
+
+fn render_readable() -> String {
+    crate::lift::Ir::readable()
+        .iter()
+        .map(|ir| ir.to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 impl Error {
@@ -259,13 +268,11 @@ mod tests {
                 "nonsense: unknown birthmark type".to_string(),
             ),
             (
-                // clap's own Display already begins "error: ", so this
-                // variant reads "Clap error: error: ...". Left as it is
-                // rather than quietly tidied: it is what ships today, and
-                // `main` prints the wrapped clap error directly instead of
-                // going through here, so nobody meets it on the usual path.
+                // No prefix of its own: clap's message already begins
+                // "error: ", and this used to put "Clap error: " in front of
+                // that (#62).
                 Error::Clap(clap_err),
-                format!("Clap error: {clap_msg}"),
+                clap_msg.clone(),
             ),
             (Error::Csv(csv_err), format!("CSV error: {csv_msg}")),
             (
@@ -352,6 +359,70 @@ mod tests {
         assert!(rendered.contains("\n  1. Parse error: a"), "{rendered}");
         assert!(rendered.contains("\n  3. Parse error: c"), "{rendered}");
         assert!(!rendered.contains("0."), "numbered from zero: {rendered}");
+    }
+
+    /// The message has to name every representation this build can read, and
+    /// separate them.
+    ///
+    /// Honest about its reach: `Ir::readable()` holds one entry today, so the
+    /// separator half cannot fail yet — `join("")` and `join(", ")` produce
+    /// the same string for one item. It is here for the build that adds a
+    /// second reader, which is exactly when a broken join would ship
+    /// unnoticed.
+    #[test]
+    fn test_an_unreadable_representation_lists_what_can_be_read() {
+        let rendered =
+            Error::UnsupportedIr(PathBuf::from("foreign.json"), crate::lift::Ir::IdaMicrocode)
+                .to_string();
+        for ir in crate::lift::Ir::readable() {
+            assert!(
+                rendered.contains(&ir.to_string()),
+                "{ir} missing: {rendered}"
+            );
+        }
+        let separators = rendered.matches(", ").count();
+        assert_eq!(
+            separators,
+            crate::lift::Ir::readable().len() - 1,
+            "{} readable representations should be separated {} times: {rendered}",
+            crate::lift::Ir::readable().len(),
+            crate::lift::Ir::readable().len() - 1
+        );
+    }
+
+    /// `impl std::error::Error for Error {}` was empty, so `source()` was
+    /// `None` even for the variants holding a cause. Nothing called it —
+    /// there was nothing to get (#62).
+    #[test]
+    fn test_a_wrapped_error_is_reachable_as_a_source() {
+        use std::error::Error as _;
+
+        let inner = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied");
+        let inner_msg = inner.to_string();
+        let e = Error::Io(PathBuf::from("locked.json"), inner);
+        let source = e.source().expect("the io::Error is the cause");
+        assert_eq!(source.to_string(), inner_msg);
+
+        let e = Error::Json(
+            PathBuf::from("broken.json"),
+            serde_json::from_str::<i32>("nope").unwrap_err(),
+        );
+        assert!(e.source().is_some(), "the serde_json::Error is the cause");
+    }
+
+    /// A variant that is not wrapping anything has no cause to report, and
+    /// saying otherwise would make a chain look deeper than it is.
+    #[test]
+    fn test_an_error_of_our_own_has_no_source() {
+        use std::error::Error as _;
+
+        assert!(Error::Parse("ours".to_string()).source().is_none());
+        assert!(Error::InvalidPcode(1).source().is_none());
+        assert!(
+            Error::Array(vec![Error::Parse("child".to_string())])
+                .source()
+                .is_none()
+        );
     }
 
     #[test]
