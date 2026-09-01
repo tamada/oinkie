@@ -37,14 +37,17 @@ Supported Birthmark Types:
   - op-seq (Opcode Sequence)
   - op-freq (Opcode Frequency)
   - op-set (Opcode Set)
-  - op-uni-gram-seq,   op-uni-gram-freq,   op-uni-gram-set   (Opcode 1-gram variants)
-  - op-bi-gram-seq,    op-bi-gram-freq,    op-bi-gram-set    (Opcode 2-gram variants)
-  - op-tri-gram-seq,   op-tri-gram-freq,   op-tri-gram-set   (Opcode 3-gram variants)
-  - op-quad-gram-seq,  op-quad-gram-freq,  op-quad-gram-set  (Opcode 4-gram variants)
-  - op-penta-gram-seq, op-penta-gram-freq, op-penta-gram-set (Opcode 5-gram variants)
-  - op-hexa-gram-seq,  op-hexa-gram-freq,  op-hexa-gram-set  (Opcode 6-gram variants)
-  - op-hepta-gram-seq, op-hepta-gram-freq, op-hepta-gram-set (Opcode 7-gram variants)
-  - op-octa-gram-seq,  op-octa-gram-freq,  op-octa-gram-set  (Opcode 8-gram variants)
+  - op-1gram-seq, op-1gram-freq, op-1gram-set (Opcode 1-gram variants)
+  - op-2gram-seq, op-2gram-freq, op-2gram-set (Opcode 2-gram variants)
+  - op-3gram-seq, op-3gram-freq, op-3gram-set (Opcode 3-gram variants)
+  - op-4gram-seq, op-4gram-freq, op-4gram-set (Opcode 4-gram variants)
+  - op-5gram-seq, op-5gram-freq, op-5gram-set (Opcode 5-gram variants)
+  - op-6gram-seq, op-6gram-freq, op-6gram-set (Opcode 6-gram variants)
+  - op-7gram-seq, op-7gram-freq, op-7gram-set (Opcode 7-gram variants)
+  - op-8gram-seq, op-8gram-freq, op-8gram-set (Opcode 8-gram variants)
+
+  info stops the listing at k = 8. Any k is accepted: op-12gram-set is a
+  birthmark type, it is simply not one info can list.
 
 Supported Similarity Algorithms:
   - cosine (Cosine Similarity)

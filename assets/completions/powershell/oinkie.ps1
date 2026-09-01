@@ -28,7 +28,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Display information about the application')
-            [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to P-code JSON files using a specified lifter')
+            [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to JSON files of an intermediate representation, using a specified lifter')
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
@@ -42,15 +42,17 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             break
         }
         'oinkie;lift' {
-            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files for the lifted P-code (default: ''./pcodes'' directory)')
-            [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files for the lifted P-code (default: ''./pcodes'' directory)')
+            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files of the lifted programs (default: ''./pcodes'' directory)')
+            [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files of the lifted programs (default: ''./pcodes'' directory)')
             [CompletionResult]::new('-l', '-l', [CompletionResultType]::ParameterName, 'Specify the lifter type')
             [CompletionResult]::new('--lifter-type', '--lifter-type', [CompletionResultType]::ParameterName, 'Specify the lifter type')
-            [CompletionResult]::new('-H', '-H ', [CompletionResultType]::ParameterName, 'Specify the path to the home directory of the lifter (e.g., GHIDRA_HOME for Ghidra). If not specified, the environment variable (e.g., GHIDRA_HOME) or default paths are searched.')
-            [CompletionResult]::new('--home', '--home', [CompletionResultType]::ParameterName, 'Specify the path to the home directory of the lifter (e.g., GHIDRA_HOME for Ghidra). If not specified, the environment variable (e.g., GHIDRA_HOME) or default paths are searched.')
-            [CompletionResult]::new('-i', '-i', [CompletionResultType]::ParameterName, 'Directory to keep intermediate files like Ghidra project directories. If not specified, a temporary directory is used and deleted.')
-            [CompletionResult]::new('--intermediate', '--intermediate', [CompletionResultType]::ParameterName, 'Directory to keep intermediate files like Ghidra project directories. If not specified, a temporary directory is used and deleted.')
-            [CompletionResult]::new('--script', '--script', [CompletionResultType]::ParameterName, 'Path to a custom lifting script. Interpretation depends on the lifter type. For Ghidra, it''s the path to a Java script.')
+            [CompletionResult]::new('-H', '-H ', [CompletionResultType]::ParameterName, 'Path to the lifter''s installation directory. If not specified, the lifter''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.')
+            [CompletionResult]::new('--home', '--home', [CompletionResultType]::ParameterName, 'Path to the lifter''s installation directory. If not specified, the lifter''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.')
+            [CompletionResult]::new('-i', '-i', [CompletionResultType]::ParameterName, 'Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.')
+            [CompletionResult]::new('--intermediate', '--intermediate', [CompletionResultType]::ParameterName, 'Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.')
+            [CompletionResult]::new('--script', '--script', [CompletionResultType]::ParameterName, 'Path to a custom lifting script, replacing the built-in one. The language is the lifter''s own: Java for Ghidra. It must write {input file name}.json into its working directory.')
+            [CompletionResult]::new('-j', '-j', [CompletionResultType]::ParameterName, 'Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.')
+            [CompletionResult]::new('--jobs', '--jobs', [CompletionResultType]::ParameterName, 'Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.')
             [CompletionResult]::new('-S', '-S ', [CompletionResultType]::ParameterName, 'Skip if the resultant JSON file already exists')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip if the resultant JSON file already exists')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -60,8 +62,8 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
         'oinkie;extract' {
             [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: ''./birthmarks'' directory)')
             [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: ''./birthmarks'' directory)')
-            [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, ''op-seq'' extracts the sequence of operations as a birthmark, while ''fc-freq'' extracts the frequency of function calls. The full birthmark types cann be found by running ''oinkie info''.')
-            [CompletionResult]::new('--birthmark-type', '--birthmark-type', [CompletionResultType]::ParameterName, 'Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, ''op-seq'' extracts the sequence of operations as a birthmark, while ''fc-freq'' extracts the frequency of function calls. The full birthmark types cann be found by running ''oinkie info''.')
+            [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, ''op-seq'' extracts the sequence of operations as a birthmark, while ''fc-freq'' extracts the frequency of function calls. k-grams are written with the k in the name: ''op-3gram-set''. Any k parses, not only the ones ''oinkie info'' lists. The full birthmark types cann be found by running ''oinkie info''.')
+            [CompletionResult]::new('--birthmark-type', '--birthmark-type', [CompletionResultType]::ParameterName, 'Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, ''op-seq'' extracts the sequence of operations as a birthmark, while ''fc-freq'' extracts the frequency of function calls. k-grams are written with the k in the name: ''op-3gram-set''. Any k parses, not only the ones ''oinkie info'' lists. The full birthmark types cann be found by running ''oinkie info''.')
             [CompletionResult]::new('-S', '-S ', [CompletionResultType]::ParameterName, 'Skip the resultant birthmark file is already exists')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip the resultant birthmark file is already exists')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
@@ -93,8 +95,8 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             break
         }
         'oinkie;run' {
-            [CompletionResult]::new('-a', '-a', [CompletionResultType]::ParameterName, 'Similarity algorithm to use')
-            [CompletionResult]::new('--analysis', '--analysis', [CompletionResultType]::ParameterName, 'Similarity algorithm to use')
+            [CompletionResult]::new('-a', '-a', [CompletionResultType]::ParameterName, 'Analysis to run, as ''{birthmark}-{algorithm}'' -- for example ''op-set-jaccard'' or ''op-3gram-freq-cosine''. Run ''oinkie info'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.')
+            [CompletionResult]::new('--analysis', '--analysis', [CompletionResultType]::ParameterName, 'Analysis to run, as ''{birthmark}-{algorithm}'' -- for example ''op-set-jaccard'' or ''op-3gram-freq-cosine''. Run ''oinkie info'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.')
             [CompletionResult]::new('-s', '-s', [CompletionResultType]::ParameterName, 'Pairing strategy for file comparisons')
             [CompletionResult]::new('--strategy', '--strategy', [CompletionResultType]::ParameterName, 'Pairing strategy for file comparisons')
             [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Destination path for the output CSV file (default: ''similarities'' directory')
@@ -109,7 +111,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
         }
         'oinkie;help' {
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Display information about the application')
-            [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to P-code JSON files using a specified lifter')
+            [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to JSON files of an intermediate representation, using a specified lifter')
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')

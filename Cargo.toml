@@ -9,7 +9,10 @@ gencomp = [ "dep:clap_complete" ]
 
 [dependencies]
 chrono = { version = "0.4.44", features = [ "serde" ] }
-clap = { version = "4.6.1", features = [ "derive" ] }
+# "string" lets the builder take runtime-generated values, which is what the
+# completion lists for --birthmark-type and --analysis are: they are computed
+# from the birthmark vocabulary rather than written out (#25).
+clap = { version = "4.6.1", features = [ "derive", "string" ] }
 clap_complete = { version = "4.6.5", optional = true }
 csv = "1.4.0"
 env_logger = "0.11.10"

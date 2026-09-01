@@ -148,11 +148,11 @@ _oinkie() {
                     return 0
                     ;;
                 --birthmark-type)
-                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-uni-gram-seq op-bi-gram-seq op-tri-gram-seq op-quad-gram-seq op-penta-gram-seq op-hexa-gram-seq op-hepta-gram-seq op-octa-gram-seq op-uni-gram-freq op-bi-gram-freq op-tri-gram-freq op-quad-gram-freq op-penta-gram-freq op-hexa-gram-freq op-hepta-gram-freq op-octa-gram-freq op-uni-gram-set op-bi-gram-set op-tri-gram-set op-quad-gram-set op-penta-gram-set op-hexa-gram-set op-hepta-gram-set op-octa-gram-set" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-1gram-seq op-2gram-seq op-3gram-seq op-4gram-seq op-5gram-seq op-6gram-seq op-7gram-seq op-8gram-seq op-1gram-freq op-2gram-freq op-3gram-freq op-4gram-freq op-5gram-freq op-6gram-freq op-7gram-freq op-8gram-freq op-1gram-set op-2gram-set op-3gram-set op-4gram-set op-5gram-set op-6gram-set op-7gram-set op-8gram-set" -- "${cur}"))
                     return 0
                     ;;
                 -b)
-                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-uni-gram-seq op-bi-gram-seq op-tri-gram-seq op-quad-gram-seq op-penta-gram-seq op-hexa-gram-seq op-hepta-gram-seq op-octa-gram-seq op-uni-gram-freq op-bi-gram-freq op-tri-gram-freq op-quad-gram-freq op-penta-gram-freq op-hexa-gram-freq op-hepta-gram-freq op-octa-gram-freq op-uni-gram-set op-bi-gram-set op-tri-gram-set op-quad-gram-set op-penta-gram-set op-hexa-gram-set op-hepta-gram-set op-octa-gram-set" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-1gram-seq op-2gram-seq op-3gram-seq op-4gram-seq op-5gram-seq op-6gram-seq op-7gram-seq op-8gram-seq op-1gram-freq op-2gram-freq op-3gram-freq op-4gram-freq op-5gram-freq op-6gram-freq op-7gram-freq op-8gram-freq op-1gram-set op-2gram-set op-3gram-set op-4gram-set op-5gram-set op-6gram-set op-7gram-set op-8gram-set" -- "${cur}"))
                     return 0
                     ;;
                 *)
@@ -289,7 +289,7 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__lift)
-            opts="-d -l -H -i -S -h --dest --lifter-type --home --intermediate --script --skip --help [FILES]..."
+            opts="-d -l -H -i -j -S -h --dest --lifter-type --home --intermediate --script --jobs --skip --help [FILES]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -328,6 +328,14 @@ _oinkie() {
                     return 0
                     ;;
                 --script)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --jobs)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -j)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
@@ -376,11 +384,11 @@ _oinkie() {
             fi
             case "${prev}" in
                 --analysis)
-                    COMPREPLY=($(compgen -W "fc-freq-cosine fc-set-dice fc-freq-euclidean fc-set-jaccard fc-seq-levenshtein fc-seq-lcs fc-set-simpson fc-freq-weightedjaccard op-freq-cosine op-set-dice op-freq-euclidean op-set-jaccard op-seq-levenshtein op-seq-lcs op-set-simpson op-freq-weightedjaccard op1gram-set-dice op1gram-set-jaccard op1gram-set-simpson op1gram-seq-levenshtein op1gram-seq-lcs op1gram-freq-cosine op1gram-freq-euclidean op1gram-freq-weightedjaccard op2gram-set-dice op2gram-set-jaccard op2gram-set-simpson op2gram-seq-levenshtein op2gram-seq-lcs op2gram-freq-cosine op2gram-freq-euclidean op2gram-freq-weightedjaccard op3gram-set-dice op3gram-set-jaccard op3gram-set-simpson op3gram-seq-levenshtein op3gram-seq-lcs op3gram-freq-cosine op3gram-freq-euclidean op3gram-freq-weightedjaccard op4gram-set-dice op4gram-set-jaccard op4gram-set-simpson op4gram-seq-levenshtein op4gram-seq-lcs op4gram-freq-cosine op4gram-freq-euclidean op4gram-freq-weightedjaccard op5gram-set-dice op5gram-set-jaccard op5gram-set-simpson op5gram-seq-levenshtein op5gram-seq-lcs op5gram-freq-cosine op5gram-freq-euclidean op5gram-freq-weightedjaccard op6gram-set-dice op6gram-set-jaccard op6gram-set-simpson op6gram-seq-levenshtein op6gram-seq-lcs op6gram-freq-cosine op6gram-freq-euclidean op6gram-freq-weightedjaccard" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "fc-seq-levenshtein fc-seq-lcs fc-freq-cosine fc-freq-euclidean fc-freq-weightedjaccard fc-set-dice fc-set-jaccard fc-set-simpson op-seq-levenshtein op-seq-lcs op-set-dice op-set-jaccard op-set-simpson op-freq-cosine op-freq-euclidean op-freq-weightedjaccard op-1gram-seq-levenshtein op-1gram-seq-lcs op-2gram-seq-levenshtein op-2gram-seq-lcs op-3gram-seq-levenshtein op-3gram-seq-lcs op-4gram-seq-levenshtein op-4gram-seq-lcs op-5gram-seq-levenshtein op-5gram-seq-lcs op-6gram-seq-levenshtein op-6gram-seq-lcs op-7gram-seq-levenshtein op-7gram-seq-lcs op-8gram-seq-levenshtein op-8gram-seq-lcs op-1gram-freq-cosine op-1gram-freq-euclidean op-1gram-freq-weightedjaccard op-2gram-freq-cosine op-2gram-freq-euclidean op-2gram-freq-weightedjaccard op-3gram-freq-cosine op-3gram-freq-euclidean op-3gram-freq-weightedjaccard op-4gram-freq-cosine op-4gram-freq-euclidean op-4gram-freq-weightedjaccard op-5gram-freq-cosine op-5gram-freq-euclidean op-5gram-freq-weightedjaccard op-6gram-freq-cosine op-6gram-freq-euclidean op-6gram-freq-weightedjaccard op-7gram-freq-cosine op-7gram-freq-euclidean op-7gram-freq-weightedjaccard op-8gram-freq-cosine op-8gram-freq-euclidean op-8gram-freq-weightedjaccard op-1gram-set-dice op-1gram-set-jaccard op-1gram-set-simpson op-2gram-set-dice op-2gram-set-jaccard op-2gram-set-simpson op-3gram-set-dice op-3gram-set-jaccard op-3gram-set-simpson op-4gram-set-dice op-4gram-set-jaccard op-4gram-set-simpson op-5gram-set-dice op-5gram-set-jaccard op-5gram-set-simpson op-6gram-set-dice op-6gram-set-jaccard op-6gram-set-simpson op-7gram-set-dice op-7gram-set-jaccard op-7gram-set-simpson op-8gram-set-dice op-8gram-set-jaccard op-8gram-set-simpson" -- "${cur}"))
                     return 0
                     ;;
                 -a)
-                    COMPREPLY=($(compgen -W "fc-freq-cosine fc-set-dice fc-freq-euclidean fc-set-jaccard fc-seq-levenshtein fc-seq-lcs fc-set-simpson fc-freq-weightedjaccard op-freq-cosine op-set-dice op-freq-euclidean op-set-jaccard op-seq-levenshtein op-seq-lcs op-set-simpson op-freq-weightedjaccard op1gram-set-dice op1gram-set-jaccard op1gram-set-simpson op1gram-seq-levenshtein op1gram-seq-lcs op1gram-freq-cosine op1gram-freq-euclidean op1gram-freq-weightedjaccard op2gram-set-dice op2gram-set-jaccard op2gram-set-simpson op2gram-seq-levenshtein op2gram-seq-lcs op2gram-freq-cosine op2gram-freq-euclidean op2gram-freq-weightedjaccard op3gram-set-dice op3gram-set-jaccard op3gram-set-simpson op3gram-seq-levenshtein op3gram-seq-lcs op3gram-freq-cosine op3gram-freq-euclidean op3gram-freq-weightedjaccard op4gram-set-dice op4gram-set-jaccard op4gram-set-simpson op4gram-seq-levenshtein op4gram-seq-lcs op4gram-freq-cosine op4gram-freq-euclidean op4gram-freq-weightedjaccard op5gram-set-dice op5gram-set-jaccard op5gram-set-simpson op5gram-seq-levenshtein op5gram-seq-lcs op5gram-freq-cosine op5gram-freq-euclidean op5gram-freq-weightedjaccard op6gram-set-dice op6gram-set-jaccard op6gram-set-simpson op6gram-seq-levenshtein op6gram-seq-lcs op6gram-freq-cosine op6gram-freq-euclidean op6gram-freq-weightedjaccard" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "fc-seq-levenshtein fc-seq-lcs fc-freq-cosine fc-freq-euclidean fc-freq-weightedjaccard fc-set-dice fc-set-jaccard fc-set-simpson op-seq-levenshtein op-seq-lcs op-set-dice op-set-jaccard op-set-simpson op-freq-cosine op-freq-euclidean op-freq-weightedjaccard op-1gram-seq-levenshtein op-1gram-seq-lcs op-2gram-seq-levenshtein op-2gram-seq-lcs op-3gram-seq-levenshtein op-3gram-seq-lcs op-4gram-seq-levenshtein op-4gram-seq-lcs op-5gram-seq-levenshtein op-5gram-seq-lcs op-6gram-seq-levenshtein op-6gram-seq-lcs op-7gram-seq-levenshtein op-7gram-seq-lcs op-8gram-seq-levenshtein op-8gram-seq-lcs op-1gram-freq-cosine op-1gram-freq-euclidean op-1gram-freq-weightedjaccard op-2gram-freq-cosine op-2gram-freq-euclidean op-2gram-freq-weightedjaccard op-3gram-freq-cosine op-3gram-freq-euclidean op-3gram-freq-weightedjaccard op-4gram-freq-cosine op-4gram-freq-euclidean op-4gram-freq-weightedjaccard op-5gram-freq-cosine op-5gram-freq-euclidean op-5gram-freq-weightedjaccard op-6gram-freq-cosine op-6gram-freq-euclidean op-6gram-freq-weightedjaccard op-7gram-freq-cosine op-7gram-freq-euclidean op-7gram-freq-weightedjaccard op-8gram-freq-cosine op-8gram-freq-euclidean op-8gram-freq-weightedjaccard op-1gram-set-dice op-1gram-set-jaccard op-1gram-set-simpson op-2gram-set-dice op-2gram-set-jaccard op-2gram-set-simpson op-3gram-set-dice op-3gram-set-jaccard op-3gram-set-simpson op-4gram-set-dice op-4gram-set-jaccard op-4gram-set-simpson op-5gram-set-dice op-5gram-set-jaccard op-5gram-set-simpson op-6gram-set-dice op-6gram-set-jaccard op-6gram-set-simpson op-7gram-set-dice op-7gram-set-jaccard op-7gram-set-simpson op-8gram-set-dice op-8gram-set-jaccard op-8gram-set-simpson" -- "${cur}"))
                     return 0
                     ;;
                 --strategy)

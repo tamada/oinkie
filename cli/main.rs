@@ -1,5 +1,5 @@
 mod cli;
-mod info;
+mod values;
 
 use clap::{Parser, ValueEnum};
 use indicatif::ProgressBar;
@@ -353,9 +353,8 @@ The birthmark is a unique characteristic of a program that can be used to identi
 Oinkie extracts birthmarks from given codes and compares them to calculate the similarities."
     );
     println!("============ Birthmarks =============");
-    cli::BType::value_variants().iter().for_each(|b| {
-        let pv = b.to_possible_value().unwrap();
-        println!("- {:<20}  {}", pv.get_name(), pv.get_help().unwrap());
+    BirthmarkType::advertised().for_each(|b| {
+        println!("- {:<20}  {}", b.to_string(), b.description());
     });
     println!("======== Compare Algorithms ========");
     Algorithm::value_variants().iter().for_each(|c| {
@@ -632,6 +631,83 @@ mod tests {
         assert!(LifterType::Angr.home_spec().is_none());
         let err = LifterType::Angr.find_home(None).unwrap_err().to_string();
         assert!(err.contains("angr"), "unhelpful message: {err}");
+    }
+
+    fn run_analysis(name: &str) -> Result<AnalysisType> {
+        let opts = cli::OinkieOpts::try_parse_from(vec!["oinkie", "run", "-a", name, "x.json"])
+            .map_err(Error::Clap)?;
+        let cli::OinkieCommand::Run(run_opts) = opts.command else {
+            panic!("Expected Run command");
+        };
+        run_opts.analysis_type()
+    }
+
+    fn extract_birthmark(name: &str) -> Result<()> {
+        cli::OinkieOpts::try_parse_from(vec!["oinkie", "extract", "-b", name, "x.json"])
+            .map_err(Error::Clap)?;
+        Ok(())
+    }
+
+    /// The CLI used to spell these its own way -- `op3gram-set-dice` for an
+    /// analysis and `op-tri-gram-set` for a birthmark -- because each was a
+    /// hand-written `ValueEnum` whose clap names were derived from Rust
+    /// identifiers. Neither spelling is what the library parses, and the
+    /// library is the parser now (#25).
+    #[test]
+    fn test_a_kgram_is_named_the_way_the_library_names_it() {
+        let at = run_analysis("op-3gram-set-dice").expect("the library spelling should parse");
+        assert_eq!(at.birthmark, BirthmarkType::OpKgramSet(3));
+        assert!(extract_birthmark("op-3gram-set").is_ok());
+    }
+
+    #[test]
+    fn test_the_spellings_the_cli_used_to_invent_are_gone() {
+        assert!(
+            run_analysis("op3gram-set-dice").is_err(),
+            "the old --analysis spelling still parses"
+        );
+        assert!(
+            extract_birthmark("op-tri-gram-set").is_err(),
+            "the old --birthmark-type spelling still parses"
+        );
+    }
+
+    /// The k ceiling was a property of the hand-written list, not of the
+    /// grammar. The list still stops -- a completion list has to -- but the
+    /// option does not.
+    #[test]
+    fn test_a_k_past_the_advertised_list_is_still_accepted() {
+        let beyond = MAX_ADVERTISED_K + 1;
+        let at = run_analysis(&format!("op-{beyond}gram-freq-cosine")).unwrap();
+        assert_eq!(at.birthmark, BirthmarkType::OpKgramFreq(beyond));
+        assert!(extract_birthmark(&format!("op-{beyond}gram-freq")).is_ok());
+    }
+
+    /// Parsing at the option rather than after the run starts is what keeps a
+    /// refused pairing a usage error, and the message is the library's, which
+    /// names the pairing that was meant.
+    #[test]
+    fn test_a_refused_pairing_is_reported_while_parsing() {
+        let Err(e) = run_analysis("op-seq-euclidean") else {
+            panic!("op-seq-euclidean should be refused");
+        };
+        let err = e.to_string();
+        assert!(
+            err.contains("op-freq-euclidean"),
+            "does not name the canonical pairing: {err}"
+        );
+    }
+
+    #[test]
+    fn test_the_defaults_are_names_the_library_parses() {
+        let at = run_analysis("op-set-jaccard").unwrap();
+        assert_eq!(at.birthmark, BirthmarkType::OpSet);
+        let opts = cli::OinkieOpts::try_parse_from(vec!["oinkie", "run", "x.json"]).unwrap();
+        let cli::OinkieCommand::Run(run_opts) = opts.command else {
+            panic!("Expected Run command");
+        };
+        assert_eq!(run_opts.analysis_type().unwrap().birthmark, at.birthmark);
+        assert!(cli::OinkieOpts::try_parse_from(vec!["oinkie", "extract", "x.json"]).is_ok());
     }
 
     /// Lifting is serial unless asked otherwise: it runs a whole decompiler
