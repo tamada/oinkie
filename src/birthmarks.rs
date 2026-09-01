@@ -497,9 +497,17 @@ impl AnalysisType {
         BirthmarkType::advertised().flat_map(|bt| {
             Algorithm::value_variants()
                 .iter()
-                .filter(|a| bt.pairs_with(a))
-                .map(|a| format!("{bt}-{}", a.cli_name()))
-                .collect::<Vec<_>>()
+                // One closure rather than `filter` then `map`, because both
+                // would have to borrow `bt`, which does not outlive this
+                // iterator. Written as an `if` rather than `bool::then`,
+                // which clippy refuses inside `filter_map`.
+                .filter_map(move |a| {
+                    if bt.pairs_with(a) {
+                        Some(format!("{bt}-{}", a.cli_name()))
+                    } else {
+                        None
+                    }
+                })
         })
     }
 }

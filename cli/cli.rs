@@ -205,7 +205,7 @@ For example, 'op-seq' extracts the sequence of operations as a birthmark,
 while 'fc-freq' extracts the frequency of function calls.
 k-grams are written with the k in the name: 'op-3gram-set'. Any k parses, not
 only the ones 'oinkie info' lists.
-The full birthmark types cann be found by running 'oinkie info'.")]
+The full birthmark types can be found by running 'oinkie info'.")]
     birthmark_type: BirthmarkType,
 
     #[clap(

@@ -60,7 +60,7 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-d+[Specify the directory for putting the resultant JSON files for the extracted birthmarks (default\: '\''./birthmarks'\'' directory)]:DIRECTORY:_files' \
 '--dest=[Specify the directory for putting the resultant JSON files for the extracted birthmarks (default\: '\''./birthmarks'\'' directory)]:DIRECTORY:_files' \
-'-b+[Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, '\''op-seq'\'' extracts the sequence of operations as a birthmark, while '\''fc-freq'\'' extracts the frequency of function calls. k-grams are written with the k in the name\: '\''op-3gram-set'\''. Any k parses, not only the ones '\''oinkie info'\'' lists. The full birthmark types cann be found by running '\''oinkie info'\''.]:BIRTHMARK_TYPE:((fc-seq\:"the sequence of method calls in a program"
+'-b+[Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, '\''op-seq'\'' extracts the sequence of operations as a birthmark, while '\''fc-freq'\'' extracts the frequency of function calls. k-grams are written with the k in the name\: '\''op-3gram-set'\''. Any k parses, not only the ones '\''oinkie info'\'' lists. The full birthmark types can be found by running '\''oinkie info'\''.]:BIRTHMARK_TYPE:((fc-seq\:"the sequence of method calls in a program"
 fc-freq\:"the frequency of method calls in a program"
 fc-set\:"the set of method calls in a program"
 op-seq\:"the sequence of operations in a program"
@@ -90,7 +90,7 @@ op-5gram-set\:"the set of 5-grams of operations in a program"
 op-6gram-set\:"the set of 6-grams of operations in a program"
 op-7gram-set\:"the set of 7-grams of operations in a program"
 op-8gram-set\:"the set of 8-grams of operations in a program"))' \
-'--birthmark-type=[Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, '\''op-seq'\'' extracts the sequence of operations as a birthmark, while '\''fc-freq'\'' extracts the frequency of function calls. k-grams are written with the k in the name\: '\''op-3gram-set'\''. Any k parses, not only the ones '\''oinkie info'\'' lists. The full birthmark types cann be found by running '\''oinkie info'\''.]:BIRTHMARK_TYPE:((fc-seq\:"the sequence of method calls in a program"
+'--birthmark-type=[Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, '\''op-seq'\'' extracts the sequence of operations as a birthmark, while '\''fc-freq'\'' extracts the frequency of function calls. k-grams are written with the k in the name\: '\''op-3gram-set'\''. Any k parses, not only the ones '\''oinkie info'\'' lists. The full birthmark types can be found by running '\''oinkie info'\''.]:BIRTHMARK_TYPE:((fc-seq\:"the sequence of method calls in a program"
 fc-freq\:"the frequency of method calls in a program"
 fc-set\:"the set of method calls in a program"
 op-seq\:"the sequence of operations in a program"

@@ -83,7 +83,7 @@ Options:
           while 'fc-freq' extracts the frequency of function calls.
           k-grams are written with the k in the name: 'op-3gram-set'. Any k parses, not
           only the ones 'oinkie info' lists.
-          The full birthmark types cann be found by running 'oinkie info'. [default: op-seq]
+          The full birthmark types can be found by running 'oinkie info'. [default: op-seq]
   -S, --skip
           Skip the resultant birthmark file is already exists
   -B, --binary-type <BINARY_TYPE>

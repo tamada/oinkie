@@ -50,7 +50,7 @@ impl TypedValueParser for AnalysisParser {
         _arg: Option<&clap::Arg>,
         value: &OsStr,
     ) -> Result<Self::Value, clap::Error> {
-        let name = lossless(value, cmd)?;
+        let name = lossless(value, cmd, "analysis name")?;
         // Parsed and thrown away: this is the validation, and doing it here is
         // what keeps an unknown name a clap error rather than a failure after
         // the run has started. The message is the library's, which names the
@@ -78,7 +78,7 @@ impl TypedValueParser for BirthmarkTypeParser {
         _arg: Option<&clap::Arg>,
         value: &OsStr,
     ) -> Result<Self::Value, clap::Error> {
-        let name = lossless(value, cmd)?;
+        let name = lossless(value, cmd, "birthmark type")?;
         BirthmarkType::try_from(name.as_str()).map_err(|e| invalid_value(cmd, e))
     }
 
@@ -92,11 +92,15 @@ impl TypedValueParser for BirthmarkTypeParser {
 /// A name that is not UTF-8 cannot be one of these, so it is rejected as an
 /// invalid value rather than lossily converted into a different name that
 /// might happen to parse.
-fn lossless(value: &OsStr, cmd: &clap::Command) -> Result<String, clap::Error> {
+///
+/// `what` names the vocabulary the value failed to be. Both parsers come
+/// through here, and an `--analysis` value told it is not a birthmark name
+/// sends the reader looking in the wrong place.
+fn lossless(value: &OsStr, cmd: &clap::Command, what: &str) -> Result<String, clap::Error> {
     value.to_str().map(str::to_string).ok_or_else(|| {
         clap::Error::raw(
             ErrorKind::InvalidUtf8,
-            format!("{:?}: not a valid birthmark name\n", value),
+            format!("{:?}: not a valid {what}\n", value),
         )
         .with_cmd(cmd)
     })
@@ -104,4 +108,31 @@ fn lossless(value: &OsStr, cmd: &clap::Command) -> Result<String, clap::Error> {
 
 fn invalid_value(cmd: &clap::Command, e: oinkie::Error) -> clap::Error {
     clap::Error::raw(ErrorKind::InvalidValue, format!("{e}\n")).with_cmd(cmd)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use clap::builder::TypedValueParser;
+    use std::os::unix::ffi::OsStrExt;
+
+    /// Both parsers refuse a non-UTF-8 value through the same helper, so the
+    /// message has to name the vocabulary the value failed to be. It said
+    /// "birthmark name" for both until a review caught it, which sent an
+    /// `--analysis` reader looking in the wrong place.
+    #[test]
+    fn test_a_non_utf8_value_is_refused_as_what_the_option_takes() {
+        let cmd = clap::Command::new("oinkie");
+        let bad = OsStr::from_bytes(b"op-\xff-set");
+
+        let e = AnalysisParser
+            .parse_ref(&cmd, None, bad)
+            .expect_err("a non-UTF-8 value cannot be a name");
+        assert!(e.to_string().contains("analysis name"), "{e}");
+
+        let e = BirthmarkTypeParser
+            .parse_ref(&cmd, None, bad)
+            .expect_err("a non-UTF-8 value cannot be a name");
+        assert!(e.to_string().contains("birthmark type"), "{e}");
+    }
 }
