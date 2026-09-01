@@ -89,6 +89,10 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
 /// Read the comparison result from the given CSV file and return a CompareResult struct.
 /// This function skips actual comparison and shorten the comparison time if the result file already exists.
 /// The CSV file is expected to have a line starting with "result," followed by the duration in nanoseconds and the similarity value, separated by commas.
+///
+/// "Expected" is enforced. Without the line there is no score to report, and
+/// returning one anyway meant reporting 0.0 -- a real answer, and the wrong
+/// one -- for a file an interrupted run left half written.
 fn read_result_file(
     dest_path: &Path,
     index: usize,
@@ -103,8 +107,12 @@ fn read_result_file(
 
     let mut original_path1 = PathBuf::new();
     let mut original_path2 = PathBuf::new();
-    let mut similarity = 0.0;
-    let mut duration_nanos = 0;
+    // An Option rather than a zeroed pair, so that "the file never said" is
+    // not spelled the same way as "the score was zero". It used to be the
+    // latter: a file holding the pair but no result line came back as a
+    // successful comparison scoring 0.0, which is what an interrupted run
+    // leaves behind and what --skip then reads.
+    let mut scored: Option<(u64, f64)> = None;
 
     for result in reader.records() {
         let record = result.map_err(Error::Csv)?;
@@ -116,16 +124,17 @@ fn read_result_file(
                         dest_path.display()
                     )));
                 }
-                duration_nanos = record[1]
+                let duration_nanos = record[1]
                     .parse()
                     .map_err(|e| Error::ParseInt(record[1].to_string(), e))?;
-                similarity = record[2].parse().map_err(|e| {
+                let similarity = record[2].parse().map_err(|e| {
                     Error::Parse(format!(
                         "Failed to parse similarity value in {}: {}",
                         dest_path.display(),
                         e
                     ))
                 })?;
+                scored = Some((duration_nanos, similarity));
             }
             Some("left") => {
                 if let Some(s) = record.get(3) {
@@ -141,6 +150,12 @@ fn read_result_file(
         }
     }
 
+    let Some((duration_nanos, similarity)) = scored else {
+        return Err(Error::Parse(format!(
+            "Result line not found in {}",
+            dest_path.display()
+        )));
+    };
     if original_path1.as_os_str().is_empty() || original_path2.as_os_str().is_empty() {
         return Err(Error::Parse(format!(
             "Birthmark paths not found in {}",
@@ -631,6 +646,101 @@ mod tests {
         assert!(LifterType::Angr.home_spec().is_none());
         let err = LifterType::Angr.find_home(None).unwrap_err().to_string();
         assert!(err.contains("angr"), "unhelpful message: {err}");
+    }
+
+    /// A similarity CSV as `compare` writes one, written to a temp file so
+    /// that `read_result_file` can be exercised directly.
+    ///
+    /// Through the CLI it is only reachable with `--skip` over a directory
+    /// left by an earlier run, which is why every one of its error paths was
+    /// uncovered (#28): the end-to-end tests never take the branch, and none
+    /// of them arranges a *malformed* leftover.
+    fn read_result(body: &str) -> Result<CompareResult> {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("00000.csv");
+        std::fs::write(&path, body).unwrap();
+        read_result_file(&path, 7, Path::new("a.json"), Path::new("b.json"))
+    }
+
+    const A_WHOLE_RESULT: &str = "result,28083,0.75\n\
+        left,program,hello_clang,bin/hello_clang,1,1,pcodes/hello_clang.json\n\
+        right,program,hello_gcc,bin/hello_gcc,1,1,pcodes/hello_gcc.json\n\
+        matrix,,entry\n\
+        0,entry,0.75\n";
+
+    #[test]
+    fn test_a_stored_result_is_read_back_whole() {
+        let cr = read_result(A_WHOLE_RESULT).unwrap();
+        // the index is the caller's, not the file's: the file is named for it
+        assert_eq!(cr.index, 7);
+        assert_eq!(cr.similarity, 0.75);
+        assert_eq!(cr.path1, PathBuf::from("bin/hello_clang"));
+        assert_eq!(cr.path2, PathBuf::from("bin/hello_gcc"));
+        assert_eq!(cr.duration, Duration::from_nanos(28083));
+    }
+
+    /// The paths come from the `left` and `right` records rather than from
+    /// the arguments, which is what makes a `--skip` rerun agree with a fresh
+    /// one about which file was on which side.
+    #[test]
+    fn test_the_pair_is_read_from_the_file_not_from_the_arguments() {
+        let cr = read_result(A_WHOLE_RESULT).unwrap();
+        assert_ne!(cr.path1, PathBuf::from("a.json"));
+        assert_ne!(cr.path2, PathBuf::from("b.json"));
+    }
+
+    #[test]
+    fn test_a_malformed_stored_result_says_what_is_wrong_with_it() {
+        let cases = [
+            (
+                "result,28083\nleft,,,x\nright,,,y\n",
+                "Invalid result line format",
+            ),
+            (
+                "result,notanumber,0.75\nleft,,,x\nright,,,y\n",
+                "Parse int error",
+            ),
+            (
+                "result,28083,notafloat\nleft,,,x\nright,,,y\n",
+                "Failed to parse similarity value",
+            ),
+            (
+                "result,28083,0.75\nright,,,y\n",
+                "Birthmark paths not found",
+            ),
+            ("result,28083,0.75\nleft,,,x\n", "Birthmark paths not found"),
+            // A file with the pair but no score. Reachable: a run interrupted
+            // part-way through writing leaves one, and --skip reads it.
+            ("left,,,x\nright,,,y\n", "Result line not found"),
+            ("", "Result line not found"),
+        ];
+        for (body, expected) in cases {
+            let Err(e) = read_result(body) else {
+                panic!("should have been refused: {body:?}");
+            };
+            assert!(
+                e.to_string().contains(expected),
+                "{body:?} gave {e}, expected something containing {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_a_result_file_that_is_not_there_is_an_io_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("00000.csv");
+        let Err(e) = read_result_file(&missing, 0, Path::new("a"), Path::new("b")) else {
+            panic!("a missing file should not read");
+        };
+        assert!(e.to_string().starts_with("IO error for"), "{e}");
+    }
+
+    /// `oinkie info` prints each algorithm's clap help with two `unwrap()`s,
+    /// so an algorithm added without a doc comment panics the command rather
+    /// than printing a blank line. Calling it is the guard.
+    #[test]
+    fn test_info_prints_every_algorithm_without_panicking() {
+        assert!(perform_info().is_ok());
     }
 
     fn run_analysis(name: &str) -> Result<AnalysisType> {

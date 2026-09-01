@@ -169,6 +169,162 @@ fn load_comparison<P: AsRef<Path>>(path: P) -> Result<(Array2<f64>, PathBuf, Pat
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn dir_with(files: &[(&str, &str)]) -> TempDir {
+        let d = tempfile::tempdir().unwrap();
+        for (name, body) in files {
+            std::fs::write(d.path().join(name), body).unwrap();
+        }
+        d
+    }
+
+    /// A similarity CSV as `compare` writes one: the score, the pair, then
+    /// the matrix as a header row of column names and one numbered row per
+    /// element.
+    const A_COMPARISON: &str = "result,28083,0.75\n\
+        left,program,hello_clang,bin/hello_clang,1,1,pcodes/hello_clang.json\n\
+        right,program,hello_gcc,bin/hello_gcc,1,1,pcodes/hello_gcc.json\n\
+        matrix,,entry,second\n\
+        0,entry,0.75,0.25\n";
+
     #[test]
-    fn test_load_comparison() {}
+    fn test_a_comparison_is_read_into_a_matrix_and_its_pair() {
+        let d = dir_with(&[("00000.csv", A_COMPARISON)]);
+        let (matrix, p1, p2, duration) = load_comparison(d.path().join("00000.csv")).unwrap();
+        assert_eq!(matrix.dim(), (1, 2));
+        assert_eq!(matrix[[0, 1]], 0.25);
+        assert_eq!(p1, PathBuf::from("bin/hello_clang"));
+        assert_eq!(p2, PathBuf::from("bin/hello_gcc"));
+        assert_eq!(duration, Duration::from_nanos(28083));
+    }
+
+    /// A record whose first field is none of the known prefixes is skipped
+    /// rather than refused, so a file gaining a row does not stop an older
+    /// directory being reaggregated.
+    #[test]
+    fn test_a_record_it_does_not_know_is_skipped() {
+        let with_extra = format!("something,else\n{A_COMPARISON}");
+        let d = dir_with(&[("00000.csv", with_extra.as_str())]);
+        let (matrix, _, _, _) = load_comparison(d.path().join("00000.csv")).unwrap();
+        assert_eq!(matrix.dim(), (1, 2));
+    }
+
+    #[test]
+    fn test_a_comparison_with_no_matrix_in_it_is_refused() {
+        let d = dir_with(&[("00000.csv", "result,28083,0.75\nleft,,,x\nright,,,y\n")]);
+        let e = load_comparison(d.path().join("00000.csv")).unwrap_err();
+        assert!(e.to_string().contains("Valid matrix data not found"), "{e}");
+    }
+
+    #[test]
+    fn test_a_cell_that_is_not_a_number_is_refused() {
+        let broken = "matrix,,entry\n0,entry,notafloat\n";
+        let d = dir_with(&[("00000.csv", broken)]);
+        let e = load_comparison(d.path().join("00000.csv")).unwrap_err();
+        assert!(e.to_string().contains("Parse float error"), "{e}");
+    }
+
+    #[test]
+    fn test_a_comparison_that_is_not_there_is_an_io_error() {
+        let d = tempfile::tempdir().unwrap();
+        let e = load_comparison(d.path().join("00000.csv")).unwrap_err();
+        assert!(e.to_string().starts_with("IO error for"), "{e}");
+    }
+
+    /// `reaggregate` passes a load failure through rather than scoring the
+    /// pair as zero, which would be indistinguishable from two programs with
+    /// nothing in common.
+    #[test]
+    fn test_reaggregate_passes_a_load_failure_on() {
+        let d = tempfile::tempdir().unwrap();
+        let cr = CompareResult::new(
+            0,
+            0.0,
+            PathBuf::new(),
+            PathBuf::new(),
+            Duration::from_secs(0),
+        );
+        let Err(e) = reaggregate(&cr, d.path(), &Aggregator::Hungarian) else {
+            panic!("a missing comparison file should not load");
+        };
+        assert!(e.to_string().starts_with("IO error for"), "{e}");
+    }
+
+    #[test]
+    fn test_reaggregate_rescores_from_the_stored_matrix() {
+        let d = dir_with(&[("00000.csv", A_COMPARISON)]);
+        let cr = CompareResult::new(
+            0,
+            0.0,
+            PathBuf::new(),
+            PathBuf::new(),
+            Duration::from_secs(0),
+        );
+        let (rescored, _) = reaggregate(&cr, d.path(), &Aggregator::Hungarian).unwrap();
+        assert_eq!(rescored.index, 0);
+        assert_eq!(rescored.path1, PathBuf::from("bin/hello_clang"));
+        assert!(rescored.similarity > 0.0);
+    }
+
+    /// Without a `results.csv` the directory is scanned for the numbered
+    /// files instead, so a run that was interrupted before writing the
+    /// summary can still be reaggregated.
+    #[test]
+    fn test_a_directory_without_a_summary_is_scanned_for_numbered_files() {
+        let d = dir_with(&[
+            ("00000.csv", A_COMPARISON),
+            ("00002.csv", A_COMPARISON),
+            // neither of these is a comparison: one is not numbered, the
+            // other is not a CSV
+            ("summary.csv", A_COMPARISON),
+            ("00001.txt", A_COMPARISON),
+        ]);
+        let mut found = load_results(d.path())
+            .unwrap()
+            .iter()
+            .map(|cr| cr.index)
+            .collect::<Vec<_>>();
+        found.sort_unstable();
+        assert_eq!(found, vec![0, 2]);
+    }
+
+    #[test]
+    fn test_a_summary_is_read_rather_than_the_directory_scanned() {
+        let d = dir_with(&[
+            (
+                "results.csv",
+                "0,0.75,bin/a,bin/b,28083\ntotal duration,830292,00:00:000\n",
+            ),
+            ("00000.csv", A_COMPARISON),
+            ("00001.csv", A_COMPARISON),
+        ]);
+        let results = load_results(d.path()).unwrap();
+        // the scan would have found two; the summary names one, and stops at
+        // the total-duration line rather than trying to parse it as a result
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].similarity, 0.75);
+    }
+
+    /// The stem is all digits by the time it is parsed, so the only way this
+    /// fails is a number too large for a `usize` -- which is why it is an
+    /// error rather than an `unwrap`.
+    #[test]
+    fn test_a_number_too_large_to_be_an_index_is_refused() {
+        let d = dir_with(&[("999999999999999999999999999999.csv", A_COMPARISON)]);
+        let Err(e) = load_results(d.path()) else {
+            panic!("an index that does not fit a usize should be refused");
+        };
+        assert!(e.to_string().contains("Parse int error"), "{e}");
+    }
+
+    #[test]
+    fn test_a_score_directory_that_is_not_there_is_an_io_error() {
+        let d = tempfile::tempdir().unwrap();
+        let Err(e) = load_results(&d.path().join("nope")) else {
+            panic!("a directory that is not there should not scan");
+        };
+        assert!(e.to_string().starts_with("IO error for"), "{e}");
+    }
 }

@@ -15,16 +15,24 @@ pub struct OinkieOpts {
     pub level: LogLevel,
 }
 
+/// Separated from [`OinkieOpts::init`] so that it can be tested. `init`
+/// itself calls `env_logger::Builder::init`, which panics if a logger is
+/// already installed, so it can be called at most once per test binary --
+/// which would leave five of these six arms unreachable from a test.
+fn filter_level(level: &LogLevel) -> log::LevelFilter {
+    match level {
+        LogLevel::Debug => log::LevelFilter::Debug,
+        LogLevel::Info => log::LevelFilter::Info,
+        LogLevel::Warn => log::LevelFilter::Warn,
+        LogLevel::Error => log::LevelFilter::Error,
+        LogLevel::Trace => log::LevelFilter::Trace,
+        LogLevel::Off => log::LevelFilter::Off,
+    }
+}
+
 impl OinkieOpts {
     pub fn init(&self) -> Result<()> {
-        let filter = match self.level {
-            LogLevel::Debug => log::LevelFilter::Debug,
-            LogLevel::Info => log::LevelFilter::Info,
-            LogLevel::Warn => log::LevelFilter::Warn,
-            LogLevel::Error => log::LevelFilter::Error,
-            LogLevel::Trace => log::LevelFilter::Trace,
-            LogLevel::Off => log::LevelFilter::Off,
-        };
+        let filter = filter_level(&self.level);
         env_logger::Builder::new().filter_level(filter).init();
         Ok(())
     }
@@ -452,5 +460,50 @@ impl RunOpts {
             self.aggregator
         );
         &self.aggregator
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_every_log_level_maps_to_a_filter() {
+        let cases = [
+            (LogLevel::Trace, log::LevelFilter::Trace),
+            (LogLevel::Debug, log::LevelFilter::Debug),
+            (LogLevel::Info, log::LevelFilter::Info),
+            (LogLevel::Warn, log::LevelFilter::Warn),
+            (LogLevel::Error, log::LevelFilter::Error),
+            (LogLevel::Off, log::LevelFilter::Off),
+        ];
+        for (level, expected) in cases {
+            assert_eq!(filter_level(&level), expected, "{level:?}");
+        }
+    }
+
+    /// `-j` is rejected at parse time in terms of the option rather than of
+    /// the `NonZeroUsize` behind it, so both refusals have to read as
+    /// something a person typed.
+    #[test]
+    fn test_jobs_refuses_what_is_not_a_count() {
+        assert_eq!(parse_jobs("4").unwrap().get(), 4);
+        assert_eq!(parse_jobs("0").unwrap_err(), "must be at least 1");
+        let e = parse_jobs("many").unwrap_err();
+        assert!(e.contains("invalid digit"), "{e}");
+    }
+
+    #[test]
+    fn test_run_takes_skip_and_reports_it() {
+        for (args, expected) in [
+            (vec!["oinkie", "run", "a.json"], false),
+            (vec!["oinkie", "run", "-S", "a.json"], true),
+        ] {
+            let OinkieCommand::Run(opts) = OinkieOpts::try_parse_from(args).unwrap().command else {
+                panic!("Expected Run command");
+            };
+            assert_eq!(opts.is_skip(), expected);
+        }
     }
 }
