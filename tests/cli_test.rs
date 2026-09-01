@@ -58,18 +58,23 @@ fn test_lift_command() {
 /// it was given -- so the assertion is that the value reached Ghidra's home,
 /// not merely that the run failed. No Ghidra starts, so this does not join
 /// the `ghidra` group.
+///
+/// The home is a fixed absolute path rather than one under the temporary
+/// directory. It only has to be somewhere Ghidra is not, and naming it
+/// literally keeps the expected string a literal too. Derived from `TMPDIR`,
+/// it would have to survive both `to_str` and the `{:?}` the error message
+/// formats it with -- a non-UTF-8 `TMPDIR` panics on the first, and one
+/// holding a quote or a backslash comes back escaped from the second. Either
+/// way the test would report the environment variable as broken on a machine
+/// where the only unusual thing is where it puts its temporary files.
 #[test]
 fn test_the_lifter_home_is_read_from_the_environment() {
-    let temp_dir = tempfile::Builder::new()
-        .prefix("oinkie_test")
-        .tempdir()
-        .unwrap();
-    let home = temp_dir.path().join("not-a-ghidra");
+    let temp_dir = tempdir().unwrap();
     let dest = temp_dir.path().join("lifted");
 
     Command::cargo_bin("oinkie")
         .unwrap()
-        .env("GHIDRA_HOME", &home)
+        .env("GHIDRA_HOME", "/oinkie-no-such-ghidra")
         .arg("lift")
         .arg("-d")
         .arg(&dest)
@@ -77,7 +82,7 @@ fn test_the_lifter_home_is_read_from_the_environment() {
         .assert()
         .failure()
         .stderr(predicate::str::contains(
-            home.join("support/analyzeHeadless").to_str().unwrap(),
+            "/oinkie-no-such-ghidra/support/analyzeHeadless",
         ));
 }
 
