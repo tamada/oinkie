@@ -482,7 +482,7 @@ mod kgram_freq {
         for (kgram, count) in Vec::<(Kgram, usize)>::deserialize(d)? {
             if map.contains_key(&kgram) {
                 return Err(D::Error::custom(format!(
-                    "[{}]: the same k-gram is listed twice, so its frequency is ambiguous",
+                    "[{}]: listed more than once, so its frequency is ambiguous",
                     kgram.0.join(", ")
                 )));
             }
@@ -1331,7 +1331,7 @@ mod tests {
             panic!("a k-gram listed twice must not silently pick one");
         };
         let msg = e.to_string();
-        assert!(msg.contains("listed twice"), "{msg}");
+        assert!(msg.contains("listed more than once"), "{msg}");
         assert!(msg.contains("CALL"), "does not say which one: {msg}");
     }
 
