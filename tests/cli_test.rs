@@ -1,7 +1,19 @@
 use assert_cmd::Command;
 use predicates::prelude::*;
+use serial_test::serial;
 use std::fs;
 use tempfile::tempdir;
+
+// Tests marked `#[serial(ghidra)]` start a real Ghidra. They are serialised
+// against each other because Ghidra compiles its SLEIGH language definitions
+// on first use and caches them *inside its own installation*, so two headless
+// runs against an installation nobody has used yet write the same file at the
+// same time and the loser reads a half-written one. analyzeHeadless exits
+// successfully regardless, so it arrives as a missing output rather than an
+// error (#54).
+//
+// The group is named for what is shared rather than left anonymous, so that a
+// future test needing the same exclusion knows which one to join.
 
 #[test]
 fn test_info_command() {
@@ -15,6 +27,7 @@ fn test_info_command() {
 }
 
 #[test]
+#[serial(ghidra)]
 fn test_lift_command() {
     let temp_dir = tempdir().unwrap();
     let dest = temp_dir.path().join("lifted");
@@ -196,8 +209,26 @@ fn test_reaggregate_command() {
 /// also used as the working directory of the Ghidra process. A relative path
 /// must therefore be resolved before the process starts, or Ghidra resolves it
 /// a second time against itself and looks for `irs/irs`.
+/// Both `-i` regressions in one run, because each run is a whole decompiler.
+///
+/// A path given to `-i` is created rather than required to exist, as every
+/// other destination directory in the CLI is and as the temporary directory
+/// used without `-i` is by construction. And it is resolved once: it used to
+/// be resolved twice, by us and again by Ghidra against its own working
+/// directory, so `-i irs` went looking for `irs/irs`.
+///
+/// A relative path that does not exist yet covers both at once, and being
+/// nested covers creating intermediate levels rather than just the last.
+///
+/// Either regression makes the run itself fail here, which is how #36 was
+/// reported -- Ghidra complaining that `irs/irs` did not exist -- rather than
+/// showing up as a stray directory. Both were checked by reverting each fix in
+/// turn. The explicit assertions below still earn their place: they name which
+/// of the two broke, and they catch a variant that doubles the path without
+/// failing outright.
 #[test]
-fn test_lift_command_with_relative_intermediate_dir() {
+#[serial(ghidra)]
+fn test_lift_command_intermediate_dir_is_created_and_resolved_once() {
     // Ghidra rejects any path element starting with '.', and tempdir() names
     // its directories ".tmpXXXX", so the project location needs a plain prefix.
     let temp_dir = tempfile::Builder::new()
@@ -206,52 +237,24 @@ fn test_lift_command_with_relative_intermediate_dir() {
         .unwrap();
     let input = fs::canonicalize("testdata/hello_world/bin/hello_clang").unwrap();
     let dest = temp_dir.path().join("lifted");
-    fs::create_dir(temp_dir.path().join("irs")).unwrap();
 
     Command::cargo_bin("oinkie")
         .unwrap()
         .current_dir(temp_dir.path())
         .arg("lift")
         .arg("-i")
-        .arg("irs")
+        .arg("irs/nested")
         .arg("-d")
         .arg(&dest)
         .arg(&input)
         .assert()
         .success();
 
+    let intermediate = temp_dir.path().join("irs/nested");
+    assert!(intermediate.is_dir(), "the -i directory was not created");
     assert!(
-        !temp_dir.path().join("irs").join("irs").exists(),
+        !intermediate.join("irs/nested").exists(),
         "the -i path was resolved twice"
     );
-    assert!(dest.join("hello_clang.json").exists());
-}
-
-/// Every other destination directory in the CLI is created for the user, and
-/// the temporary directory used when `-i` is omitted exists by construction.
-/// A path passed to `-i` should be no different.
-#[test]
-fn test_lift_command_creates_the_intermediate_dir() {
-    // See the note above: the project location must not sit under a dot-directory.
-    let temp_dir = tempfile::Builder::new()
-        .prefix("oinkie_test")
-        .tempdir()
-        .unwrap();
-    let input = fs::canonicalize("testdata/hello_world/bin/hello_clang").unwrap();
-    let dest = temp_dir.path().join("lifted");
-    let intermediate = temp_dir.path().join("does/not/exist/yet");
-
-    Command::cargo_bin("oinkie")
-        .unwrap()
-        .arg("lift")
-        .arg("-i")
-        .arg(&intermediate)
-        .arg("-d")
-        .arg(&dest)
-        .arg(&input)
-        .assert()
-        .success();
-
-    assert!(intermediate.is_dir(), "the -i directory was not created");
     assert!(dest.join("hello_clang.json").exists());
 }

@@ -38,21 +38,6 @@ jobs:
           cargo clippy -- -D warnings
           cargo build --release
 
-      # Ghidra compiles its SLEIGH language definitions from .slaspec to .sla
-      # on first use and caches them inside its own installation, which the
-      # runner unpacks fresh every time. The lift tests start three
-      # analyzeHeadless processes at once, and against a cold installation
-      # they race to write the same .sla; the loser reads a half-written file
-      # and dies with "ZipException: invalid block type" -- while
-      # analyzeHeadless still exits 0, so the failure surfaced only as a
-      # missing output file. One serial lift builds the cache before anything
-      # runs in parallel.
-      - name: Warm Ghidra's language cache
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          export GHIDRA_HOME=${{ env.GHIDRA_INSTALL_DIR }}
-          ./target/release/oinkie lift -d "$RUNNER_TEMP/warm" testdata/hello_world/bin/hello_clang
-
       - name: Convert coverage format to lcov
         if: matrix.os == 'ubuntu-latest'
         run: |
