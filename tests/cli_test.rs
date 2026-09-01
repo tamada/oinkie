@@ -243,14 +243,25 @@ fn test_a_kgram_frequency_birthmark_can_be_written_and_read_back() {
         .assert()
         .success();
 
-    let score = |dir: &std::path::Path| {
+    // Every row, sorted. The rows are written from a parallel iteration, so
+    // which one lands first is not part of the output's meaning -- reading
+    // only the first line made this test depend on a race, and it lost.
+    //
+    // Each row is `index, similarity, left, right, duration`; the duration is
+    // wall clock and the only field that differs between two runs of the same
+    // analysis, so it is dropped.
+    let scores = |dir: &std::path::Path| {
         let csv = fs::read_to_string(dir.join("results.csv")).unwrap();
-        let line = csv.lines().next().unwrap().to_string();
-        // index, similarity, left, right, duration -- the duration is the
-        // only field that differs between two runs of the same analysis
-        line.rsplit_once(',').unwrap().0.to_string()
+        let mut rows: Vec<String> = csv
+            .lines()
+            .filter(|l| !l.starts_with("total duration,"))
+            .map(|l| l.rsplit_once(',').unwrap().0.to_string())
+            .collect();
+        rows.sort();
+        assert!(!rows.is_empty(), "no scores in {}", dir.display());
+        rows
     };
-    assert_eq!(score(&through_a_file), score(&in_memory));
+    assert_eq!(scores(&through_a_file), scores(&in_memory));
 }
 
 #[test]
