@@ -1,9 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::Iterable;
+use crate::lift::Ir;
+use crate::{Error, Iterable, Result};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Program<T> {
@@ -28,6 +29,132 @@ pub struct Program<T> {
     functions: Vec<Function<T>>,
     #[serde(skip)]
     pub json_path: Option<PathBuf>,
+}
+
+impl<T> TryFrom<PathBuf> for Program<T>
+where
+    T: DeserializeOwned + crate::Op,
+{
+    type Error = Error;
+
+    fn try_from(path: PathBuf) -> Result<Self> {
+        std::fs::File::open(&path)
+            .map_err(|e| Error::Io(path.clone(), e))
+            .and_then(|f| serde_json::from_reader(f).map_err(|e| Error::Json(path, e)))
+    }
+}
+
+impl<T> TryFrom<&Path> for Program<T>
+where
+    T: DeserializeOwned + crate::Op,
+{
+    type Error = Error;
+
+    fn try_from(path: &Path) -> Result<Self> {
+        Self::try_from(path.to_path_buf())
+    }
+}
+
+/// A lifted program whose operation type was chosen by the file rather than by
+/// the caller.
+///
+/// [`Program`] is generic over its operation type, but nothing was deciding
+/// that type: every caller wrote `Program<ghidra::Op>` and a file lifted by
+/// anything else would have been read against P-Code's vocabulary. The
+/// decision belongs to the `ir` field the file carries, and this is where it
+/// is made.
+///
+/// One variant is not an oversight. Ghidra is the only lifter implemented, so
+/// it is the only representation with an operation type to read into; naming
+/// the others here would mean inventing types for opcodes nobody has seen yet.
+/// Adding a lifter adds a variant, and the compiler then points at every place
+/// that has to account for it — which is the property the enum exists for.
+pub enum AnyProgram {
+    GhidraPcode(Program<crate::ghidra::Op>),
+}
+
+/// Just enough of a lifted file to learn which representation it is in.
+///
+/// Deserializing this skips the operations rather than building them, so
+/// reading the representation costs a scan of the text and no allocation.
+#[derive(Deserialize)]
+struct IrProbe {
+    #[serde(default)]
+    ir: Ir,
+}
+
+impl AnyProgram {
+    /// Reads a lifted program, choosing the operation type from the file's own
+    /// `ir` field.
+    ///
+    /// A representation with no reader is refused by name. Read as P-Code it
+    /// would fail anyway, since the opcode enum is closed — but on the first
+    /// foreign opcode it happened to meet, reported as an unknown variant
+    /// among seventy-five alternatives rather than as the one fact that
+    /// matters.
+    pub fn load(path: &Path) -> Result<Self> {
+        // Read once and deserialize twice from the same bytes: the probe has
+        // to see the file before the reader can be chosen, and reading it
+        // again would cost more than the scan does.
+        let bytes = std::fs::read(path).map_err(|e| Error::Io(path.to_path_buf(), e))?;
+        let json_err = |e| Error::Json(path.to_path_buf(), e);
+        let probe: IrProbe = serde_json::from_slice(&bytes).map_err(json_err)?;
+        match probe.ir {
+            Ir::GhidraPcode => serde_json::from_slice(&bytes)
+                .map(Self::GhidraPcode)
+                .map_err(json_err),
+            ir => Err(Error::UnsupportedIr(path.to_path_buf(), ir)),
+        }
+    }
+
+    /// The representation this program's operations are written in.
+    pub fn ir(&self) -> Ir {
+        match self {
+            Self::GhidraPcode(p) => p.ir(),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::GhidraPcode(p) => p.name(),
+        }
+    }
+
+    pub fn path(&self) -> &Path {
+        match self {
+            Self::GhidraPcode(p) => p.path(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Self::GhidraPcode(p) => p.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn set_json_path(&mut self, path: PathBuf) {
+        match self {
+            Self::GhidraPcode(p) => p.set_json_path(path),
+        }
+    }
+}
+
+impl crate::prelude::CsvInfo for AnyProgram {
+    fn csv_info(&self) -> String {
+        match self {
+            Self::GhidraPcode(p) => p.csv_info(),
+        }
+    }
+
+    fn names(&self) -> Vec<String> {
+        match self {
+            Self::GhidraPcode(p) => p.names(),
+        }
+    }
 }
 
 impl<T> crate::prelude::CsvInfo for Program<T> {
@@ -204,6 +331,68 @@ mod tests {
         );
         let back: Program<crate::ghidra::Op> = serde_json::from_str(&json).unwrap();
         assert_eq!(back.ir(), Ir::GhidraPcode);
+    }
+
+    /// The point of the dispatch: the file decides, not the caller.
+    #[test]
+    fn test_any_program_reads_ghidra_pcode() {
+        let program = AnyProgram::load(Path::new("testdata/hello_world/pcodes/hello_clang.json"))
+            .expect("the fixture must load");
+        assert_eq!(program.ir(), Ir::GhidraPcode);
+        assert_eq!(program.name(), "hello_clang");
+        assert_eq!(program.len(), 1);
+    }
+
+    /// A file written before the `ir` field existed carries no representation
+    /// to dispatch on, and must still reach the reader it was written for.
+    #[test]
+    fn test_any_program_reads_a_file_without_the_field() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("legacy.json");
+        std::fs::write(
+            &path,
+            r#"{"program":"legacy","path":"bin/legacy","symbols":{},"functions":[]}"#,
+        )
+        .unwrap();
+        let program = AnyProgram::load(&path).expect("a file without the field must still load");
+        assert_eq!(program.ir(), Ir::GhidraPcode);
+    }
+
+    /// Read as P-Code, a foreign file fails on whichever of its opcodes came
+    /// first, reported as an unknown variant among seventy-five alternatives.
+    /// Naming the representation instead says the one thing the user can act
+    /// on.
+    #[test]
+    fn test_any_program_refuses_a_representation_it_cannot_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("foreign.json");
+        std::fs::write(
+            &path,
+            r#"{"program":"foreign","path":"bin/foreign","ir":"ida-microcode",
+                "symbols":{},"functions":[{"name":"main","ops":[
+                  {"op":"m_call","inputs":["r0"]}]}]}"#,
+        )
+        .unwrap();
+        match AnyProgram::load(&path) {
+            Err(Error::UnsupportedIr(_, ir)) => assert_eq!(ir, Ir::IdaMicrocode),
+            other => panic!("expected UnsupportedIr, got {other:?}", other = other.err()),
+        }
+    }
+
+    /// The closed opcode enum is the one Ghidra assumption that fails loudly,
+    /// and dispatching on the representation must not have loosened it.
+    #[test]
+    fn test_an_unknown_opcode_is_still_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bogus.json");
+        std::fs::write(
+            &path,
+            r#"{"program":"bogus","path":"bin/bogus","ir":"ghidra-pcode",
+                "symbols":{},"functions":[{"name":"main","ops":[
+                  {"op":"LLIL_SET_REG","inputs":["(register, 0x0, 8)"]}]}]}"#,
+        )
+        .unwrap();
+        assert!(matches!(AnyProgram::load(&path), Err(Error::Json(_, _))));
     }
 
     /// The fixtures are real lifter output, so they must carry what the

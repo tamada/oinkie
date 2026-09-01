@@ -311,38 +311,35 @@ fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec
     }
 }
 
+/// A finished comparison before it is attached to the two things compared.
+///
+/// The programs are held by reference in a [`Comparison`], so producing one
+/// fixes the type they are reported as. Returning the result on its own lets
+/// the same computation be reported against a `Program<T>` or against the
+/// [`AnyProgram`] a caller loaded without naming `T`.
+type Scored = (Array2<f64>, Vec<f64>, std::time::Duration);
+
 trait ProgramComparator<T: crate::Op> {
-    fn compare_programs<'a>(
+    fn score_programs(
         &self,
-        p1: &'a Program<T>,
-        p2: &'a Program<T>,
+        p1: &Program<T>,
+        p2: &Program<T>,
         aggregator: &Aggregator,
-    ) -> Result<Comparison<'a, Program<T>>> {
+    ) -> Result<Scored> {
         let p1_len = p1.len();
         let p2_len = p2.len();
         let size = std::cmp::max(p1_len, p2_len);
+        let zero = std::time::Duration::from_millis(0);
         if p1_len == 0 && p2_len == 0 {
-            Ok(Comparison::new(
-                p1,
-                p2,
-                Array2::<f64>::zeros((0, 0)),
-                vec![1.0],
-                std::time::Duration::from_millis(0),
-            ))
+            Ok((Array2::<f64>::zeros((0, 0)), vec![1.0], zero))
         } else if p1_len == 0 || p2_len == 0 {
-            Ok(Comparison::new(
-                p1,
-                p2,
-                Array2::<f64>::zeros((0, 0)),
-                vec![0.0],
-                std::time::Duration::from_millis(0),
-            ))
+            Ok((Array2::<f64>::zeros((0, 0)), vec![0.0], zero))
         } else {
             let start = Instant::now();
             let r = build_matrix(p1, p2, size, |f1, f2| self.compare_func(f1, f2))?;
             aggregator
                 .aggregate(&r)
-                .map(|sim| Comparison::new(p1, p2, r, sim, start.elapsed()))
+                .map(|sim| (r, sim, start.elapsed()))
         }
     }
 
@@ -469,22 +466,58 @@ impl From<&Algorithm> for Comparator {
 }
 
 impl Comparator {
+    fn score_programs<T: crate::Op>(
+        &self,
+        p1: &Program<T>,
+        p2: &Program<T>,
+        aggregator: &Aggregator,
+    ) -> Result<Scored> {
+        match &self.inner {
+            ComparatorImpl::Cosine(c) => c.score_programs(p1, p2, aggregator),
+            ComparatorImpl::Dice(d) => d.score_programs(p1, p2, aggregator),
+            ComparatorImpl::Euclidean(e) => e.score_programs(p1, p2, aggregator),
+            ComparatorImpl::Jaccard(j) => j.score_programs(p1, p2, aggregator),
+            ComparatorImpl::Levenshtein(l) => l.score_programs(p1, p2, aggregator),
+            ComparatorImpl::Lcs(lcs) => lcs.score_programs(p1, p2, aggregator),
+            ComparatorImpl::Simpson(s) => s.score_programs(p1, p2, aggregator),
+            ComparatorImpl::WeightedJaccard(wj) => wj.score_programs(p1, p2, aggregator),
+        }
+    }
+
     pub fn compare_programs<'a, T: crate::Op>(
         &self,
         p1: &'a Program<T>,
         p2: &'a Program<T>,
         aggregator: &Aggregator,
     ) -> Result<Comparison<'a, Program<T>>> {
-        match &self.inner {
-            ComparatorImpl::Cosine(c) => c.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::Dice(d) => d.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::Euclidean(e) => e.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::Jaccard(j) => j.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::Levenshtein(l) => l.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::Lcs(lcs) => lcs.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::Simpson(s) => s.compare_programs(p1, p2, aggregator),
-            ComparatorImpl::WeightedJaccard(wj) => wj.compare_programs(p1, p2, aggregator),
+        let (matrix, similarities, duration) = self.score_programs(p1, p2, aggregator)?;
+        Ok(Comparison::new(p1, p2, matrix, similarities, duration))
+    }
+
+    /// Compares two programs read without naming their operation type.
+    ///
+    /// Two representations describe the same instruction with different
+    /// operations, so a comparison across them would measure the disagreement
+    /// between the lifters rather than anything about the programs. That is
+    /// refused here for the same reason it is refused for birthmarks in
+    /// [`Self::compare_birthmarks`]. Only one representation can be read
+    /// today, so nothing reachable is refused yet; the check is what keeps
+    /// that true when a second one arrives.
+    pub fn compare_any<'a>(
+        &self,
+        p1: &'a AnyProgram,
+        p2: &'a AnyProgram,
+        aggregator: &Aggregator,
+    ) -> Result<Comparison<'a, AnyProgram>> {
+        if p1.ir() != p2.ir() {
+            return Err(Error::IrMismatch(p1.ir(), p2.ir()));
         }
+        let (matrix, similarities, duration) = match (p1, p2) {
+            (AnyProgram::GhidraPcode(a), AnyProgram::GhidraPcode(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+        };
+        Ok(Comparison::new(p1, p2, matrix, similarities, duration))
     }
 
     pub fn compare_birthmarks<'a>(
@@ -962,6 +995,36 @@ mod tests {
     use super::*;
     use crate::birthmarks::Metadata;
     use std::path::PathBuf;
+
+    /// Dispatching on the file's representation must change nothing about the
+    /// answer -- only about who chose the operation type.
+    #[test]
+    fn test_compare_any_agrees_with_the_typed_comparison() {
+        let paths = [
+            "testdata/hello_world/pcodes/hello_clang.json",
+            "testdata/hello_world/pcodes/hello_gcc.json",
+        ];
+        let typed: Vec<Program<crate::ghidra::Op>> = paths
+            .iter()
+            .map(|p| Path::new(p).try_into().unwrap())
+            .collect();
+        let any: Vec<AnyProgram> = paths
+            .iter()
+            .map(|p| AnyProgram::load(Path::new(p)).unwrap())
+            .collect();
+
+        let comparator = Algorithm::Jaccard.comparator();
+        let aggregator = &Aggregator::Hungarian;
+        let expected = comparator
+            .compare_programs(&typed[0], &typed[1], aggregator)
+            .unwrap()
+            .similarity();
+        let actual = comparator
+            .compare_any(&any[0], &any[1], aggregator)
+            .unwrap()
+            .similarity();
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn compare_count_does_not_panic_on_empty_targets() {

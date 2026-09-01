@@ -28,6 +28,8 @@ pub enum Error {
     IrMismatch(crate::lift::Ir, crate::lift::Ir),
     /// An `fc-*` birthmark was asked of a program holding no call at all.
     NoCallOperations(PathBuf, crate::lift::Ir),
+    /// A lifted file naming a representation this build cannot read.
+    UnsupportedIr(PathBuf, crate::lift::Ir),
     InvalidPcode(u32),
     Io(PathBuf, std::io::Error),
     Json(PathBuf, serde_json::Error),
@@ -77,6 +79,16 @@ impl std::fmt::Display for Error {
             Error::ParseFloat(s, e) => write!(f, "{s}: Parse float error {e}"),
             Error::Parse(s) => write!(f, "Parse error: {}", s),
             Error::ParseInt(s, e) => write!(f, "{s}: Parse int error {e}"),
+            Error::UnsupportedIr(path, ir) => write!(
+                f,
+                "{}: no reader for {ir}; this build can read {}",
+                path.display(),
+                crate::lift::Ir::readable()
+                    .iter()
+                    .map(|ir| ir.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             Error::Clap(e) => write!(f, "Clap error: {}", e),
             Error::ShapeError(e) => write!(f, "Shape error: {}", e),
         }
@@ -110,9 +122,6 @@ impl Error {
 pub trait Op {
     /// returns the mnemonic of the operation, e.g., "ADD", "SUB", etc.
     fn mnemonic(&self) -> &str;
-
-    /// returns the unique code of the operation, e.g., the pcode opcode.
-    fn code(&self) -> u32;
 
     /// returns the inputs of the operation, e.g., the source registers or memory locations.
     fn inputs(&self) -> &[String];

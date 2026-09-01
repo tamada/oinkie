@@ -1,39 +1,11 @@
-use std::{
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::str::FromStr;
 
 use crate::ghidra::pcode::PcodeOp;
-use crate::program::Program;
 use crate::{Error, Result};
-use serde::{Deserialize, Serialize, Serializer, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, Serializer};
 
 pub(crate) mod lifter;
 pub mod pcode;
-
-impl<T> TryFrom<PathBuf> for Program<T>
-where
-    T: DeserializeOwned + crate::Op,
-{
-    type Error = Error;
-
-    fn try_from(path: PathBuf) -> Result<Self> {
-        std::fs::File::open(&path)
-            .map_err(|e| Error::Io(path.clone(), e))
-            .and_then(|f| serde_json::from_reader(f).map_err(|e| Error::Json(path, e)))
-    }
-}
-
-impl<T> TryFrom<&Path> for Program<T>
-where
-    T: DeserializeOwned + crate::Op,
-{
-    type Error = Error;
-
-    fn try_from(path: &Path) -> Result<Self> {
-        Self::try_from(path.to_path_buf())
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Op {
@@ -45,10 +17,6 @@ pub struct Op {
 impl crate::Op for Op {
     fn mnemonic(&self) -> &str {
         self.op.mnemonic()
-    }
-
-    fn code(&self) -> u32 {
-        self.op as u32
     }
 
     fn inputs(&self) -> &[String] {
