@@ -37,7 +37,7 @@ where
 {
     type Error = Error;
 
-    /// Read whole, then parsed from the bytes, for the reason
+    /// Reads the file whole and parses the bytes, for the reason
     /// [`AnyProgram::load`] already did it that way: serde_json's `IoRead`
     /// takes one byte at a time, so `from_reader` on an unbuffered `File` is
     /// one `read` syscall per byte — 3.3 s against 25 ms on a 10 MB lifted

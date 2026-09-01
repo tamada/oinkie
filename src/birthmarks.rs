@@ -162,7 +162,7 @@ impl Display for BirthmarkType {
 impl TryFrom<PathBuf> for Birthmark {
     type Error = Error;
 
-    /// Read whole, then parsed from the bytes.
+    /// Reads the file whole, then parses the bytes.
     ///
     /// `from_reader` on a bare `File` looks like the obvious thing and is a
     /// trap: serde_json's `IoRead` takes one byte at a time, so an unbuffered
