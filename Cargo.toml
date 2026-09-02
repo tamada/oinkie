@@ -1,6 +1,6 @@
 [package]
 name = "oinkie"
-version = "0.3.0"
+version = "0.4.0"
 description = "Birthmarking toolkit for Ghidra P-Code"
 edition = "2024"
 

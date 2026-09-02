@@ -8,10 +8,10 @@ outputs:
 ---
 
 {{< keywordList markdownify="true" >}}
-[![Version](https://shields.io/badge/Version-0.3.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.3.0)
+[![Version](https://shields.io/badge/Version-0.4.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.4.0)
 [![License-MIT](https://shields.io/badge/License-MIT-blue)](https://github.com/tamada/oinkie/blob/main/LICENSE) 
 [![Coverage Status](https://coveralls.io/repos/github/tamada/oinkie/badge.svg)](https://coveralls.io/github/tamada/oinkie)
-[![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.3.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
+[![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.4.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 {{< /keywordList >}}
 
 
