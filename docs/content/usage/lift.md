@@ -26,13 +26,17 @@ oinkie lift [OPTIONS] [FILES]...
 * `-d, --dest <DIRECTORY>`  
   Specify the directory to place the resulting JSON files of the lifted P-code. Defaults to the `./pcodes` directory. `[default: pcodes]`
 * `-l, --lifter-type <LIFTER_TYPE>`  
-  Specify the lifter type to use. `[default: ghidra]` `[possible values: ghidra, llvm, binary-ninja]`
+  Specify the lifter type to use. `[default: ghidra]` `[possible values: ghidra, angr, ida-pro, binary-ninja]`  
+  Only `ghidra` is implemented; the others are named so that the error says which one you asked for.
 * `-H, --home <HOME>`  
-  Specify the path to the home directory of the lifter (e.g., `GHIDRA_HOME` for Ghidra). If not specified, the application will search the respective environment variable or look for common default paths.
+  Path to the lifter's installation directory. If not specified, the lifter's own environment variable (`GHIDRA_HOME` for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
 * `-i, --intermediate <DIRECTORY>`  
   Specify a directory to keep intermediate lifter files (like Ghidra project directories). If not provided, a temporary directory is used and deleted automatically.
 * `--script <SCRIPT>`  
   Path to a custom lifting script. The script's interpretation depends on the lifter type. For Ghidra, it's the path to a Java script.
+* `-j, --jobs <JOBS>`  
+  How many files may be lifted at once. `[default: 1]`  
+  Lifting is serial by default: each lift is a whole decompiler process, and Ghidra compiles its language definitions into its own installation on first use, so parallel lifts against a fresh installation can corrupt that cache. Once it is built, `-j` is safe; the command prints a notice rather than refusing.
 * `-S, --skip`  
   Skip the lifting process if the output JSON file already exists in the destination directory.
 

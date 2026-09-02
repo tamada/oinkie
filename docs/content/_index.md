@@ -1,6 +1,6 @@
 ---
 title: "oinkie 🐽🐷🐖"
-description: "Detecting software theft, the birthmark toolkit for Ghidra Pcode, LLVM IR/BC, and Binary Ninja."
+description: "Detecting software theft, the birthmark toolkit for Ghidra P-code, with Binary Ninja and IDA Pro planned."
 date: 2026-06-22
 draft: false
 outputs:
@@ -21,7 +21,7 @@ outputs:
 
 **oinkie** is a software birthmark toolkit designed for detecting software theft. It extracts unique characteristics (birthmarks) of software from binary formats and compares them to identify suspected plagiarism.
 
-Currently, **oinkie** supports extracting and comparing birthmarks from Ghidra Pcode, and planned support includes LLVM IR/BC and Binary Ninja.
+Currently, **oinkie** supports extracting and comparing birthmarks from Ghidra P-code. Support for Binary Ninja and IDA Pro is planned; the trade-offs are being worked out in the multi-lifter design note.
 
 ---
 

@@ -27,39 +27,56 @@ oinkie info [OPTIONS]
 Running the `info` command provides detailed listings of supported formats and algorithms in your current environment:
 
 ```text
-oinkie v0.2.0
-Detecting software theft, the birthmark toolkit for Ghidra Pcode, LLVM IR/BC, and Binary Ninja.
-
-Supported Birthmark Types:
-  - fc-seq (Function Calls Sequence)
-  - fc-freq (Function Calls Frequency)
-  - fc-set (Function Calls Set)
-  - op-seq (Opcode Sequence)
-  - op-freq (Opcode Frequency)
-  - op-set (Opcode Set)
-  - op-1gram-seq, op-1gram-freq, op-1gram-set (Opcode 1-gram variants)
-  - op-2gram-seq, op-2gram-freq, op-2gram-set (Opcode 2-gram variants)
-  - op-3gram-seq, op-3gram-freq, op-3gram-set (Opcode 3-gram variants)
-  - op-4gram-seq, op-4gram-freq, op-4gram-set (Opcode 4-gram variants)
-  - op-5gram-seq, op-5gram-freq, op-5gram-set (Opcode 5-gram variants)
-  - op-6gram-seq, op-6gram-freq, op-6gram-set (Opcode 6-gram variants)
-  - op-7gram-seq, op-7gram-freq, op-7gram-set (Opcode 7-gram variants)
-  - op-8gram-seq, op-8gram-freq, op-8gram-set (Opcode 8-gram variants)
-
-  info stops the listing at k = 8. Any k is accepted: op-12gram-set is a
-  birthmark type, it is simply not one info can list.
-
-Supported Similarity Algorithms:
-  - cosine (Cosine Similarity)
-  - dice (Dice Index)
-  - euclidean (Euclidean Distance)
-  - jaccard (Jaccard Index)
-  - levenshtein (Levenshtein Distance)
-  - lcs (Longest Common Subsequence)
-  - simpson (Simpson Index)
-  - weighted-jaccard (Weighted Jaccard Index)
-
-Supported Aggregators:
-  - hungarian (Bipartite Matching via Hungarian Algorithm)
-  - topn:N (Average of Top N Closest Matchings)
+=========== Oinkie Info ============
+Oinkie is a tool for detecting the code theft with Ghidra P-code as birthmarks.
+The birthmark is a unique characteristic of a program that can be used to identify it.
+Oinkie extracts birthmarks from given codes and compares them to calculate the similarities.
+============ Birthmarks =============
+- fc-seq                the sequence of method calls in a program
+- fc-freq               the frequency of method calls in a program
+- fc-set                the set of method calls in a program
+- op-seq                the sequence of operations in a program
+- op-set                the set of operations in a program
+- op-freq               the frequency of operations in a program
+- op-1gram-seq          the sequence of 1-grams of operations in a program
+- op-2gram-seq          the sequence of 2-grams of operations in a program
+- op-3gram-seq          the sequence of 3-grams of operations in a program
+- op-4gram-seq          the sequence of 4-grams of operations in a program
+- op-5gram-seq          the sequence of 5-grams of operations in a program
+- op-6gram-seq          the sequence of 6-grams of operations in a program
+- op-7gram-seq          the sequence of 7-grams of operations in a program
+- op-8gram-seq          the sequence of 8-grams of operations in a program
+- op-1gram-freq         the frequency of 1-grams of operations in a program
+- op-2gram-freq         the frequency of 2-grams of operations in a program
+- op-3gram-freq         the frequency of 3-grams of operations in a program
+- op-4gram-freq         the frequency of 4-grams of operations in a program
+- op-5gram-freq         the frequency of 5-grams of operations in a program
+- op-6gram-freq         the frequency of 6-grams of operations in a program
+- op-7gram-freq         the frequency of 7-grams of operations in a program
+- op-8gram-freq         the frequency of 8-grams of operations in a program
+- op-1gram-set          the set of 1-grams of operations in a program
+- op-2gram-set          the set of 2-grams of operations in a program
+- op-3gram-set          the set of 3-grams of operations in a program
+- op-4gram-set          the set of 4-grams of operations in a program
+- op-5gram-set          the set of 5-grams of operations in a program
+- op-6gram-set          the set of 6-grams of operations in a program
+- op-7gram-set          the set of 7-grams of operations in a program
+- op-8gram-set          the set of 8-grams of operations in a program
+======== Compare Algorithms ========
+- cosine                Cosine similarity based on term frequency vectors. Available: seq and freq
+- dice                  Dice coefficient. Available: seq, set and freq
+- euclidean             Euclidean distance between term frequency vectors. Available: seq and freq
+- jaccard               Jaccard index. Available: seq, set and freq
+- levenshtein           Levenshtein distance. Available: seq
+- lcs                   Longest Common Subsequence (LCS). Available: seq
+- simpson               Simpson's coefficient. Available: seq, set and freq
+- weighted-jaccard      Weighted Jaccard index based on term frequency vectors. Available: seq and freq
 ```
+
+The k-gram listing stops at \\(k = 8\\). That bound is only what `info` shows:
+any \\(k\\) is accepted, so `op-12gram-set` is a birthmark type even though it is
+not listed.
+
+`info` does not list the aggregators, which are given to `-A/--aggregator` on
+`compare`, `run` and `reaggregate` rather than named in an analysis. They are
+`hungarian` and `topn:N` (or `topn:all`); see those commands' `--help`.
