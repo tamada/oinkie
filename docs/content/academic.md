@@ -11,10 +11,10 @@ Software birthmarking has been researched extensively. Below is a collection of 
 ## 📜 Publications by Haruaki Tamada (Creator)
 
 1. *Nikolay Fedorov, Akito Monden, Hiroki Inayoshi, Haruaki Tamada, and Masateru Tsunoda*, **Project-wise Comparison of Software Birthmarks Using Weighted Partial Similarity**, IEEE Transactions on Software Engineering, 2026 (submitted).　[ [arXiv](https://arxiv.org/abs/2606.25418) ]
-    * **Contribution:** Compares whole projects rather than single files, weighting the partial similarities between their constituent birthmarks.
+    * **Contribution:** Established a framework for project-wise comparison by symmetric aggregation of module-level similarities, then addressed its two failure modes: a weighting scheme favouring larger modules, to suppress incidental similarity from small ones, and a partial similarity over only the top fraction of module pairs, to catch reuse of a small subset of a project. Evaluated on 35 open-source Java projects across ten categories, scored by the harmonic mean of resilience and credibility.
 
 2. *Nikolay Fedorov, Akito Monden, Hiroki Inayoshi, Haruaki Tamada, and Masateru Tsunoda*, **Detection of LLM-assisted Code Plagiarism Using \\(k\\)-gram Software Birthmarks**, In Proc. 8th World Symposium on Software Engineering (WSSE 2026), October 2026 (Nara, Japan, to appear).　[ [arXiv](https://arxiv.org/abs/2607.03014) ]
-    * **Contribution:** Applies \\(k\\)-gram software birthmarks to plagiarism in which a large language model did part of the writing.
+    * **Contribution:** Asked whether birthmarks survive an LLM paraphrasing the code, using \\(k\\)-gram birthmarks over Java opcodes for \\(k = 1\\) to \\(6\\) against three contemporary models and five similarity measures. They remain effective; the coding-oriented models produced the hardest clones to detect.
 
 3. *Haruaki Tamada*, **Cross-Platform Software Birthmarking for Real-World Binaries via Intermediate Representation**, In Proc. 34th IEEE/ACIS International Conference on Software Engineering, Artificial Intelligence, Networking and Parallel/Distributed Computing ([SNPD2026](https://acisinternational.org/conferences/snpd-2026-i/)), August 2026 (Okayama, Japan, **Best Special Session Paper Award**).　[ [arXiv](https://arxiv.org/abs/2606.21988) ]
     * **Contribution:** Proposed a cross-platform birthmarking approach using a Ghidra P-code intermediate representation, demonstrating exceptional architecture consistency (\\(r=0.9846\\)) and identifying the Simpson index's resilience against library dilution.
