@@ -423,9 +423,16 @@ impl Elements {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
-    Freq(FxHashMap<String, usize>),
+    /// An operation named more than once is refused, for the reason
+    /// [`Data::KgramFreq`] gives: serde's derived map deserializer takes the
+    /// last of a repeated key without saying so, and a birthmark names each
+    /// operation once (#66).
+    Freq(
+        #[serde(serialize_with = "sorted_freq", deserialize_with = "no_repeated_key")]
+        FxHashMap<String, usize>,
+    ),
     Seq(Vec<String>),
-    Set(FxHashSet<String>),
+    Set(#[serde(serialize_with = "sorted_set")] FxHashSet<String>),
     KgramSeq(Vec<Kgram>),
     /// Written as a list of `[kgram, count]` pairs rather than as a JSON
     /// object.
@@ -444,7 +451,101 @@ pub enum Data {
     /// their files would stop reading. It also needs no separator, so no
     /// mnemonic can ever contain one.
     KgramFreq(#[serde(with = "kgram_freq")] FxHashMap<Kgram, usize>),
-    KgramSet(FxHashSet<Kgram>),
+    KgramSet(#[serde(serialize_with = "sorted_kgram_set")] FxHashSet<Kgram>),
+}
+
+/// A map and a set have no order of their own, so the one they are written in
+/// has to come from somewhere. Hash order comes from the insertion history and
+/// the hasher, which means two equal birthmarks can be written differently and
+/// a `rustc-hash` bump relays every file for no reason. Sorted, the bytes are
+/// a function of what the birthmark holds (#68).
+///
+/// `Seq` and `KgramSeq` are not here on purpose. Their order is the program's,
+/// and sorting them would not canonicalise the file — it would destroy the
+/// birthmark.
+fn sorted_freq<S>(map: &FxHashMap<String, usize>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut pairs = map.iter().collect::<Vec<_>>();
+    pairs.sort_unstable_by_key(|(name, _)| *name);
+    s.collect_map(pairs)
+}
+
+/// See [`sorted_freq`].
+fn sorted_set<S>(set: &FxHashSet<String>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut items = set.iter().collect::<Vec<_>>();
+    items.sort_unstable();
+    s.collect_seq(items)
+}
+
+/// See [`sorted_freq`].
+fn sorted_kgram_set<S>(set: &FxHashSet<Kgram>, s: S) -> std::result::Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut items = set.iter().collect::<Vec<_>>();
+    items.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+    s.collect_seq(items)
+}
+
+/// Reads a frequency map, refusing a key that appears more than once.
+///
+/// serde's derived deserializer inserts in a loop, so `{"COPY": 3, "COPY": 5}`
+/// loads as 5 and nothing is said — a similarity computed from a count the
+/// file contradicts itself about (#66).
+///
+/// Two decisions here, on different axes, and they are easy to run together.
+///
+/// *Which shapes need a check at all* is decided by ambiguity: a repeated
+/// element in a `Set` denotes the same set, and a repeated element in a `Seq`
+/// is what a sequence is for, so neither can mean two things. A repeated
+/// count can, which is why only the frequency shapes have this.
+///
+/// *Which repeats are refused* is not: every one is, without comparing the
+/// values, so `{"COPY": 3, "COPY": 3}` is refused as well. A repeated key is
+/// a malformed object however the values fall, and "a duplicate that happens
+/// to agree with itself" is not a category worth carving out — reading it
+/// would mean accepting a broken file whenever it was broken consistently.
+///
+/// Nothing this crate writes can produce a repeat, since it serializes from a
+/// map, so refusing costs no real file anything.
+fn no_repeated_key<'de, D>(d: D) -> std::result::Result<FxHashMap<String, usize>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    use serde::de::{Error as _, MapAccess, Visitor};
+
+    struct Frequencies;
+
+    impl<'de> Visitor<'de> for Frequencies {
+        type Value = FxHashMap<String, usize>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a map of operations to how often each occurs")
+        }
+
+        fn visit_map<M>(self, mut entries: M) -> std::result::Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut map = FxHashMap::default();
+            while let Some((name, count)) = entries.next_entry::<String, usize>()? {
+                if map.contains_key(&name) {
+                    return Err(M::Error::custom(format!(
+                        "{name}: listed more than once; a birthmark names each operation once"
+                    )));
+                }
+                map.insert(name, count);
+            }
+            Ok(map)
+        }
+    }
+
+    d.deserialize_map(Frequencies)
 }
 
 /// `KgramFreq` as a list of pairs. See the variant for why.
@@ -465,7 +566,8 @@ mod kgram_freq {
         pairs.serialize(s)
     }
 
-    /// A repeated k-gram is refused rather than resolved.
+    /// A repeated k-gram is refused rather than resolved, on the same terms
+    /// as [`no_repeated_key`]: every repeat, without comparing the counts.
     ///
     /// The list is a map on disk, and collecting it would let the last pair
     /// win silently — a file saying a k-gram occurred 3 times and again 5
@@ -482,7 +584,7 @@ mod kgram_freq {
         for (kgram, count) in Vec::<(Kgram, usize)>::deserialize(d)? {
             if map.contains_key(&kgram) {
                 return Err(D::Error::custom(format!(
-                    "[{}]: listed more than once, so its frequency is ambiguous",
+                    "[{}]: listed more than once; a birthmark names each k-gram once",
                     kgram.0.join(", ")
                 )));
             }
@@ -1308,6 +1410,161 @@ mod tests {
         );
     }
 
+    /// A map and a set have no order of their own, so what gets written has
+    /// to be decided. Hash order decides it by insertion history and by the
+    /// hasher, which means two equal birthmarks can be written differently
+    /// and a `rustc-hash` bump relays every file (#68).
+    ///
+    /// Built twice from the same elements in opposite orders: the bytes have
+    /// to match. Fifty elements rather than a handful, because `FxHash` is
+    /// not randomised and a small container's order can happen to be the
+    /// sorted one either way.
+    #[test]
+    fn test_what_has_no_order_is_written_in_one() {
+        let ops = (0..50).map(|i| format!("OP_{i:02}")).collect::<Vec<_>>();
+        let both_ways = |build: &dyn Fn(Vec<String>) -> Data| {
+            let forward = serde_json::to_string(&build(ops.clone())).unwrap();
+            let mut reversed = ops.clone();
+            reversed.reverse();
+            (forward, serde_json::to_string(&build(reversed)).unwrap())
+        };
+
+        let (a, b) = both_ways(&|v| {
+            let mut m = FxHashMap::default();
+            for op in v {
+                let count = op.len();
+                m.insert(op, count);
+            }
+            Data::Freq(m)
+        });
+        assert_eq!(a, b, "Freq");
+
+        let (a, b) = both_ways(&|v| Data::Set(v.into_iter().collect()));
+        assert_eq!(a, b, "Set");
+
+        let (a, b) = both_ways(&|v| {
+            Data::KgramSet(
+                v.into_iter()
+                    .map(|op| kgram(&[op.as_str(), "COPY"]))
+                    .collect(),
+            )
+        });
+        assert_eq!(a, b, "KgramSet");
+
+        let (a, b) = both_ways(&|v| {
+            let mut m = FxHashMap::default();
+            for op in v {
+                let count = op.len();
+                m.insert(kgram(&[op.as_str(), "COPY"]), count);
+            }
+            Data::KgramFreq(m)
+        });
+        assert_eq!(a, b, "KgramFreq");
+    }
+
+    /// A sequence is ordered data: its order is the program's, and sorting it
+    /// would not canonicalise the file but destroy the birthmark.
+    #[test]
+    fn test_a_sequence_keeps_the_order_it_was_extracted_in() {
+        let ops = vec!["RETURN".to_string(), "CALL".to_string(), "COPY".to_string()];
+        let json = serde_json::to_value(Data::Seq(ops.clone())).unwrap();
+        assert_eq!(json["Seq"], serde_json::json!(["RETURN", "CALL", "COPY"]));
+
+        let kgrams = vec![kgram(&["RETURN", "CALL"]), kgram(&["CALL", "COPY"])];
+        let json = serde_json::to_value(Data::KgramSeq(kgrams)).unwrap();
+        assert_eq!(
+            json["KgramSeq"],
+            serde_json::json!([["RETURN", "CALL"], ["CALL", "COPY"]])
+        );
+    }
+
+    /// The two frequency shapes refuse a repeated key and the other four
+    /// correctly do not care.
+    ///
+    /// Both axes are pinned here, because they are easy to run together.
+    /// *Which shapes check*: only the frequencies, because only a repeated
+    /// count can mean two things — a repeated set member denotes the same
+    /// set, a repeated sequence element is a sequence doing its job.
+    /// *Which repeats are refused*: all of them, so a repeat whose counts
+    /// agree is refused too. A repeated key is malformed however the values
+    /// fall.
+    ///
+    /// `Freq` used serde's derived map deserializer, which inserts in a loop,
+    /// so `{"COPY": 3, "COPY": 5}` loaded as 5 with nothing said — the same
+    /// hazard #59 removed from `KgramFreq`, in the family that already worked
+    /// (#66).
+    ///
+    /// The line is ambiguity, not repetition. A `Set` repeating an element
+    /// denotes the same set, so collapsing loses nothing; a `Seq` repeating
+    /// one is a sequence doing its job.
+    #[test]
+    fn test_only_a_repeated_frequency_is_refused() {
+        let refused = [
+            (r#"{"Freq":{"COPY":3,"COPY":5}}"#, "COPY"),
+            (
+                r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
+                "CALL",
+            ),
+            // and the same repeats with counts that agree, which are refused
+            // for being repeats rather than for disagreeing
+            (r#"{"Freq":{"COPY":3,"COPY":3}}"#, "COPY"),
+            (
+                r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],3]]}"#,
+                "CALL",
+            ),
+        ];
+        for (json, named) in refused {
+            let msg = serde_json::from_str::<Data>(json)
+                .expect_err("a repeated key must not be resolved by picking one")
+                .to_string();
+            assert!(msg.contains("listed more than once"), "{json}: {msg}");
+            assert!(msg.contains(named), "does not say which one: {msg}");
+        }
+
+        // Nothing here can mean two things, so nothing is refused.
+        let accepted = [
+            (r#"{"Set":["COPY","COPY"]}"#, 1),
+            (r#"{"KgramSet":[["CALL","COPY"],["CALL","COPY"]]}"#, 1),
+            (r#"{"Seq":["COPY","COPY"]}"#, 2),
+            (r#"{"KgramSeq":[["CALL","COPY"],["CALL","COPY"]]}"#, 2),
+        ];
+        for (json, len) in accepted {
+            let d: Data = serde_json::from_str(json).unwrap_or_else(|e| panic!("{json}: {e}"));
+            assert_eq!(d.len(), len, "{json}");
+        }
+    }
+
+    /// A frequency map that says each thing once is still read, and read
+    /// whole. Refusing a repeat must not turn into refusing a second key.
+    #[test]
+    fn test_a_frequency_map_with_distinct_keys_is_read_whole() {
+        let Data::Freq(m) =
+            serde_json::from_str::<Data>(r#"{"Freq":{"COPY":3,"CALL":5,"RETURN":1}}"#).unwrap()
+        else {
+            panic!("the shape changed");
+        };
+        assert_eq!(m.len(), 3);
+        assert_eq!(m["COPY"], 3);
+        assert_eq!(m["CALL"], 5);
+        assert_eq!(m["RETURN"], 1);
+    }
+
+    /// The custom visitor has to say what it wanted, or a file with the wrong
+    /// shape reports "invalid type: sequence, expected " and stops there.
+    #[test]
+    fn test_a_frequency_that_is_not_a_map_says_what_was_expected() {
+        for json in [r#"{"Freq":[]}"#, r#"{"Freq":"COPY"}"#] {
+            let msg = serde_json::from_str::<Data>(json)
+                .expect_err("this is not a frequency map")
+                .to_string();
+            assert!(msg.contains("invalid type"), "{json}: {msg}");
+            assert!(
+                msg.contains("expected a map of operations to how often each occurs"),
+                "{json}: {msg}"
+            );
+        }
+    }
+
     /// A list is a weaker container than the map it stands for: it can say
     /// the same thing twice. Collecting would take the last one, so a file
     /// claiming a k-gram occurred 3 times and again 5 times would load as 5
@@ -1324,13 +1581,11 @@ mod tests {
         };
         assert_eq!(m[&kgram(&["CALL", "COPY"])], 3);
 
-        let twice = serde_json::from_str::<Data>(
+        let msg = serde_json::from_str::<Data>(
             r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
-        );
-        let Err(e) = twice else {
-            panic!("a k-gram listed twice must not silently pick one");
-        };
-        let msg = e.to_string();
+        )
+        .expect_err("a repeated k-gram must not be resolved by picking one")
+        .to_string();
         assert!(msg.contains("listed more than once"), "{msg}");
         assert!(msg.contains("CALL"), "does not say which one: {msg}");
     }
