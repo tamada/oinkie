@@ -424,9 +424,9 @@ impl Elements {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
     /// An operation named more than once is refused, for the reason
-    /// [`Data::KgramFreq`] gives: a count the file states twice is ambiguous,
-    /// and serde's derived map deserializer takes the last one without saying
-    /// so (#66).
+    /// [`Data::KgramFreq`] gives: serde's derived map deserializer takes the
+    /// last of a repeated key without saying so, and a birthmark names each
+    /// operation once (#66).
     Freq(
         #[serde(serialize_with = "sorted_freq", deserialize_with = "no_repeated_key")]
         FxHashMap<String, usize>,
@@ -492,18 +492,27 @@ where
     s.collect_seq(items)
 }
 
-/// Reads a frequency map, refusing a key that appears twice.
+/// Reads a frequency map, refusing a key that appears more than once.
 ///
 /// serde's derived deserializer inserts in a loop, so `{"COPY": 3, "COPY": 5}`
 /// loads as 5 and nothing is said — a similarity computed from a count the
-/// file contradicts itself about. Nothing this crate writes can produce one,
-/// since it serializes from a map, so refusing costs no real file anything
-/// (#66).
+/// file contradicts itself about (#66).
 ///
-/// Only the frequency shapes need this. A repeated element in a `Set` denotes
-/// the same set, and a repeated element in a `Seq` is what a sequence is for
-/// — neither is ambiguous. The problem is the contradiction, not the
-/// repetition.
+/// Two decisions here, on different axes, and they are easy to run together.
+///
+/// *Which shapes need a check at all* is decided by ambiguity: a repeated
+/// element in a `Set` denotes the same set, and a repeated element in a `Seq`
+/// is what a sequence is for, so neither can mean two things. A repeated
+/// count can, which is why only the frequency shapes have this.
+///
+/// *Which repeats are refused* is not: every one is, without comparing the
+/// values, so `{"COPY": 3, "COPY": 3}` is refused as well. A repeated key is
+/// a malformed object however the values fall, and "a duplicate that happens
+/// to agree with itself" is not a category worth carving out — reading it
+/// would mean accepting a broken file whenever it was broken consistently.
+///
+/// Nothing this crate writes can produce a repeat, since it serializes from a
+/// map, so refusing costs no real file anything.
 fn no_repeated_key<'de, D>(d: D) -> std::result::Result<FxHashMap<String, usize>, D::Error>
 where
     D: Deserializer<'de>,
@@ -527,7 +536,7 @@ where
             while let Some((name, count)) = entries.next_entry::<String, usize>()? {
                 if map.contains_key(&name) {
                     return Err(M::Error::custom(format!(
-                        "{name}: listed more than once, so its frequency is ambiguous"
+                        "{name}: listed more than once; a birthmark names each operation once"
                     )));
                 }
                 map.insert(name, count);
@@ -557,7 +566,8 @@ mod kgram_freq {
         pairs.serialize(s)
     }
 
-    /// A repeated k-gram is refused rather than resolved.
+    /// A repeated k-gram is refused rather than resolved, on the same terms
+    /// as [`no_repeated_key`]: every repeat, without comparing the counts.
     ///
     /// The list is a map on disk, and collecting it would let the last pair
     /// win silently — a file saying a k-gram occurred 3 times and again 5
@@ -574,7 +584,7 @@ mod kgram_freq {
         for (kgram, count) in Vec::<(Kgram, usize)>::deserialize(d)? {
             if map.contains_key(&kgram) {
                 return Err(D::Error::custom(format!(
-                    "[{}]: listed more than once, so its frequency is ambiguous",
+                    "[{}]: listed more than once; a birthmark names each k-gram once",
                     kgram.0.join(", ")
                 )));
             }
@@ -1468,8 +1478,16 @@ mod tests {
         );
     }
 
-    /// The two frequency shapes agree about a contradiction, and the other
-    /// four correctly do not care.
+    /// The two frequency shapes refuse a repeated key and the other four
+    /// correctly do not care.
+    ///
+    /// Both axes are pinned here, because they are easy to run together.
+    /// *Which shapes check*: only the frequencies, because only a repeated
+    /// count can mean two things — a repeated set member denotes the same
+    /// set, a repeated sequence element is a sequence doing its job.
+    /// *Which repeats are refused*: all of them, so a repeat whose counts
+    /// agree is refused too. A repeated key is malformed however the values
+    /// fall.
     ///
     /// `Freq` used serde's derived map deserializer, which inserts in a loop,
     /// so `{"COPY": 3, "COPY": 5}` loaded as 5 with nothing said — the same
@@ -1480,23 +1498,30 @@ mod tests {
     /// denotes the same set, so collapsing loses nothing; a `Seq` repeating
     /// one is a sequence doing its job.
     #[test]
-    fn test_only_a_contradicted_frequency_is_refused() {
+    fn test_only_a_repeated_frequency_is_refused() {
         let refused = [
             (r#"{"Freq":{"COPY":3,"COPY":5}}"#, "COPY"),
             (
                 r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
                 "CALL",
             ),
+            // and the same repeats with counts that agree, which are refused
+            // for being repeats rather than for disagreeing
+            (r#"{"Freq":{"COPY":3,"COPY":3}}"#, "COPY"),
+            (
+                r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],3]]}"#,
+                "CALL",
+            ),
         ];
         for (json, named) in refused {
             let msg = serde_json::from_str::<Data>(json)
-                .expect_err("a contradicted frequency must not pick one")
+                .expect_err("a repeated key must not be resolved by picking one")
                 .to_string();
-            assert!(msg.contains("ambiguous"), "{json}: {msg}");
+            assert!(msg.contains("listed more than once"), "{json}: {msg}");
             assert!(msg.contains(named), "does not say which one: {msg}");
         }
 
-        // Nothing is contradicted here, so nothing is refused.
+        // Nothing here can mean two things, so nothing is refused.
         let accepted = [
             (r#"{"Set":["COPY","COPY"]}"#, 1),
             (r#"{"KgramSet":[["CALL","COPY"],["CALL","COPY"]]}"#, 1),
@@ -1556,13 +1581,11 @@ mod tests {
         };
         assert_eq!(m[&kgram(&["CALL", "COPY"])], 3);
 
-        let twice = serde_json::from_str::<Data>(
+        let msg = serde_json::from_str::<Data>(
             r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
-        );
-        let Err(e) = twice else {
-            panic!("a k-gram listed twice must not silently pick one");
-        };
-        let msg = e.to_string();
+        )
+        .expect_err("a repeated k-gram must not be resolved by picking one")
+        .to_string();
         assert!(msg.contains("listed more than once"), "{msg}");
         assert!(msg.contains("CALL"), "does not say which one: {msg}");
     }
