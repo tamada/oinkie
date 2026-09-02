@@ -384,9 +384,16 @@ impl std::fmt::Display for Algorithm {
 impl Algorithm {
     /// The CLI spelling of this algorithm and the shape it operates on, in one
     /// table so that the parser, the validation and the error message cannot
-    /// drift apart. Written out rather than derived from `ValueEnum`, whose
-    /// kebab-case would render `WeightedJaccard` as `weighted-jaccard` and put
-    /// a hyphen inside a name that has to be split off by its last one.
+    /// drift apart.
+    ///
+    /// Written out rather than derived from `ValueEnum`, whose kebab-case
+    /// renders `WeightedJaccard` as `weighted-jaccard`. This is the canonical
+    /// spelling inside an analysis name and the one the completion list is
+    /// built from; the kebab-case is accepted there too, since it is what
+    /// `compare --algorithm` takes and what `oinkie info` prints (#71).
+    ///
+    /// A hyphen here is no longer forbidden. It was, while an analysis name
+    /// was split on its last one.
     fn spec(&self) -> (&'static str, Shape) {
         match self {
             Algorithm::Cosine => ("cosine", Shape::Freq),
