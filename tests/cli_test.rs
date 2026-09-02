@@ -183,6 +183,87 @@ fn test_extract_names_a_kgram_the_way_the_library_does() {
         .stderr(predicate::str::contains("unknown birthmark type"));
 }
 
+/// `op-*gram-freq` birthmarks could not be written at all: a k-gram is a list
+/// of operations, a JSON object's keys are strings, and `serde_json` refused
+/// the map outright (#59). Eight of the thirty birthmark types the CLI
+/// advertises — `op-1gram-freq` through `op-8gram-freq` — could not produce a
+/// file, and with them twenty-four of its eighty analyses.
+///
+/// `op-2gram-freq` on this fixture rather than a larger k, because the bug
+/// hid behind emptiness: the fixture's one function has four operations, so
+/// k >= 5 yields an empty map and an empty map has no key to refuse. A test
+/// that happened to pick k = 5 would have passed against the bug.
+///
+/// The score is checked against `run`, which computes the same analysis
+/// without ever writing a birthmark. Equal scores say the file round trip is
+/// faithful, not merely that it completed.
+#[test]
+fn test_a_kgram_frequency_birthmark_can_be_written_and_read_back() {
+    let temp_dir = tempdir().unwrap();
+    let birthmarks = temp_dir.path().join("birthmarks");
+    let through_a_file = temp_dir.path().join("through-a-file");
+    let in_memory = temp_dir.path().join("in-memory");
+    let inputs = [
+        "testdata/hello_world/pcodes/hello_clang.json",
+        "testdata/hello_world/pcodes/hello_gcc.json",
+    ];
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["extract", "-b", "op-2gram-freq", "-d"])
+        .arg(&birthmarks)
+        .args(inputs)
+        .assert()
+        .success();
+    let written: Vec<_> = fs::read_dir(&birthmarks)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(written.len(), 2, "the birthmarks were not written");
+    assert!(
+        fs::read_to_string(&written[0])
+            .unwrap()
+            .contains("KgramFreq"),
+        "the file does not hold what was asked for"
+    );
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["compare", "-a", "cosine", "-d"])
+        .arg(&through_a_file)
+        .args(&written)
+        .assert()
+        .success();
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-a", "op-2gram-freq-cosine", "-d"])
+        .arg(&in_memory)
+        .args(inputs)
+        .assert()
+        .success();
+
+    // Every row, sorted. The rows are written from a parallel iteration, so
+    // which one lands first is not part of the output's meaning -- reading
+    // only the first line made this test depend on a race, and it lost.
+    //
+    // Each row is `index, similarity, left, right, duration`; the duration is
+    // wall clock and the only field that differs between two runs of the same
+    // analysis, so it is dropped.
+    let scores = |dir: &std::path::Path| {
+        let csv = fs::read_to_string(dir.join("results.csv")).unwrap();
+        let mut rows: Vec<String> = csv
+            .lines()
+            .filter(|l| !l.starts_with("total duration,"))
+            .map(|l| l.rsplit_once(',').unwrap().0.to_string())
+            .collect();
+        rows.sort();
+        assert!(!rows.is_empty(), "no scores in {}", dir.display());
+        rows
+    };
+    assert_eq!(scores(&through_a_file), scores(&in_memory));
+}
+
 #[test]
 fn test_compare_command() {
     let temp_dir = tempdir().unwrap();

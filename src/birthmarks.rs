@@ -427,8 +427,69 @@ pub enum Data {
     Seq(Vec<String>),
     Set(FxHashSet<String>),
     KgramSeq(Vec<Kgram>),
-    KgramFreq(FxHashMap<Kgram, usize>),
+    /// Written as a list of `[kgram, count]` pairs rather than as a JSON
+    /// object.
+    ///
+    /// A JSON object's keys are strings, and a k-gram is a list of
+    /// operations. `serde_json` refuses it — "key must be a string" — so
+    /// every non-empty `op-*gram-freq` birthmark failed at write time.
+    /// `op-1gram-freq` through `op-8gram-freq` — eight of the thirty
+    /// birthmark types the CLI advertises, and one of the three shapes a
+    /// k-gram comes in — could not produce a file at all (#59). It looked k-dependent only because a program with fewer than k
+    /// operations yields an empty map, and an empty map has no key to refuse.
+    ///
+    /// A list of pairs rather than a stringified key, because the alternative
+    /// is to make `Kgram` serialize as a string, and `KgramSeq` and
+    /// `KgramSet` already write it as a list — those two families work, and
+    /// their files would stop reading. It also needs no separator, so no
+    /// mnemonic can ever contain one.
+    KgramFreq(#[serde(with = "kgram_freq")] FxHashMap<Kgram, usize>),
     KgramSet(FxHashSet<Kgram>),
+}
+
+/// `KgramFreq` as a list of pairs. See the variant for why.
+mod kgram_freq {
+    use super::Kgram;
+    use rustc_hash::FxHashMap;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub(super) fn serialize<S>(map: &FxHashMap<Kgram, usize>, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Sorted, so that extracting the same program twice writes the same
+        // bytes. A hash map's order is not stable across runs, and a
+        // birthmark file is something people diff and cache.
+        let mut pairs = map.iter().collect::<Vec<_>>();
+        pairs.sort_unstable_by(|(a, _), (b, _)| a.0.cmp(&b.0));
+        pairs.serialize(s)
+    }
+
+    /// A repeated k-gram is refused rather than resolved.
+    ///
+    /// The list is a map on disk, and collecting it would let the last pair
+    /// win silently — a file saying a k-gram occurred 3 times and again 5
+    /// times would load as 5, with a similarity computed from it and nothing
+    /// said. Nothing this crate writes can produce a duplicate, since it
+    /// serializes from a map, so a file holding one has been hand-edited or
+    /// corrupted, and guessing which count was meant is worse than stopping.
+    pub(super) fn deserialize<'de, D>(d: D) -> Result<FxHashMap<Kgram, usize>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+        let mut map = FxHashMap::default();
+        for (kgram, count) in Vec::<(Kgram, usize)>::deserialize(d)? {
+            if map.contains_key(&kgram) {
+                return Err(D::Error::custom(format!(
+                    "[{}]: listed more than once, so its frequency is ambiguous",
+                    kgram.0.join(", ")
+                )));
+            }
+            map.insert(kgram, count);
+        }
+        Ok(map)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
@@ -1156,6 +1217,137 @@ mod tests {
         assert_eq!(loaded.name(), b.name());
         assert_eq!(loaded.len(), b.len());
         assert!(Birthmark::try_from(path.clone()).is_ok());
+    }
+
+    fn kgram(ops: &[&str]) -> Kgram {
+        Kgram::new(ops.iter().map(|s| s.to_string()).collect())
+    }
+
+    fn kgram_freq_birthmark() -> Birthmark {
+        let mut freq = FxHashMap::default();
+        freq.insert(kgram(&["COPY", "RETURN"]), 1);
+        freq.insert(kgram(&["CALL", "COPY"]), 3);
+        freq.insert(kgram(&["INT_ADD", "COPY"]), 2);
+        Birthmark {
+            metadata: Metadata {
+                birthmark_type: BirthmarkType::OpKgramFreq(2),
+                ..sample_birthmark().metadata
+            },
+            elements: vec![Elements {
+                name: "main".to_string(),
+                data: Data::KgramFreq(freq),
+            }],
+            json_path: None,
+        }
+    }
+
+    /// A k-gram is a list of operations, and a JSON object's keys are
+    /// strings, so `serde_json` refused the map outright — every non-empty
+    /// `op-*gram-freq` birthmark failed at write time, so eight of the thirty
+    /// birthmark types the CLI advertises could not produce a file (#59).
+    ///
+    /// A non-empty map is what makes this a test. An empty one has no key to
+    /// refuse, which is why the bug looked as though it only affected small
+    /// k: the fixture yields nothing for k >= 5.
+    #[test]
+    fn test_a_kgram_frequency_birthmark_survives_a_round_trip() {
+        let b = kgram_freq_birthmark();
+        let json = serde_json::to_string(&b).expect("a k-gram frequency must be writable");
+        let back: Birthmark = serde_json::from_str(&json).expect("and readable again");
+
+        let (Data::KgramFreq(before), Data::KgramFreq(after)) =
+            (&b.elements[0].data, &back.elements[0].data)
+        else {
+            panic!("the shape changed");
+        };
+        assert_eq!(before, after);
+        assert_eq!(after[&kgram(&["CALL", "COPY"])], 3);
+    }
+
+    /// Extracting the same program twice should write the same bytes. A hash
+    /// map's iteration order is not stable across runs, so the pairs are
+    /// sorted on the way out.
+    #[test]
+    fn test_a_kgram_frequency_is_written_in_a_stable_order() {
+        // Enough keys, inserted both ways round. Three would not discriminate:
+        // FxHash is not randomised, so a small map's iteration order is
+        // whatever it is and happens to come out sorted. At fifty the order
+        // is neither sorted nor the same for both insertion orders, so this
+        // fails if the sort is removed.
+        let build = |reverse: bool| {
+            let mut ops = (0..50).map(|i| format!("OP_{i:02}")).collect::<Vec<_>>();
+            if reverse {
+                ops.reverse();
+            }
+            let mut freq = FxHashMap::default();
+            for op in ops {
+                // The count comes from the key, not from when it was
+                // inserted, or the two maps would not hold the same thing.
+                let count = op.len();
+                freq.insert(kgram(&[op.as_str(), "COPY"]), count);
+            }
+            serde_json::to_string(&Data::KgramFreq(freq)).unwrap()
+        };
+        assert_eq!(build(false), build(true));
+
+        // The data alone: `sample_birthmark` stamps `Utc::now()` into the
+        // metadata, which is not what this is about.
+        let once = serde_json::to_string(&kgram_freq_birthmark().elements[0].data).unwrap();
+        for _ in 0..8 {
+            let again = serde_json::to_string(&kgram_freq_birthmark().elements[0].data).unwrap();
+            assert_eq!(again, once);
+        }
+        let data = serde_json::to_value(&kgram_freq_birthmark().elements[0].data).unwrap();
+        assert_eq!(
+            data["KgramFreq"],
+            serde_json::json!([
+                [["CALL", "COPY"], 3],
+                [["COPY", "RETURN"], 1],
+                [["INT_ADD", "COPY"], 2],
+            ])
+        );
+    }
+
+    /// A list is a weaker container than the map it stands for: it can say
+    /// the same thing twice. Collecting would take the last one, so a file
+    /// claiming a k-gram occurred 3 times and again 5 times would load as 5
+    /// and be scored, with nothing said about it.
+    ///
+    /// Nothing this crate writes can produce one — the pairs come from a map
+    /// — so refusing costs no real file anything.
+    #[test]
+    fn test_a_kgram_listed_twice_is_refused_rather_than_resolved() {
+        let once: Data =
+            serde_json::from_str(r#"{"KgramFreq":[[["CALL","COPY"],3]]}"#).expect("one is fine");
+        let Data::KgramFreq(m) = once else {
+            panic!("the shape changed");
+        };
+        assert_eq!(m[&kgram(&["CALL", "COPY"])], 3);
+
+        let twice = serde_json::from_str::<Data>(
+            r#"{"KgramFreq":[[["CALL","COPY"],3],[["CALL","COPY"],5]]}"#,
+        );
+        let Err(e) = twice else {
+            panic!("a k-gram listed twice must not silently pick one");
+        };
+        let msg = e.to_string();
+        assert!(msg.contains("listed more than once"), "{msg}");
+        assert!(msg.contains("CALL"), "does not say which one: {msg}");
+    }
+
+    /// Only `KgramFreq` changed. The fix could have been to make `Kgram`
+    /// itself serialize as a string, and that would have rewritten the two
+    /// k-gram families that already work — whose files are readable today.
+    #[test]
+    fn test_the_other_kgram_families_still_write_a_plain_list() {
+        let k = kgram(&["CALL", "COPY"]);
+        let expected = serde_json::json!(["CALL", "COPY"]);
+
+        let seq = serde_json::to_value(Data::KgramSeq(vec![k.clone()])).unwrap();
+        assert_eq!(seq["KgramSeq"][0], expected);
+
+        let set = serde_json::to_value(Data::KgramSet(FxHashSet::from_iter([k]))).unwrap();
+        assert_eq!(set["KgramSet"][0], expected);
     }
 
     #[test]
