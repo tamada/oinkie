@@ -701,17 +701,42 @@ impl TryFrom<String> for AnalysisType {
     ///
     /// Only the algorithm name is read here; everything before it is handed to
     /// [`BirthmarkType::try_from`], which is the parser that owns that half.
-    /// Splitting on the last hyphen is safe because no algorithm name contains
-    /// one — `weightedjaccard` is deliberately a single word.
+    ///
+    /// Where the two halves meet is found rather than assumed. Each hyphen is
+    /// tried as the split, rightmost first, and the first one whose tail names
+    /// an algorithm and whose head is a birthmark type wins:
+    ///
+    /// ```text
+    /// op-freq-weighted-jaccard
+    ///         ^ "jaccard" is an algorithm, but "op-freq-weighted" is not a
+    ///           birthmark -- keep looking
+    ///    ^ "weighted-jaccard" is an algorithm and "op-freq" is a birthmark
+    /// ```
+    ///
+    /// It used to split on the last hyphen, which made an algorithm name
+    /// containing one unrepresentable — so `weightedjaccard` was spelled
+    /// without one while `compare --algorithm` and `oinkie info` showed
+    /// clap's `weighted-jaccard`, and a name built from what `info` printed
+    /// was refused (#71). Searching for the split costs a few string
+    /// comparisons on a name a person typed, and removes the rule that a
+    /// future algorithm must not be two words.
     fn try_from(name: String) -> Result<Self> {
         let lowered = name.to_lowercase();
-        let (birthmark, algorithm) = lowered
-            .rsplit_once('-')
-            .ok_or_else(|| Error::BirthmarkType(name.clone()))?;
-        let birthmark = BirthmarkType::try_from(birthmark)?;
-        let algorithm =
-            parse_algorithm(algorithm).ok_or_else(|| Error::BirthmarkType(name.clone()))?;
-        AnalysisType::new(birthmark, algorithm)
+        // The rightmost split that got as far as naming an algorithm, so that
+        // a bad birthmark half is still reported as itself rather than the
+        // whole string being blamed.
+        let mut birthmark_error = None;
+        for (at, _) in lowered.rmatch_indices('-') {
+            let (birthmark, algorithm) = (&lowered[..at], &lowered[at + 1..]);
+            let Some(algorithm) = parse_algorithm(algorithm) else {
+                continue;
+            };
+            match BirthmarkType::try_from(birthmark) {
+                Ok(birthmark) => return AnalysisType::new(birthmark, algorithm),
+                Err(e) => birthmark_error = birthmark_error.or(Some(e)),
+            }
+        }
+        Err(birthmark_error.unwrap_or(Error::BirthmarkType(name)))
     }
 }
 
@@ -736,11 +761,21 @@ impl Shape {
     }
 }
 
+/// An algorithm by either of the names it goes by: the one an analysis name
+/// uses, and clap's kebab-case, which is what `compare --algorithm` takes and
+/// what `oinkie info` prints (#71).
+///
+/// They differ for `weightedjaccard` / `weighted-jaccard` alone; the other
+/// seven are single words and spell the same either way.
 fn parse_algorithm(name: &str) -> Option<Algorithm> {
     use clap::ValueEnum;
     Algorithm::value_variants()
         .iter()
-        .find(|a| a.cli_name() == name)
+        .find(|a| {
+            a.cli_name() == name
+                || a.to_possible_value()
+                    .is_some_and(|value| value.get_name() == name)
+        })
         .cloned()
 }
 
@@ -1034,6 +1069,83 @@ mod tests {
             let at = AnalysisType::try_from(name).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(at.birthmark, expected, "name: {name}");
         }
+    }
+
+    /// `compare --algorithm` takes clap's kebab-case and `oinkie info` prints
+    /// it, so an analysis name has to accept it as well or the two halves of
+    /// the CLI disagree about what an algorithm is called (#71).
+    #[test]
+    fn test_an_algorithm_answers_to_both_of_its_spellings() {
+        use clap::ValueEnum;
+        let mut differing = 0;
+        for algorithm in Algorithm::value_variants() {
+            let own = algorithm.cli_name();
+            let kebab = algorithm.to_possible_value().unwrap();
+            let kebab = kebab.get_name();
+            assert_eq!(parse_algorithm(own).unwrap().cli_name(), own);
+            assert_eq!(parse_algorithm(kebab).unwrap().cli_name(), own, "{kebab}");
+            if own != kebab {
+                differing += 1;
+            }
+        }
+        // `weighted-jaccard` is the only one that is spelled two ways; if a
+        // second multi-word algorithm arrives this still holds, and the count
+        // is here so that going to zero is noticed rather than assumed.
+        assert_eq!(differing, 1);
+    }
+
+    /// The property the issue was really about: every name a person can build
+    /// out of what `oinkie info` shows them has to parse.
+    ///
+    /// Generated from the two lists rather than written out, so a two-word
+    /// algorithm added later is covered without anyone remembering to.
+    #[test]
+    fn test_a_name_built_from_what_info_prints_parses() {
+        use clap::ValueEnum;
+        for birthmark in BirthmarkType::advertised() {
+            for algorithm in Algorithm::value_variants() {
+                if !birthmark.pairs_with(algorithm) {
+                    continue;
+                }
+                let shown = algorithm.to_possible_value().unwrap();
+                let name = format!("{birthmark}-{}", shown.get_name());
+                let parsed =
+                    AnalysisType::try_from(name.as_str()).unwrap_or_else(|e| panic!("{name}: {e}"));
+                assert_eq!(parsed.birthmark, birthmark, "{name}");
+            }
+        }
+    }
+
+    /// Where the halves meet is searched for, rightmost hyphen first, rather
+    /// than assumed to be the last one. Both spellings therefore mean the
+    /// same analysis.
+    #[test]
+    fn test_the_split_is_found_rather_than_assumed() {
+        for name in ["op-freq-weighted-jaccard", "op-freq-weightedjaccard"] {
+            let at = AnalysisType::try_from(name).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(at.birthmark, BirthmarkType::OpFreq, "{name}");
+        }
+        let at = AnalysisType::try_from("op-3gram-freq-weighted-jaccard").unwrap();
+        assert_eq!(at.birthmark, BirthmarkType::OpKgramFreq(3));
+    }
+
+    /// Searching must not cost the message. A split that names an algorithm
+    /// but not a birthmark reports the birthmark half, not the whole string.
+    #[test]
+    fn test_a_bad_birthmark_half_is_still_reported_as_itself() {
+        let Err(e) = AnalysisType::try_from("op-nonsense-jaccard") else {
+            panic!("op-nonsense is not a birthmark type");
+        };
+        assert_eq!(e.to_string(), "op-nonsense: unknown birthmark type");
+
+        // nothing names an algorithm here, so there is no half to blame
+        let Err(e) = AnalysisType::try_from("fc-set-jaccard-extra") else {
+            panic!("nothing in this names an algorithm");
+        };
+        assert_eq!(
+            e.to_string(),
+            "fc-set-jaccard-extra: unknown birthmark type"
+        );
     }
 
     #[test]
