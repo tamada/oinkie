@@ -15,21 +15,46 @@
 
 set -eu
 
-TO_VERSION=$1
-V='[0-9]+\.[0-9]+\.[0-9]+'
-
-replace_in() {
-    file=$1
-    sed -E \
-        -e "s|(badge/Version-)${V}|\1${TO_VERSION}|g" \
-        -e "s|(releases/tag/v)${V}|\1${TO_VERSION}|g" \
-        -e "s|(oinkie:)${V}|\1${TO_VERSION}|g" \
-        "$file" > "$file.tmp"
-    mv "$file.tmp" "$file"
+usage() {
+    echo "usage: $0 <version>        e.g. $0 0.4.0" >&2
+    echo "  the leading v of a tag name is accepted and ignored" >&2
+    exit 1
 }
 
-sed -E "s/^version = \".*\"/version = \"${TO_VERSION}\"/" Cargo.toml > Cargo.toml.tmp
-mv Cargo.toml.tmp Cargo.toml
+[ $# -eq 1 ] || usage
 
-replace_in README.md
-replace_in docs/content/_index.md
+# The caller is the release workflow, which derives this from the branch name
+# `releases/vX.Y.Z`. Checked anyway: an unchecked value reaches the right-hand
+# side of a `sed` s/// and could rewrite these files into anything, and this
+# runs on a release branch where the result is committed and pushed.
+TO_VERSION=$(printf '%s' "$1" | sed -E 's/^v//')
+case $TO_VERSION in
+    *[!0-9.]* | *..* | .* | *. ) usage ;;
+esac
+echo "$TO_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || usage
+
+V='[0-9]+\.[0-9]+\.[0-9]+'
+TMP=
+
+# sed writes beside the file it is rewriting, so a failure part-way through
+# must not leave that behind for the commit step to pick up.
+cleanup() { [ -z "$TMP" ] || rm -f "$TMP"; }
+trap cleanup EXIT
+
+rewrite() {
+    file=$1
+    shift
+    TMP="$file.tmp"
+    sed -E "$@" "$file" > "$TMP"
+    mv "$TMP" "$file"
+    TMP=
+}
+
+rewrite Cargo.toml -e "s/^version = \".*\"/version = \"${TO_VERSION}\"/"
+
+for f in README.md docs/content/_index.md; do
+    rewrite "$f" \
+        -e "s|(badge/Version-)${V}|\1${TO_VERSION}|g" \
+        -e "s|(releases/tag/v)${V}|\1${TO_VERSION}|g" \
+        -e "s|(oinkie:)${V}|\1${TO_VERSION}|g"
+done
