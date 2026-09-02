@@ -7,7 +7,7 @@
 
 [![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.3.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 
-Detecting software theft, the birthmark toolkit for Ghidra Pcode, LLVM IR/BC, and Binary Ninja.
+Detecting software theft, the birthmark toolkit for Ghidra P-code, with Binary Ninja and IDA Pro planned.
 
 ![Logo of oinkie](.github/assets/oinkie.png)
 
@@ -37,7 +37,7 @@ It is derived from the binary code of the software and can be used to detect sof
 To examine the birthmarks, we apply the following steps:
 
 1. Collects the binary files to be examined.
-2. Lifts binary files to an intermediate representation (IR), such as Ghidra PCODE or LLVM IR/BC.
+2. Lifts binary files to an intermediate representation (IR), such as Ghidra's P-code.
 3. Extracts the birthmarks from the lifted IR files.
 4. Compares the birthmarks to calculate the similarities.
 5. Analyze the results to determine if software theft is suspected.
@@ -112,7 +112,7 @@ Note that the birthmark method just detects potential copies; it does not prove 
 
 The previous version of this tool is [`pochi`](https://github.com/tamada/pochi), which is the birthmark toolkit for the JVM platform. The `pochi` is a dog that said "dig dig, here" and finds the treasures in the Japanese old tale "The old man who made flowers bloom." The tool finds clues of piracy from the binary code, as illustrated by the example of the dog above.
 
-The purpose of `oinkie` is the same as `pochi`'s on the other platform: LLVM IR/BC. Hence, another tool name is wanted, such as an animal, a concept, or a famous person. From this background, I came up with the idea of a pig finding a truffle. However, truffle is already used in [GraalVM](https://www.graalvm.org/latest/graalvm-as-a-platform/language-implementation-framework/). Then I asked Microsoft Copilot, "What is the famous name of the truffle pig?" The name `oinkie` is one answer to the question.
+The purpose of `oinkie` is the same as `pochi`'s, on the other platform: native binaries rather than the JVM. Hence, another tool name is wanted, such as an animal, a concept, or a famous person. From this background, I came up with the idea of a pig finding a truffle. However, truffle is already used in [GraalVM](https://www.graalvm.org/latest/graalvm-as-a-platform/language-implementation-framework/). Then I asked Microsoft Copilot, "What is the famous name of the truffle pig?" The name `oinkie` is one answer to the question.
 
 ### 🎃 The logo of `oinkie`
 
