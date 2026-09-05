@@ -519,8 +519,15 @@ fn test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift() {
         .arg("testdata/hello_world/bin/hello_clang")
         .assert()
         .failure()
-        // the binary the user asked about, not only the JSON they have never seen
-        .stderr(predicate::str::contains("hello_clang"))
+        // The binary the user asked about, matched as the whole path and with
+        // the colon that follows it. Matching "hello_clang" alone proved
+        // nothing: the output is named hello_clang.json, so the assertion
+        // passed on a message that did not mention the binary at all.
+        .stderr(predicate::str::contains(
+            "testdata/hello_world/bin/hello_clang:",
+        ))
+        // the file that is wrong, which the cause names
+        .stderr(predicate::str::contains("hello_clang.json"))
         // and that the lifter claimed success, which is what points at the script
         .stderr(predicate::str::contains("reported success"));
 }

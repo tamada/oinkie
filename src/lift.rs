@@ -437,8 +437,10 @@ mod verifying_tests {
         let (r, _dir) = lift_with(Writes("{\"functions\": ["), "bin/sample");
         let e = r.expect_err("a file that does not parse is not a successful lift");
         let rendered = e.to_string();
-        // the binary, because that is what the caller asked about
-        assert!(rendered.contains("bin/sample"), "{rendered}");
+        // The binary, with the colon that follows it, because that is what the
+        // caller asked about -- and because a bare "sample" would also match
+        // the output's own name and so assert nothing.
+        assert!(rendered.contains("bin/sample:"), "{rendered}");
         // the file, because that is the one that is wrong
         assert!(rendered.contains("sample.json"), "{rendered}");
         // and that the lifter claimed to have succeeded, which is what points
