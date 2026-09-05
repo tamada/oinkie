@@ -65,12 +65,25 @@ public class HighPCodeLifter extends GhidraScript {
         decompInterface.dispose();
     }
 
+    /**
+     * Writes the lines, letting a failed write be a failed lift.
+     *
+     * Straight onto the BufferedWriter, and over a plain loop. A PrintWriter
+     * records write errors internally rather than throwing, so `throws
+     * IOException` would have covered only opening the file: a write that
+     * failed part-way would still have left a truncated file behind, and
+     * analyzeHeadless exits 0 regardless, so it would have arrived as
+     * unreadable output rather than as an error. The lambda a stream would
+     * take cannot throw a checked exception, which is what the PrintWriter was
+     * there to work around.
+     */
     private void outputToFile(String fileName, List<String> outputs) throws IOException {
         Path cwd = Path.of(".");
         try (var out = Files.newBufferedWriter(cwd.resolve(fileName + ".json"))) {
-            var w = new java.io.PrintWriter(out);
-            outputs.stream()
-                .forEach(line -> w.println(line));
+            for (String line : outputs) {
+                out.write(line);
+                out.newLine();
+            }
         }
     }
 
