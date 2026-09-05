@@ -15,11 +15,11 @@ use serde_json::Value;
 /// One session: initialize, then whatever else is asked, then EOF -- which is
 /// what stops the server.
 fn talk(requests: &[&str]) -> (Vec<Value>, String) {
-    talk_under(None, requests)
+    talk_under(&[], requests)
 }
 
-/// The same, with the server confined to one directory.
-fn talk_under(root: Option<&std::path::Path>, requests: &[&str]) -> (Vec<Value>, String) {
+/// The same, with the server confined to the given directories.
+fn talk_under(roots: &[&std::path::Path], requests: &[&str]) -> (Vec<Value>, String) {
     let mut stdin = String::from(
         r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
@@ -32,7 +32,7 @@ fn talk_under(root: Option<&std::path::Path>, requests: &[&str]) -> (Vec<Value>,
 
     let mut cmd = Command::cargo_bin("oinkie").unwrap();
     cmd.arg("mcp");
-    if let Some(root) = root {
+    for root in roots {
         cmd.arg("--root").arg(root);
     }
     let out = cmd
@@ -93,7 +93,13 @@ fn test_the_server_offers_the_tools_it_has() {
     tools.sort();
     assert_eq!(
         tools,
-        vec!["oinkie_info".to_string(), "oinkie_reaggregate".to_string()]
+        vec![
+            "oinkie_compare".to_string(),
+            "oinkie_extract".to_string(),
+            "oinkie_info".to_string(),
+            "oinkie_reaggregate".to_string(),
+            "oinkie_run".to_string(),
+        ]
     );
 }
 
@@ -167,14 +173,59 @@ fn scored_directory(dir: &std::path::Path) -> std::path::PathBuf {
     scores
 }
 
-fn call_reaggregate(root: &std::path::Path, args: Value) -> Value {
+fn call_tool(roots: &[&std::path::Path], name: &str, args: Value) -> Value {
     let request = serde_json::json!({
         "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-        "params": {"name": "oinkie_reaggregate", "arguments": args}
+        "params": {"name": name, "arguments": args}
     })
     .to_string();
-    let (messages, _) = talk_under(Some(root), &[&request]);
+    let (messages, _) = talk_under(roots, &[&request]);
     reply(&messages, 2).clone()
+}
+
+fn call_reaggregate(root: &std::path::Path, args: Value) -> Value {
+    call_tool(&[root], "oinkie_reaggregate", args)
+}
+
+/// The repository, canonicalized, since that is what a refusal compares
+/// against and what a resolved path comes back as.
+fn here() -> std::path::PathBuf {
+    std::fs::canonicalize(".").unwrap()
+}
+
+/// The two lifted programs the parity tests compare.
+///
+/// Deliberately not the two hello worlds: those produce the same birthmark
+/// under every analysis, so any pair of them scores 1.0 and a test built on
+/// them passes for an implementation that returns 1.0 and nothing else.
+const A: &str = "testdata/hello_world/pcodes/hello_clang.json";
+const B: &str = "testdata/quoted_names/pcodes/udl.json";
+
+fn similarities(result: &Value) -> Vec<f64> {
+    result["result"]["structuredContent"]["scores"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no scores in {result}"))
+        .iter()
+        .map(|s| s["similarity"].as_f64().unwrap())
+        .collect()
+}
+
+/// The same analysis through the CLI, as the number it writes.
+fn cli_run(dir: &std::path::Path, analysis: &str) -> Vec<f64> {
+    let dest = dir.join("cli-run");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-a", analysis, "-s", "all", "-d"])
+        .arg(&dest)
+        .args([A, B])
+        .assert()
+        .success();
+    std::fs::read_to_string(dest.join("results.csv"))
+        .unwrap()
+        .lines()
+        .filter(|l| !l.starts_with("total duration"))
+        .map(|l| l.split(',').nth(1).unwrap().parse::<f64>().unwrap())
+        .collect()
 }
 
 /// The tool and the CLI have to agree, or the MCP surface is quietly its own
@@ -271,5 +322,150 @@ fn test_an_unknown_aggregator_is_reported_as_the_callers_mistake() {
             .unwrap_or_default()
             .contains("oinkie_info"),
         "the refusal should say where the accepted names are: {result}"
+    );
+}
+
+/// The point of the whole server: hand it two lifted programs and be told how
+/// alike they are. Checked against the CLI, so the MCP surface cannot quietly
+/// become a second implementation of the same computation.
+#[test]
+fn test_running_gives_what_the_cli_gives() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = call_tool(
+        &[&here()],
+        "oinkie_run",
+        serde_json::json!({"files": [A, B], "analysis": "op-set-jaccard", "strategy": "all"}),
+    );
+    let served = similarities(&result);
+
+    assert_eq!(served.len(), 1, "one pair under 'all': {result}");
+    assert!(
+        served[0] > 0.0 && served[0] < 1.0,
+        "these two must actually differ, or this test asserts nothing: {served:?}"
+    );
+    assert_eq!(served, cli_run(dir.path(), "op-set-jaccard"));
+}
+
+/// Extracting and then comparing has to reach the same number as running,
+/// since it is the same computation with the birthmarks written down in
+/// between.
+#[test]
+fn test_extract_then_compare_agrees_with_run() {
+    let dir = tempfile::tempdir().unwrap();
+    // one root for the inputs, one for what the tools write
+    let birthmarks = dir.path().join("birthmarks");
+
+    let extracted = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_extract",
+        serde_json::json!({
+            "files": [A, B],
+            "birthmark_type": "op-set",
+            "dest": birthmarks.to_str().unwrap()
+        }),
+    );
+    let written = extracted["result"]["structuredContent"]["birthmarks"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no birthmarks in {extracted}"))
+        .iter()
+        .map(|b| b["output"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(written.len(), 2, "{extracted}");
+    for w in &written {
+        assert!(std::path::Path::new(w).exists(), "{w} was not written");
+    }
+
+    let compared = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_compare",
+        serde_json::json!({"files": written, "algorithm": "jaccard", "strategy": "all"}),
+    );
+    let two_step = similarities(&compared);
+
+    let one_step = similarities(&call_tool(
+        &[&here(), dir.path()],
+        "oinkie_run",
+        serde_json::json!({"files": [A, B], "analysis": "op-set-jaccard", "strategy": "all"}),
+    ));
+    assert_eq!(two_step, one_step);
+    assert!(two_step[0] < 1.0, "{two_step:?}");
+}
+
+/// A directory `oinkie_run` wrote has to be one `oinkie_reaggregate` can read,
+/// or the tools do not compose and the caller has to leave for the CLI.
+#[test]
+fn test_a_directory_run_wrote_can_be_reaggregated() {
+    let dir = tempfile::tempdir().unwrap();
+    let scores = dir.path().join("similarities");
+
+    let run = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_run",
+        serde_json::json!({
+            "files": [A, B],
+            "analysis": "op-set-jaccard",
+            "strategy": "all",
+            "dest": scores.to_str().unwrap()
+        }),
+    );
+    assert_eq!(
+        run["result"]["structuredContent"]["dest"]
+            .as_str()
+            .map(std::path::Path::new),
+        // canonicalized, which on macOS means /var became /private/var
+        Some(std::fs::canonicalize(&scores).unwrap().as_path())
+    );
+
+    let again = call_reaggregate(
+        dir.path(),
+        serde_json::json!({"score_directory": scores.to_str().unwrap()}),
+    );
+    assert_eq!(similarities(&again), similarities(&run));
+}
+
+/// The library refuses a pairing whose algorithm does not operate on the
+/// birthmark's shape, and names the one that was meant. That message is the
+/// only place a model can learn the right spelling, so it has to survive.
+#[test]
+fn test_an_impossible_pairing_is_refused_in_the_librarys_words() {
+    let result = call_tool(
+        &[&here()],
+        "oinkie_run",
+        serde_json::json!({"files": [A], "analysis": "op-seq-euclidean"}),
+    );
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("op-freq-euclidean"), "{result}");
+    assert_eq!(result["error"]["code"].as_i64(), Some(-32602), "{result}");
+}
+
+/// A model handed a directory will pass all of it, and `all-and-self` is
+/// quadratic. The count is known before anything is read, so the refusal
+/// happens then.
+#[test]
+fn test_too_many_pairs_is_refused_before_anything_is_read() {
+    let result = call_tool(
+        &[&here()],
+        "oinkie_run",
+        serde_json::json!({"files": [A, B], "max_pairs": 1}),
+    );
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("3 pairs"), "{result}");
+    assert!(message.contains("max_pairs"), "{result}");
+}
+
+#[test]
+fn test_a_program_outside_the_root_is_refused() {
+    let dir = tempfile::tempdir().unwrap();
+    let result = call_tool(
+        &[dir.path()],
+        "oinkie_run",
+        serde_json::json!({"files": [std::fs::canonicalize(A).unwrap()]}),
+    );
+    assert!(
+        result["error"]["message"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("outside every allowed"),
+        "{result}"
     );
 }
