@@ -7,16 +7,6 @@
 //! between "you asked for something impossible" and "something went wrong" is
 //! made by an exhaustive match, so a variant added later stops the build
 //! rather than defaulting to whichever is wrong for it.
-//!
-//! Written here rather than alongside the first tool that needs it. Nothing in
-//! this change can fail -- `oinkie_info` takes no arguments and reads no files
-//! -- but the match below has to decide, once, which side of the line every
-//! existing variant falls on, and doing that deliberately with tests is worth
-//! more than doing it in a hurry next to the tools that will use it.
-#![allow(
-    dead_code,
-    reason = "used by the tools that take arguments and read files"
-)]
 
 use oinkie::Error;
 use rmcp::ErrorData;

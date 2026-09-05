@@ -8,16 +8,29 @@ use oinkie::prelude::*;
 
 pub(crate) fn perform(opts: cli::ReaggregateOpts) -> Result<Vec<Duration>> {
     let start = std::time::Instant::now();
-    let score_dir = opts.score_directory();
+    let results = reaggregate_all(opts.score_directory(), opts.aggregator())?;
+    super::store_and_get_durations(results, opts.dest_file(), start)
+}
+
+/// Recomputes every score in a directory, and hands them back.
+///
+/// Split out of [`perform`], which now only decides where to write them,
+/// because the MCP tool wants the scores themselves rather than a CSV. Both
+/// callers get the same numbers by construction rather than by two
+/// implementations agreeing.
+pub(crate) fn reaggregate_all(
+    score_dir: &Path,
+    aggregator: &Aggregator,
+) -> Result<Vec<CompareResult>> {
+    let start = std::time::Instant::now();
     let crs = load_results(score_dir)?;
     log::info!("read the previous results {:?}", start.elapsed());
     let results = crs
         .iter()
-        .map(|cr| reaggregate(cr, score_dir, opts.aggregator()))
+        .map(|cr| reaggregate(cr, score_dir, aggregator))
         .collect::<Vec<_>>();
     let results = Error::vec_result_to_result_vec(results)?;
-    let cresults = results.into_iter().map(|(cr, _)| cr).collect::<Vec<_>>();
-    super::store_and_get_durations(cresults, opts.dest_file(), start)
+    Ok(results.into_iter().map(|(cr, _)| cr).collect())
 }
 
 fn reaggregate(
