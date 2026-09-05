@@ -32,6 +32,14 @@ jobs:
           version: "12.1"
           auth_token: ${{ secrets.GITHUB_TOKEN }}
 
+      # Ghidra compiles the lifting script at lift time, so an error in it is
+      # not a build failure -- it is a lift that produces nothing, reported as
+      # a missing output because analyzeHeadless exits 0 either way. The jars
+      # and the JDK are already here for the steps above, so checking it costs
+      # about two seconds.
+      - name: Compile the lifting script
+        run: ./lifter/compile-check.sh
+
       - name: build
         run: |
           cargo fmt --all -- --check
