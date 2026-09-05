@@ -42,16 +42,19 @@ impl Oinkie {
     }
 }
 
+/// A blocking task that did not come back -- panicked, or was cancelled.
+///
+/// Not the caller's doing, whatever they asked for, so it is reported as an
+/// internal failure rather than as a bad argument.
+fn joined(e: tokio::task::JoinError) -> ErrorData {
+    ErrorData::internal_error(format!("the work did not finish: {e}"), None)
+}
+
 /// A refusal that points at where the accepted names are.
 ///
 /// Every one of these is a value the caller chose, so it is reported as their
 /// mistake -- which the shared conversion cannot do, since the library refuses
 /// several of them through `Error::Parse` and that variant spans both sides.
-/// A blocking task that did not come back. Not the caller's doing.
-fn joined(e: tokio::task::JoinError) -> ErrorData {
-    ErrorData::internal_error(format!("the work did not finish: {e}"), None)
-}
-
 fn refuse(e: impl std::fmt::Display) -> ErrorData {
     ErrorData::invalid_params(
         format!("{e}. Call oinkie_info for the names this accepts."),
@@ -111,6 +114,13 @@ pub struct ExtractParams {
     /// Paths to lifted programs -- the JSON that `oinkie lift` writes.
     pub files: Vec<String>,
     /// Directory to write the birthmarks into. Created if it is not there.
+    ///
+    /// Required, and deliberately without a default. The CLI defaults this to
+    /// "birthmarks" because the person running it chose the working directory
+    /// and can see it; a server's working directory is wherever the client
+    /// happened to start it. A default would resolve against that, land
+    /// outside the roots, and be refused -- naming a value the caller never
+    /// supplied.
     pub dest: String,
     /// Which birthmark to extract, for example "op-seq" or "op-3gram-set".
     /// Defaults to "op-seq". Call oinkie_info for the full list.
