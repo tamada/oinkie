@@ -46,7 +46,12 @@ jobs:
       - name: build
         run: |
           cargo fmt --all -- --check
-          cargo clippy -- -D warnings
+          # Both configurations get compiled. The release binary carries the
+          # MCP server, so clippy is run with the feature; `cargo build` is
+          # left on the default features, because everything under `mcp` is
+          # behind `#[cfg]` and a wrong one would otherwise only show up in a
+          # build nobody runs.
+          cargo clippy --all-targets --features mcp -- -D warnings
           cargo build --release
 
       - name: Convert coverage format to lcov
@@ -55,7 +60,10 @@ jobs:
           export GHIDRA_HOME=${{ env.GHIDRA_INSTALL_DIR }}
           cargo install cargo-llvm-cov
           rustup component add llvm-tools-preview
-          cargo llvm-cov --lcov --output-path coverage.lcov
+          # --features mcp, or cli/mcp/ is invisible to the report the way
+          # cli/gencomp.rs already is: behind a feature, and so never compiled
+          # by a coverage run using the default ones.
+          cargo llvm-cov --features mcp --lcov --output-path coverage.lcov
 
       - name: coveralls
         uses: coverallsapp/github-action@v2

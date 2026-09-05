@@ -96,7 +96,8 @@ jobs:
           rustup update stable
           rustup target add ${{ matrix.target }}
           cargo install cargo-zigbuild
-          cargo zigbuild --release --target ${{ matrix.target }}
+          # --features mcp: without it the published binary has no `oinkie mcp`.
+          cargo zigbuild --release --features mcp --target ${{ matrix.target }}
 
       - name: Create distribution files.
         env:
