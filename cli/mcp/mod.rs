@@ -4,6 +4,7 @@
 //! Behind the `mcp` cargo feature, the way `gencomp` is, so that a build that
 //! does not want a server does not carry tokio and rmcp.
 
+mod analysis;
 mod error;
 mod info;
 mod paths;
