@@ -27,6 +27,7 @@ Commands:
   compare      Compare birthmarks and output the similarity score
   reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
   run          Extract birthmarks and compare them in one command
+  mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
   help         Print this message or the help of the given subcommand(s)
 
 Options:
@@ -44,6 +45,9 @@ The toolkit's operations are divided into distinct stages. You can execute them 
 
 * **[Displaying Application Info](info)**  
   Query general details, supported birthmark models, and similarity algorithms.
+
+* **[Serving to an Agent](mcp)**  
+  Expose the steps below over the Model Context Protocol, so an agent can run them.
 
 1. **[Lifting Binaries to Pcode (OIR)](lift)**  
    Convert your raw executable or compiled binary files into the Oinkie Intermediate Representation (OIR) JSON format using Ghidra.
