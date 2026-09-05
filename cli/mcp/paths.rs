@@ -55,6 +55,28 @@ impl Roots {
     /// part that does exist, which is what resolves symlinks, and rebuilds the
     /// rest on top.
     ///
+    /// # What this does and does not promise
+    ///
+    /// It answers, at the moment it is asked, where a path leads. A symlink
+    /// that exists and points out of a root is caught, because the existing
+    /// part is canonicalized -- including one whose every written component
+    /// lies inside a root.
+    ///
+    /// It cannot promise that the answer is still true when the caller acts on
+    /// it. Between this check and the `File::create` that follows, a component
+    /// could be replaced by a symlink, and the write would follow it. Closing
+    /// that needs the write itself to be done relative to a root's descriptor
+    /// (`openat`, or a crate like `cap-std`) rather than by path -- and the
+    /// write lives in `store_and_get_durations`, which the CLI shares, so it
+    /// is a change to more than this module.
+    ///
+    /// It is left open deliberately. Replacing a component inside a root
+    /// requires write access to that root, and the server runs as the person
+    /// who chose the roots: anything able to do it can already write wherever
+    /// that person can, without involving oinkie. The operational form of this
+    /// is "do not point `--root` at a directory other people can write to",
+    /// which belongs in the documentation rather than in a lock here.
+    ///
     /// That rebuilding is why `..` is refused outright rather than resolved.
     /// A path like `<root>/nowhere/../../etc/passwd` has a canonical ancestor
     /// of `<root>`, and appending the remainder to it produces something that
@@ -86,6 +108,19 @@ impl Roots {
         let canonical = loop {
             match walked.canonicalize() {
                 Ok(c) => break c,
+                // Only "it is not there" means keep looking further up. Every
+                // other failure is about a component that *is* there and could
+                // not be resolved -- no permission to traverse it, a symlink
+                // loop, a file where a directory was expected -- and walking
+                // past one of those builds the answer out of a prefix nobody
+                // established, then checks *that* against the roots. The
+                // verdict would mean nothing whichever way it came out.
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
+                    return Err(ErrorData::invalid_params(
+                        format!("{path}: cannot resolve {}: {e}", walked.display()),
+                        None,
+                    ));
+                }
                 Err(_) => match (walked.file_name(), walked.parent()) {
                     (Some(name), Some(parent)) => {
                         tail.push(name.to_owned());
@@ -269,6 +304,34 @@ mod tests {
             roots
                 .resolve(other.join("secret").to_str().unwrap())
                 .is_ok()
+        );
+    }
+
+    /// A component that exists but cannot be resolved is reported as itself.
+    /// It used to be treated as "not there" and walked past, which built the
+    /// answer out of a prefix nobody had established -- and then checked that
+    /// against the roots, so the verdict meant nothing either way.
+    ///
+    /// `ENOTDIR` stands in for the family. A permission error is the other
+    /// everyday member and cannot be arranged portably in a test, since a
+    /// suite running as root would not get one.
+    #[test]
+    fn test_a_component_that_cannot_be_resolved_is_not_walked_past() {
+        let f = fixture();
+        let through_a_file = f.root.join("pcodes/a.json/deeper/out.csv");
+        let e = f
+            .roots
+            .resolve(through_a_file.to_str().unwrap())
+            .unwrap_err();
+        assert!(
+            e.message.contains("cannot resolve"),
+            "a file used as a directory should say so: {}",
+            e.message
+        );
+        assert!(
+            e.message.contains("a.json"),
+            "and name the component that failed: {}",
+            e.message
         );
     }
 
