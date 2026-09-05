@@ -6,6 +6,10 @@ image_quay   := 'quay.io/tama5'
 image_github := 'ghcr.io/tamada'
 container_image := image_quay
 
+# Compile the Ghidra lifting script without running Ghidra (~2s)
+compile-check:
+    ./lifter/compile-check.sh
+
 container-local:
     docker build \
         --build-arg GIT_REVISION={{git_revision}} \
