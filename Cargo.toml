@@ -6,6 +6,10 @@ edition = "2024"
 
 [features]
 gencomp = [ "dep:clap_complete" ]
+# The MCP server. Behind a feature the way `gencomp` is, so that a build that
+# does not want it does not carry tokio and rmcp; the release workflows pass
+# `--features mcp`, so the published binary has it.
+mcp = [ "dep:rmcp", "dep:tokio" ]
 
 [dependencies]
 chrono = { version = "0.4.44", features = [ "serde" ] }
@@ -25,12 +29,17 @@ ndarray = "0.16"
 num-derive = "0.4.2"
 num-traits = "0.2.19"
 rayon = "1.12.0"
+# `schemars` is not a direct dependency: rmcp re-exports the version its macros
+# generate against, and depending on a second one is how the derives stop
+# agreeing with the runtime.
+rmcp = { version = "3.2", optional = true, features = [ "macros", "server", "transport-io" ] }
 rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = [ "derive" ] }
 serde_json = "1.0.150"
 sha2 = "0.10.9"
 tempfile = "3.10.1"
 thiserror = "2.0.20"
+tokio = { version = "1", optional = true, features = [ "rt-multi-thread", "macros", "io-std" ] }
 
 [[bin]]
 name = "oinkie"

@@ -82,7 +82,23 @@ pub enum OinkieCommand {
         about = "Extract birthmarks and compare them in one command"
     )]
     Run(RunOpts),
+
+    #[cfg(feature = "mcp")]
+    #[command(
+        name = "mcp",
+        about = "Serve oinkie over the Model Context Protocol, on stdin and stdout"
+    )]
+    Mcp(McpOpts),
 }
+
+/// Options for the MCP server.
+///
+/// Empty for now. The server speaks stdio and takes its vocabulary from the
+/// library, so there is nothing to configure yet; confining which paths the
+/// tools may touch is what will fill this in.
+#[cfg(feature = "mcp")]
+#[derive(Debug, clap::Parser)]
+pub struct McpOpts {}
 
 #[derive(Debug, clap::Parser)]
 pub struct LiftOpts {
