@@ -3,7 +3,8 @@ use crate::lift::headless::Headless;
 use crate::{Error, Result};
 use std::path::{Path, PathBuf};
 
-pub const DEFAULT_GHIDRA_SCRIPT: &str = include_str!("../../lifter/scripts/HighPCodeLifter.java");
+pub const DEFAULT_GHIDRA_SCRIPT: &str =
+    include_str!("../../assets/lifters/ghidra/scripts/HighPCodeLifter.java");
 
 pub struct GhidraLifter {
     home: PathBuf,

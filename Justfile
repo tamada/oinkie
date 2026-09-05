@@ -8,7 +8,7 @@ container_image := image_quay
 
 # Compile the Ghidra lifting script without running Ghidra (~2s)
 compile-check:
-    ./lifter/compile-check.sh
+    ./assets/lifters/ghidra/compile-check.sh
 
 container-local:
     docker build \

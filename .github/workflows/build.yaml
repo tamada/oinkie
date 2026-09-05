@@ -39,8 +39,8 @@ jobs:
       # about two seconds.
       - name: Compile the lifting scripts
         run: |
-          ./lifter/compile-check.sh \
-            lifter/scripts/HighPCodeLifter.java \
+          ./assets/lifters/ghidra/compile-check.sh \
+            assets/lifters/ghidra/scripts/HighPCodeLifter.java \
             testdata/scripts/BrokenLifter.java
 
       - name: build

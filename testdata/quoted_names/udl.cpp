@@ -2,7 +2,8 @@
 //
 // A C++ user-defined literal operator mangles to something Ghidra demangles
 // as `operator""__km`, so lifting this exercises the escaping that the JSON
-// writer in lifter/scripts/HighPCodeLifter.java has to do. Nothing here is
+// writer in assets/lifters/ghidra/scripts/HighPCodeLifter.java has to do.
+// Nothing here is
 // about what the program computes.
 //
 // Built with: clang++ -std=c++17 -O0 -g0 -o bin/udl udl.cpp

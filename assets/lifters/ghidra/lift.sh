@@ -8,7 +8,7 @@ else
 fi
 
 GHIDRA_HEADLESS="${GHIDRA_HOME}/support/analyzeHeadless"
-SCRIPT_DIR="$(pwd)/lifter/scripts"
+SCRIPT_DIR="$(pwd)/assets/lifters/ghidra/scripts"
 TARGET_BIN=$(realpath "$1") # The target binary for binary lifting, passed as an argument to the script
 PROJ_NAME="$(basename $TARGET_BIN)"
 PROJ_DIR="$(echo "$TARGET_BIN" | sed 's|executables|ghidra|g')/"

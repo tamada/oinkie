@@ -9,7 +9,7 @@
 # buried in the process output. This catches it in about two seconds instead of
 # a Ghidra round trip.
 #
-# Usage: lifter/compile-check.sh [script.java ...]
+# Usage: assets/lifters/ghidra/compile-check.sh [script.java ...]
 #
 # Ghidra is found the way oinkie finds it: GHIDRA_HOME, then
 # GHIDRA_INSTALL_DIR (which the CI action exports), then the usual install
@@ -25,7 +25,7 @@ readonly MIN_JDK=21
 
 scripts=("$@")
 if [ ${#scripts[@]} -eq 0 ]; then
-    scripts=("lifter/scripts/HighPCodeLifter.java")
+    scripts=("assets/lifters/ghidra/scripts/HighPCodeLifter.java")
 fi
 
 find_ghidra_home() {
