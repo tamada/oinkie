@@ -49,6 +49,25 @@ pub enum Error {
         ir = .1
     )]
     NoCallOperations(PathBuf, crate::lift::Ir),
+    /// A lifter reported success but wrote a file that cannot be read back.
+    ///
+    /// Named for the binary as well as for the JSON, because the binary is
+    /// what the caller asked about and the JSON is a file they have never
+    /// seen. That the lifter reported success is the part that points at the
+    /// script rather than at the binary: `analyzeHeadless` exits 0 whether or
+    /// not its post-script threw, so a script that writes malformed output is
+    /// indistinguishable from one that works until something reads what it
+    /// wrote.
+    ///
+    /// The output's path is not repeated here: every error
+    /// [`crate::prelude::AnyProgram::load`] can return carries it already, and
+    /// naming it twice put the same long path in the message twice.
+    #[error(
+        "{binary}: the lifter reported success, but what it wrote cannot be read back: {cause}",
+        binary = .0.display(),
+        cause = .1
+    )]
+    UnreadableOutput(PathBuf, #[source] Box<Error>),
     /// A lifted file naming a representation this build cannot read.
     #[error(
         "{path}: no reader for {ir}; this build can read {readable}",
@@ -201,6 +220,7 @@ mod tests {
             Error::IncompatibleAnalysis(_, _) => "IncompatibleAnalysis",
             Error::IrMismatch(_, _) => "IrMismatch",
             Error::NoCallOperations(_, _) => "NoCallOperations",
+            Error::UnreadableOutput(_, _) => "UnreadableOutput",
             Error::UnsupportedIr(_, _) => "UnsupportedIr",
             Error::InvalidPcode(_) => "InvalidPcode",
             Error::Io(_, _) => "Io",
@@ -287,6 +307,18 @@ mod tests {
             (
                 Error::NoCallOperations(PathBuf::from("bin/sample"), Ir::GhidraPcode),
                 "bin/sample: no operation is a call, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either the program really calls nothing, or oinkie's reader for ghidra-pcode does not recognise that representation's call operations".to_string(),
+            ),
+            (
+                Error::UnreadableOutput(
+                    PathBuf::from("bin/sample"),
+                    Box::new(Error::Json(
+                        PathBuf::from("pcodes/sample.json"),
+                        serde_json::from_str::<i32>("nope").unwrap_err(),
+                    )),
+                ),
+                format!(
+                    "bin/sample: the lifter reported success, but what it wrote cannot be read back: pcodes/sample.json: JSON error: {json_msg}"
+                ),
             ),
             (
                 Error::UnsupportedIr(PathBuf::from("foreign.json"), Ir::IdaMicrocode),

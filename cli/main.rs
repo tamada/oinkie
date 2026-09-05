@@ -324,11 +324,17 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
         })
         .collect::<Result<Vec<_>>>();
     let duration = start.elapsed();
-    println!(
-        "Extraction completed in {} nsec ({})",
-        duration.as_nanos(),
-        format_duration(duration)
-    );
+    // Only on success. This used to print unconditionally and then return the
+    // error, so a failed run announced that it had completed and the failure
+    // came immediately below it -- which is the same thing #83 is about, one
+    // layer up.
+    if r.is_ok() {
+        println!(
+            "Extraction completed in {} nsec ({})",
+            duration.as_nanos(),
+            format_duration(duration)
+        );
+    }
     r
 }
 
@@ -501,11 +507,17 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
         })
     };
     let duration = start.elapsed();
-    println!(
-        "Lifting completed in {} nsec ({})",
-        duration.as_nanos(),
-        format_duration(duration)
-    );
+    // Only on success. This used to print unconditionally and then return the
+    // error, so a failed run announced that it had completed and the failure
+    // came immediately below it -- which is the same thing #83 is about, one
+    // layer up.
+    if r.is_ok() {
+        println!(
+            "Lifting completed in {} nsec ({})",
+            duration.as_nanos(),
+            format_duration(duration)
+        );
+    }
     r
 }
 

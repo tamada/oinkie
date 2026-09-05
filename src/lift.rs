@@ -9,6 +9,35 @@ pub trait Lifter {
     fn lift(&self, input: &Path, output: &Path) -> Result<()>;
 }
 
+/// A lifter whose output is read back before the lift is called a success.
+///
+/// Wrapping here, rather than asking each [`Lifter`] to check its own output,
+/// is the point. [`LifterBuilder::build`] is the one path every caller takes,
+/// so a lifter added to its match gets the check without its author having to
+/// remember -- the same reasoning that leaves [`crate::Op::is_call`] without a
+/// default.
+///
+/// A writer is exactly the kind of code that looks finished while producing
+/// something nothing can read. `analyzeHeadless` exits 0 whether or not its
+/// post-script threw; the built-in script wrote unescaped names for as long as
+/// it existed; and a replacement passed to `--script` is arbitrary Java that
+/// oinkie never sees. Without this, all three end the same way: a directory of
+/// files that look lifted, and a failure at `extract` naming a line and column
+/// in a file the reader did not know existed.
+struct Verifying<L>(L);
+
+impl<L: Lifter> Lifter for Verifying<L> {
+    fn lift(&self, input: &Path, output: &Path) -> Result<()> {
+        self.0.lift(input, output)?;
+        // Loaded and dropped: this is the check. Reading it is the only way to
+        // know the file is one oinkie can use, and the read is what `extract`
+        // would have done later anyway.
+        crate::program::AnyProgram::load(output)
+            .map(|_| ())
+            .map_err(|e| crate::Error::UnreadableOutput(input.to_path_buf(), Box::new(e)))
+    }
+}
+
 #[derive(Debug, ValueEnum, Clone, Copy, Serialize, Deserialize)]
 #[clap(rename_all = "kebab-case")]
 pub enum LifterType {
@@ -240,10 +269,12 @@ impl LifterBuilder {
         match self.lifter_type {
             LifterType::Ghidra => {
                 let home = self.lifter_type.find_home(self.home.as_deref())?;
-                Ok(Box::new(crate::ghidra::lifter::GhidraLifter::new(
-                    home,
-                    self.script,
-                    self.intermediate_dir,
+                Ok(Box::new(Verifying(
+                    crate::ghidra::lifter::GhidraLifter::new(
+                        home,
+                        self.script,
+                        self.intermediate_dir,
+                    ),
                 )))
             }
             LifterType::Angr => Err(crate::Error::Parse(
@@ -350,5 +381,113 @@ mod tests {
             !err.contains("install it in one of"),
             "offers an empty list: {err}"
         );
+    }
+}
+
+#[cfg(test)]
+mod verifying_tests {
+    use super::*;
+    use crate::Error;
+
+    /// A lifter that writes exactly what it is given, so that what the
+    /// verifier does with each kind of output can be described rather than
+    /// arranged through a real decompiler.
+    struct Writes(&'static str);
+
+    impl Lifter for Writes {
+        fn lift(&self, _input: &Path, output: &Path) -> Result<()> {
+            std::fs::write(output, self.0).map_err(|e| Error::Io(output.to_path_buf(), e))
+        }
+    }
+
+    /// A lifter that fails before writing anything.
+    struct Fails;
+
+    impl Lifter for Fails {
+        fn lift(&self, _input: &Path, _output: &Path) -> Result<()> {
+            Err(Error::Parse("the decompiler said no".to_string()))
+        }
+    }
+
+    const A_READABLE_PROGRAM: &str = r#"{
+        "program": "sample",
+        "path": "bin/sample",
+        "ir": "ghidra-pcode",
+        "symbols": {},
+        "functions": []
+    }"#;
+
+    fn lift_with<L: Lifter>(lifter: L, input: &str) -> (Result<()>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("sample.json");
+        let r = Verifying(lifter).lift(Path::new(input), &output);
+        (r, dir)
+    }
+
+    #[test]
+    fn test_a_readable_output_is_a_successful_lift() {
+        let (r, _dir) = lift_with(Writes(A_READABLE_PROGRAM), "bin/sample");
+        assert!(r.is_ok(), "{:?}", r.unwrap_err().to_string());
+    }
+
+    /// The case this exists for. The lifter reported success -- `Writes`
+    /// returns `Ok` -- and the file it left behind is not one oinkie can read.
+    #[test]
+    fn test_an_unparseable_output_fails_the_lift() {
+        let (r, _dir) = lift_with(Writes("{\"functions\": ["), "bin/sample");
+        let e = r.expect_err("a file that does not parse is not a successful lift");
+        let rendered = e.to_string();
+        // The binary, with the colon that follows it, because that is what the
+        // caller asked about -- and because a bare "sample" would also match
+        // the output's own name and so assert nothing.
+        assert!(rendered.contains("bin/sample:"), "{rendered}");
+        // the file, because that is the one that is wrong
+        assert!(rendered.contains("sample.json"), "{rendered}");
+        // and that the lifter claimed to have succeeded, which is what points
+        // at the script rather than at the binary
+        assert!(rendered.contains("reported success"), "{rendered}");
+    }
+
+    /// The cause has to survive, or the message says a file is unreadable
+    /// without saying what is wrong with it.
+    #[test]
+    fn test_the_underlying_error_is_kept_as_the_cause() {
+        use std::error::Error as _;
+        let (r, _dir) = lift_with(Writes("{\"functions\": ["), "bin/sample");
+        let e = r.unwrap_err();
+        let source = e.source().expect("the parse failure is the cause");
+        assert!(source.to_string().contains("JSON error"), "{source}");
+        assert!(e.to_string().contains("JSON error"), "{e}");
+    }
+
+    /// A representation this build cannot read is caught here too, rather
+    /// than at `extract`.
+    #[test]
+    fn test_an_output_in_an_unreadable_representation_fails_the_lift() {
+        let json = A_READABLE_PROGRAM.replace("ghidra-pcode", "ida-microcode");
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("sample.json");
+        std::fs::write(&output, &json).unwrap();
+        struct Nothing;
+        impl Lifter for Nothing {
+            fn lift(&self, _i: &Path, _o: &Path) -> Result<()> {
+                Ok(())
+            }
+        }
+        let e = Verifying(Nothing)
+            .lift(Path::new("bin/sample"), &output)
+            .expect_err("a representation with no reader is not a successful lift");
+        assert!(e.to_string().contains("no reader for ida-microcode"), "{e}");
+    }
+
+    /// A lifter that fails is reported as itself. Wrapping its error in
+    /// "cannot be read back" would blame the output for a file that was never
+    /// written.
+    #[test]
+    fn test_a_failing_lifter_is_not_reported_as_an_unreadable_output() {
+        let (r, _dir) = lift_with(Fails, "bin/sample");
+        let e = r.unwrap_err();
+        assert_eq!(e.to_string(), "Parse error: the decompiler said no");
+        assert!(!e.to_string().contains("cannot be read back"), "{e}");
     }
 }

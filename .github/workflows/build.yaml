@@ -37,8 +37,11 @@ jobs:
       # a missing output because analyzeHeadless exits 0 either way. The jars
       # and the JDK are already here for the steps above, so checking it costs
       # about two seconds.
-      - name: Compile the lifting script
-        run: ./lifter/compile-check.sh
+      - name: Compile the lifting scripts
+        run: |
+          ./lifter/compile-check.sh \
+            lifter/scripts/HighPCodeLifter.java \
+            testdata/scripts/BrokenLifter.java
 
       - name: build
         run: |

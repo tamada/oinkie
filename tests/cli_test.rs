@@ -494,3 +494,40 @@ fn test_lift_escapes_a_quote_in_a_function_name() {
         "the quoted name did not survive escaping: {names:?}"
     );
 }
+
+/// A lifting script can write bytes, return normally, and leave behind a file
+/// nothing can read. `analyzeHeadless` exits 0 either way, so before #83 that
+/// was a successful lift, and the failure surfaced at `extract` as a parse
+/// error naming a line and column in a file the reader had never seen.
+///
+/// Driven through `--script`, which is the path that cannot be fixed by
+/// correcting the built-in script: a replacement is arbitrary Java that oinkie
+/// never inspects, so the check has to be on the output.
+#[test]
+#[serial(ghidra)]
+fn test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift() {
+    let temp_dir = tempdir().unwrap();
+    let dest = temp_dir.path().join("lifted");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("lift")
+        .arg("--script")
+        .arg("testdata/scripts/BrokenLifter.java")
+        .arg("-d")
+        .arg(&dest)
+        .arg("testdata/hello_world/bin/hello_clang")
+        .assert()
+        .failure()
+        // The binary the user asked about, matched as the whole path and with
+        // the colon that follows it. Matching "hello_clang" alone proved
+        // nothing: the output is named hello_clang.json, so the assertion
+        // passed on a message that did not mention the binary at all.
+        .stderr(predicate::str::contains(
+            "testdata/hello_world/bin/hello_clang:",
+        ))
+        // the file that is wrong, which the cause names
+        .stderr(predicate::str::contains("hello_clang.json"))
+        // and that the lifter claimed success, which is what points at the script
+        .stderr(predicate::str::contains("reported success"));
+}
