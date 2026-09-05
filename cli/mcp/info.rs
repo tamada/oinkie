@@ -59,11 +59,12 @@ const AGGREGATORS: &[(&str, &str)] = &[
     ),
     (
         "topn:all",
-        "For each element on the left, take its best match on the right, without requiring the matching to be one-to-one.",
+        "For each element on the left, take its best match on the right, without requiring the matching to be one-to-one. \"topn\" alone means the same.",
     ),
     (
-        "topn:N",
-        "As topn:all, but considering only the N most similar elements. N must be at least 1.",
+        "topn:5",
+        "As topn:all, but considering only the 5 most similar. Any count of at least 1 works: \
+         the name is topn: followed by the number, and 5 here is only an example.",
     ),
 ];
 
@@ -114,6 +115,10 @@ pub fn vocabulary() -> Vocabulary {
             ),
             "An analysis is named '{birthmark}-{algorithm}'. The algorithm has to operate on the \
              birthmark's shape; a pairing that does not is refused, naming the one that was meant."
+                .to_string(),
+            "An aggregator is 'hungarian', 'topn:all' or 'topn:' followed by a count of at \
+             least 1. The listed 'topn:5' is one example of the last, not the only value it \
+             takes -- the same way the k-gram list above is a sample rather than a limit."
                 .to_string(),
             "An algorithm's own name and the name it carries inside an analysis can differ: \
              'weighted-jaccard' is the algorithm, and the analysis is spelled \
@@ -230,18 +235,43 @@ mod tests {
     /// because `Aggregator` has a `FromStr` and no enumeration. Parsing each
     /// one is the closest substitute: the list cannot advertise a name the
     /// parser would refuse.
+    ///
+    /// Verbatim, with nothing standing in. The list used to carry `topn:N` and
+    /// this test replaced the `N` with a 3 before parsing -- so it asserted
+    /// that *some* name parsed, not the one being advertised, and `topn:N`
+    /// reached a reader as though it were a value they could send.
     #[test]
-    fn test_every_advertised_aggregator_parses() {
+    fn test_every_advertised_aggregator_parses_verbatim() {
         for agg in vocabulary().aggregators {
-            // The literal N is a placeholder in the name, so it is described
-            // rather than parsed; a concrete one stands in for it.
-            let name = agg.name.replace(":N", ":3");
             assert!(
-                Aggregator::from_str(&name).is_ok(),
-                "advertised but refused: {} (tried {name})",
+                Aggregator::from_str(&agg.name).is_ok(),
+                "advertised but refused: {}",
                 agg.name
             );
         }
+    }
+
+    /// The listed `topn:` value is an example, and a reader has to be told so
+    /// or they will take it for the only one.
+    #[test]
+    fn test_the_notes_say_the_topn_count_is_free() {
+        let notes = vocabulary().notes.join(" ");
+        assert!(notes.contains("topn:"), "{notes}");
+        for n in [
+            "topn:1",
+            "topn:5",
+            "topn:97",
+            "topn:all",
+            "topn",
+            "hungarian",
+        ] {
+            assert!(Aggregator::from_str(n).is_ok(), "{n} should parse");
+        }
+        assert!(
+            Aggregator::from_str("topn:N").is_err(),
+            "the placeholder must not be advertised as a value"
+        );
+        assert!(Aggregator::from_str("topn:0").is_err(), "0 is refused");
     }
 
     /// A missing doc comment would otherwise reach a model as an empty string,

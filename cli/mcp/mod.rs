@@ -13,6 +13,13 @@ use std::time::{Duration, Instant};
 use oinkie::prelude::{Error, Result};
 use rmcp::ServiceExt;
 
+/// Starts the server, and returns only when the client goes away.
+///
+/// The failures here are reported as `Error::Parse`, which `error.rs` does not
+/// classify as the caller's fault -- correctly, since no argument would fix a
+/// runtime that will not start. They do not become MCP errors in any case:
+/// this returns to `main`, which prints and exits, and by definition there is
+/// no session yet to report them into.
 pub(crate) fn perform(_opts: &crate::cli::McpOpts) -> Result<Vec<Duration>> {
     let start = Instant::now();
     // A runtime built here rather than a `#[tokio::main]` on `main`, so that

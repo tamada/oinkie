@@ -29,7 +29,6 @@ fn is_the_callers_fault(e: &Error) -> bool {
         | Error::IncompatibleAnalysis(_, _)
         | Error::Mismatch(_, _)
         | Error::IrMismatch(_, _)
-        | Error::Parse(_)
         | Error::ParseFloat(_, _)
         | Error::ParseInt(_, _)
         | Error::Clap(_) => true,
@@ -47,6 +46,20 @@ fn is_the_callers_fault(e: &Error) -> bool {
         | Error::LapJV(_)
         | Error::ShapeError(_)
         | Error::UnreadableOutput(_, _) => false,
+
+        // `Parse` is a catch-all carrying a string, and the strings it carries
+        // come from both sides: "Invalid aggregator" is the caller's, while
+        // "Ghidra headless analyzer not found", "could not start N lift jobs"
+        // and "angr is not yet implemented" are not. Nothing in the variant
+        // says which.
+        //
+        // So it does not claim the caller is at fault. Telling a model it
+        // asked wrongly when it did not is the more expensive mistake -- it
+        // will try different arguments, repeatedly, against something no
+        // argument can fix. A tool wanting a caller-fault code for a value it
+        // took (the aggregator is what reaches `Parse` that way) should
+        // validate that value itself rather than rely on this.
+        Error::Parse(_) => false,
 
         // A group is the caller's fault only if all of it is. One internal
         // failure in a batch makes the whole batch an internal failure, since
@@ -99,6 +112,15 @@ mod tests {
         assert_ne!(to_mcp(e).code, rmcp::model::ErrorCode::INVALID_PARAMS);
     }
 
+    /// `Parse` carries a string and nothing else, and those strings come from
+    /// both sides. Since the variant cannot say which, it does not claim the
+    /// caller is at fault -- no argument would fix this one.
+    #[test]
+    fn test_the_catch_all_does_not_claim_the_caller_is_at_fault() {
+        let e = Error::Parse("Ghidra headless analyzer not found at /nope".to_string());
+        assert_ne!(to_mcp(e).code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
     /// The numbering survives, because "the third input failed" is the only
     /// thing a caller running over several files can act on.
     #[test]
@@ -114,7 +136,18 @@ mod tests {
             "{}",
             d.message
         );
-        assert_eq!(d.code, rmcp::model::ErrorCode::INVALID_PARAMS);
+    }
+
+    /// A group of nothing but the caller's own mistakes is still theirs.
+    /// Asserted in both directions, or `all` could be inverted and only one
+    /// of these would notice.
+    #[test]
+    fn test_a_group_of_the_callers_mistakes_is_the_callers_fault() {
+        let e = Error::Array(vec![
+            Error::BirthmarkType("nonsense".to_string()),
+            Error::BirthmarkType("also nonsense".to_string()),
+        ]);
+        assert_eq!(to_mcp(e).code, rmcp::model::ErrorCode::INVALID_PARAMS);
     }
 
     /// One internal failure makes the batch internal. Reporting "you asked
@@ -123,7 +156,7 @@ mod tests {
     #[test]
     fn test_one_internal_failure_makes_the_whole_group_internal() {
         let e = Error::Array(vec![
-            Error::Parse("the caller's".to_string()),
+            Error::BirthmarkType("the caller's".to_string()),
             Error::UnreadableOutput(
                 PathBuf::from("bin/sample"),
                 Box::new(Error::Parse("ours".to_string())),
