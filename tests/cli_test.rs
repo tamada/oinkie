@@ -447,3 +447,50 @@ fn test_lift_command_intermediate_dir_is_created_and_resolved_once() {
     );
     assert!(dest.join("hello_clang.json").exists());
 }
+
+/// A function name can hold a double quote. A C++ user-defined literal
+/// operator is the everyday way to get one: Ghidra demangles `operator""_km`
+/// as `operator""__km`, and the lifting script used to paste names into the
+/// JSON unescaped, so the file it produced could not be read back.
+///
+/// `lift` reported success either way -- the script wrote its bytes and
+/// returned, and analyzeHeadless exits 0 regardless (#54) -- so the failure
+/// only appeared later, at `extract` (#77).
+///
+/// Both halves are asserted. That the output parses is the bug; that the name
+/// survives is what stops the fix from being "strip the quote", which would
+/// parse and would then compare a name the program does not have.
+#[test]
+#[serial(ghidra)]
+fn test_lift_escapes_a_quote_in_a_function_name() {
+    let temp_dir = tempdir().unwrap();
+    let dest = temp_dir.path().join("lifted");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("lift")
+        .arg("-d")
+        .arg(&dest)
+        .arg("testdata/quoted_names/bin/udl")
+        .assert()
+        .success();
+
+    let out_file = dest.join("udl.json");
+    // through oinkie's own reader rather than a parser of the test's
+    // choosing: this is the operation that used to fail
+    oinkie::prelude::AnyProgram::load(&out_file)
+        .expect("oinkie cannot read the file it just wrote");
+
+    let body = fs::read_to_string(&out_file).unwrap();
+    let json: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let names = json["functions"]
+        .as_array()
+        .expect("no functions array")
+        .iter()
+        .map(|f| f["name"].as_str().expect("a function with no name"))
+        .collect::<Vec<_>>();
+    assert!(
+        names.iter().any(|n| n.contains('"')),
+        "the quoted name did not survive escaping: {names:?}"
+    );
+}
