@@ -92,13 +92,28 @@ pub enum OinkieCommand {
 }
 
 /// Options for the MCP server.
-///
-/// Empty for now. The server speaks stdio and takes its vocabulary from the
-/// library, so there is nothing to configure yet; confining which paths the
-/// tools may touch is what will fill this in.
 #[cfg(feature = "mcp")]
 #[derive(Debug, clap::Parser)]
-pub struct McpOpts {}
+pub struct McpOpts {
+    #[clap(
+        short = 'r',
+        long = "root",
+        value_name = "DIRECTORY",
+        help = "Directory the tools may read and write under. May be given more than once.
+Every path a tool is handed, input and output alike, has to resolve inside one of
+these; anything else is refused. Defaults to the working directory.
+The paths the tools receive are written by a language model rather than by you,
+which is the whole reason this exists."
+    )]
+    roots: Vec<PathBuf>,
+}
+
+#[cfg(feature = "mcp")]
+impl McpOpts {
+    pub fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+}
 
 #[derive(Debug, clap::Parser)]
 pub struct LiftOpts {

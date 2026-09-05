@@ -6,6 +6,7 @@
 
 mod error;
 mod info;
+mod paths;
 mod server;
 
 use std::time::{Duration, Instant};
@@ -20,7 +21,7 @@ use rmcp::ServiceExt;
 /// runtime that will not start. They do not become MCP errors in any case:
 /// this returns to `main`, which prints and exits, and by definition there is
 /// no session yet to report them into.
-pub(crate) fn perform(_opts: &crate::cli::McpOpts) -> Result<Vec<Duration>> {
+pub(crate) fn perform(opts: &crate::cli::McpOpts) -> Result<Vec<Duration>> {
     let start = Instant::now();
     // A runtime built here rather than a `#[tokio::main]` on `main`, so that
     // every other subcommand stays synchronous and pays nothing for this one.
@@ -28,12 +29,16 @@ pub(crate) fn perform(_opts: &crate::cli::McpOpts) -> Result<Vec<Duration>> {
         .enable_all()
         .build()
         .map_err(|e| Error::Parse(format!("could not start the async runtime: {e}")))?;
-    runtime.block_on(serve())?;
+    // Resolved before the server starts: a root that is wrong is a mistake in
+    // how this was launched, and the person who can fix it is watching now
+    // rather than when a tool is first called.
+    let roots = paths::Roots::new(opts.roots())?;
+    runtime.block_on(serve(roots))?;
     Ok(vec![start.elapsed()])
 }
 
-async fn serve() -> Result<()> {
-    let service = server::Oinkie::new()
+async fn serve(roots: paths::Roots) -> Result<()> {
+    let service = server::Oinkie::new(roots)
         .serve(rmcp::transport::stdio())
         .await
         .map_err(|e| Error::Parse(format!("could not start the MCP server: {e}")))?;
