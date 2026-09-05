@@ -55,27 +55,12 @@ impl Roots {
     /// part that does exist, which is what resolves symlinks, and rebuilds the
     /// rest on top.
     ///
-    /// # What this does and does not promise
-    ///
-    /// It answers, at the moment it is asked, where a path leads. A symlink
-    /// that exists and points out of a root is caught, because the existing
-    /// part is canonicalized -- including one whose every written component
-    /// lies inside a root.
-    ///
-    /// It cannot promise that the answer is still true when the caller acts on
-    /// it. Between this check and the `File::create` that follows, a component
-    /// could be replaced by a symlink, and the write would follow it. Closing
-    /// that needs the write itself to be done relative to a root's descriptor
-    /// (`openat`, or a crate like `cap-std`) rather than by path -- and the
-    /// write lives in `store_and_get_durations`, which the CLI shares, so it
-    /// is a change to more than this module.
-    ///
-    /// It is left open deliberately. Replacing a component inside a root
-    /// requires write access to that root, and the server runs as the person
-    /// who chose the roots: anything able to do it can already write wherever
-    /// that person can, without involving oinkie. The operational form of this
-    /// is "do not point `--root` at a directory other people can write to",
-    /// which belongs in the documentation rather than in a lock here.
+    /// The answer is true when it is given, not for ever: a symlink appearing
+    /// between this and the write that follows would be followed. Guarding
+    /// against that would mean writing through a root's descriptor rather than
+    /// by path, and this is a local server started by the person whose files
+    /// it is reading -- what it is keeping out is a mistaken path, not someone
+    /// racing it.
     ///
     /// That rebuilding is why `..` is refused outright rather than resolved.
     /// A path like `<root>/nowhere/../../etc/passwd` has a canonical ancestor
