@@ -61,11 +61,24 @@ find_javac() {
         exit 1
     fi
 
-    # "javac 25.0.2" -> 25
-    local version
-    version=$("$javac" -version 2>&1 | awk '{ print $2 }' | cut -d. -f1)
-    if [ "${version:-0}" -lt "$MIN_JDK" ]; then
-        echo "$0: $javac is Java $version; Ghidra's class files need $MIN_JDK or newer." >&2
+    # "javac 25.0.2" -> 25, "javac 25-ea" -> 25, "javac 1.8.0_292" -> 1.
+    #
+    # Leading digits rather than the first dot-separated field, because an
+    # early-access build reports "25-ea" and has no dot at all. Cutting on the
+    # dot left that whole string, and `[ 25-ea -lt 21 ]` is not a comparison
+    # that fails -- it is an error, which `if` reads as false, so the guard
+    # waved the JDK through and printed a shell error next to it.
+    local reported major
+    reported=$("$javac" -version 2>&1 | awk '{ print $2 }')
+    major=${reported%%[!0-9]*}
+    if [ -z "$major" ]; then
+        echo "$0: cannot tell which Java $javac is: it reports \"$reported\"." >&2
+        echo "  Refusing rather than guessing, since the guard below is the" >&2
+        echo "  only thing standing between you and an unreadable error." >&2
+        exit 1
+    fi
+    if [ "$major" -lt "$MIN_JDK" ]; then
+        echo "$0: $javac is Java $reported; Ghidra's class files need $MIN_JDK or newer." >&2
         echo "  An older javac fails with \"bad class file\" against Ghidra's jars," >&2
         echo "  which is about the JDK and not about the script." >&2
         echo "  Point JAVA_HOME at a newer JDK." >&2
@@ -82,7 +95,11 @@ if [ ! -d "$ghidra_home/Ghidra" ]; then
     exit 1
 fi
 
+# The trailing separator is stripped: Java reads an empty classpath element as
+# the current directory, so leaving it there would put "." on the classpath and
+# let a stray .class file stand in for a jar that is actually missing.
 classpath=$(find "$ghidra_home/Ghidra" -name '*.jar' | tr '\n' ':')
+classpath=${classpath%:}
 
 outdir=$(mktemp -d)
 trap 'rm -rf "$outdir"' EXIT
