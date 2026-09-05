@@ -265,6 +265,21 @@ mod tests {
         assert!(e.message.contains("outside every allowed"), "{}", e.message);
     }
 
+    /// A symlink that stays inside a root is allowed, and that is deliberate
+    /// rather than an oversight: what is checked is where a path leads, not
+    /// how it is spelled. Pinned because it is the behaviour that rules out
+    /// the tempting one-line "open with O_NOFOLLOW" -- that refuses a final
+    /// component that is a link whatever it points at, including this.
+    #[cfg(unix)]
+    #[test]
+    fn test_a_symlink_that_stays_inside_a_root_is_allowed() {
+        let f = fixture();
+        let link = f.root.join("shortcut.json");
+        std::os::unix::fs::symlink(f.root.join("pcodes/a.json"), &link).unwrap();
+        let resolved = f.roots.resolve(link.to_str().unwrap()).unwrap();
+        assert_eq!(resolved, f.root.join("pcodes/a.json"));
+    }
+
     /// A relative path is taken against the working directory, not against a
     /// root -- a root is a boundary, not a base. It still has to land inside.
     #[test]
