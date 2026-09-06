@@ -15,6 +15,19 @@
 
 set -eu
 
+# Every path below is relative to the repository root, and always was -- run
+# from anywhere else, this used to fail at the first sed with
+# `Cargo.toml: No such file or directory`. Going there rather than saying so
+# removes the precondition instead of documenting it.
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
+
+# cargo is needed for the lock file below. Said here, because `cargo: not
+# found` three-quarters of the way through a release does not explain itself.
+command -v cargo > /dev/null || {
+    echo "$0: cargo is not on PATH, and Cargo.lock cannot be brought along without it" >&2
+    exit 1
+}
+
 usage() {
     echo "usage: $0 <version>        e.g. $0 0.4.0" >&2
     echo "  the leading v of a tag name is accepted and ignored" >&2
