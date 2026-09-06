@@ -58,3 +58,15 @@ for f in README.md docs/content/_index.md; do
         -e "s|(releases/tag/v)${V}|\1${TO_VERSION}|g" \
         -e "s|(oinkie:)${V}|\1${TO_VERSION}|g"
 done
+
+# Cargo.lock names this package's version too, and the container builds with
+# `cargo build --locked`, which refuses to reconcile a lock that disagrees with
+# the manifest -- it exits 101 rather than fixing it. Leaving the lock behind
+# therefore breaks the release it is preparing.
+#
+# `--workspace` so that only this package's own entry moves, and `--offline` so
+# that a release runner resolves nothing from the network here. Between them
+# the change is a single line. `cargo generate-lockfile` would also work and is
+# the wrong tool: it rebuilds the whole lock, and dependency resolutions can
+# move with it.
+cargo update --workspace --offline
