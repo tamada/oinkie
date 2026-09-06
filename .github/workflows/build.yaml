@@ -37,6 +37,11 @@ jobs:
       # a missing output because analyzeHeadless exits 0 either way. The jars
       # and the JDK are already here for the steps above, so checking it costs
       # about two seconds.
+      # A second, against several minutes of Rust if the images were built here
+      # instead. Nothing else looks at the Containerfiles until a release.
+      - name: Check the Containerfiles' sources exist
+        run: ./.github/scripts/check_container_sources.sh
+
       - name: Compile the lifting scripts
         run: |
           ./assets/lifters/ghidra/compile-check.sh \
