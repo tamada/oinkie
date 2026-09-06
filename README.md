@@ -1,11 +1,11 @@
 # oinkie 🐽🐷🐖
 
-[![Version](https://img.shields.io/badge/Version-0.4.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.4.0)
+[![Version](https://img.shields.io/badge/Version-0.5.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.5.0)
 [![License-MIT](https://img.shields.io/badge/License-MIT-blue)](https://github.com/tamada/oinkie/blob/main/LICENSE)
 
 [![Coverage Status](https://coveralls.io/repos/github/tamada/oinkie/badge.svg)](https://coveralls.io/github/tamada/oinkie)
 
-[![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.4.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
+[![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.5.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 
 Detects software theft by comparing birthmarks extracted from binaries. Ghidra P-Code today; Binary Ninja and IDA Pro planned.
 
