@@ -37,10 +37,32 @@ jobs:
       # a missing output because analyzeHeadless exits 0 either way. The jars
       # and the JDK are already here for the steps above, so checking it costs
       # about two seconds.
-      # A second, against several minutes of Rust if the images were built here
-      # instead. Nothing else looks at the Containerfiles until a release.
+      # The shallow half, for the full image, which is not built here.
       - name: Check the Containerfiles' sources exist
         run: ./.github/scripts/check_container_sources.sh
+
+      # Actually build one, rather than checking that its COPY sources exist.
+      # A path check would have caught the break that prompted this and very
+      # little else: not a COPY that names the wrong thing, not an
+      # `include_str!` reaching outside the context, not a runtime stage
+      # missing a dependency. Measured at 26s cold locally, so the reason for
+      # not doing it was wrong.
+      #
+      # The light image only, and on one leg of the matrix. It shares its
+      # entire builder stage with the full image, so everything about the build
+      # context is covered for both; what the full image adds is a 400 MB
+      # Ghidra download whose URL and checksum change only when someone edits
+      # them, and that is left to the release, with the cheap check above
+      # standing in for it here.
+      - name: Build the light container image
+        if: matrix.os == 'ubuntu-latest'
+        run: docker build -f containers/light/Containerfile -t oinkie:ci .
+
+      # The image is only worth building if it runs, and the one thing it must
+      # do that the host binary does not is serve MCP over `docker run -i`.
+      - name: Verify the image serves MCP
+        if: matrix.os == 'ubuntu-latest'
+        run: ./.github/scripts/verify_mcp.sh --image oinkie:ci
 
       - name: Compile the lifting scripts
         run: |

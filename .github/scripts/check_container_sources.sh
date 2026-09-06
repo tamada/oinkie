@@ -2,14 +2,15 @@
 #
 # Does every path the Containerfiles copy still exist?
 #
-# Nothing builds the images except a release, so a `COPY` naming a directory
-# that has moved is discovered when the release is already tagged. That is
-# exactly what happened: #91 moved `lifter/` under `assets/`, both
-# Containerfiles went on copying `lifter`, and the break sat on main
-# undetected because no push builds an image.
+# This is the shallow half of a pair. CI builds the *light* image on every
+# push, which covers everything about its build context and rather more; the
+# *full* image is not built until a release, because what it adds is a 400 MB
+# Ghidra download whose URL and checksum change only when someone edits them.
 #
-# A second's worth of shell catches it. Building the images on every push would
-# too, at several minutes of Rust each.
+# So this exists for the full image, and costs a second. Without it, a `COPY`
+# there naming a directory that has moved is discovered when the release is
+# already tagged -- which is what happened: #91 moved `lifter/` under
+# `assets/`, both Containerfiles went on copying `lifter`, and nothing looked.
 #
 # Usage: .github/scripts/check_container_sources.sh
 

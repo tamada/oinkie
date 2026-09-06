@@ -10,11 +10,24 @@
 # Speaks the protocol rather than grepping `--help`: a subcommand that exists
 # and does not work would pass that.
 #
-# Usage: .github/scripts/verify_mcp.sh <path to oinkie>
+# Usage:
+#   .github/scripts/verify_mcp.sh <path to oinkie>
+#   .github/scripts/verify_mcp.sh --image <tag>
+#
+# The image form asks the same question of a container, which is how the
+# documentation tells people to run this -- and `docker run -i` without a TTY
+# is itself part of what is being checked.
 
 set -euo pipefail
 
-readonly BIN="${1:?usage: $0 <path to oinkie>}"
+if [ "${1:-}" = "--image" ]; then
+    readonly SUBJECT="image ${2:?usage: $0 --image <tag>}"
+    run() { docker run -i --rm "$2" mcp; }
+else
+    readonly SUBJECT="${1:?usage: $0 <path to oinkie> | --image <tag>}"
+    run() { "$1" mcp; }
+fi
+
 readonly EXPECTED="oinkie_compare oinkie_extract oinkie_info oinkie_reaggregate oinkie_run"
 
 session() {
@@ -28,8 +41,8 @@ out=$(mktemp)
 err=$(mktemp)
 trap 'rm -f "$out" "$err"' EXIT
 
-session | "$BIN" mcp > "$out" 2> "$err" || {
-    echo "$0: $BIN mcp exited non-zero" >&2
+session | run "$@" > "$out" 2> "$err" || {
+    echo "$0: $SUBJECT did not serve a session" >&2
     sed 's/^/  /' "$err" >&2
     exit 1
 }
@@ -47,10 +60,10 @@ got=$(jq -r 'select(.id == 2) | .result.tools[].name' "$out" | sort | tr '\n' ' 
 got="${got% }"
 
 if [ "$got" != "$EXPECTED" ]; then
-    echo "$0: $BIN does not serve the expected tools" >&2
+    echo "$0: $SUBJECT does not serve the expected tools" >&2
     echo "  got:  ${got:-<none>}" >&2
     echo "  want: $EXPECTED" >&2
     exit 1
 fi
 
-echo "ok: $BIN serves $got"
+echo "ok: $SUBJECT serves $got"
