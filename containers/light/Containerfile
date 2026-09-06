@@ -21,10 +21,9 @@ COPY lifter     ./lifter
 
 # Build the release binary.
 #
-# --features mcp, or the image has no `oinkie mcp`. Both images carry it:
-# it is the same binary either way, and not building it here would mean
-# rebuilding this one on the day lifting becomes a tool. Point MCP clients
-# at the light image, which has no Ghidra to carry.
+# --features mcp, or this image has no `oinkie mcp`. This is the image to point
+# an MCP client at: nothing the server offers lifts, so the Ghidra and JDK the
+# full image carries would be a gigabyte of dead weight on that path.
 RUN cargo build --release --locked --features mcp
 
 # ==========================================

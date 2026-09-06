@@ -1,7 +1,7 @@
 ---
 title: "Serving to an Agent (`mcp` command)"
 description: "How to serve oinkie over the Model Context Protocol so an agent can drive the birthmarking pipeline."
-date: 2026-09-06
+date: 2026-09-05
 draft: false
 weight: 70
 ---
