@@ -1,4 +1,19 @@
-# Multi-stage Dockerfile for full oinkie environment (includes Rust binary & Ghidra lifter)
+# One build, two images: `full-image`, which carries Ghidra, and `light-image`,
+# which does not. They share the builder stage below, and that sharing is the
+# point of the file: when this was two files with identical builder halves, a
+# directory that moved had to be fixed in both, and was fixed in neither (#91).
+#
+# `docker build` with no --target builds the *last* stage, which is
+# `light-image`. Anything that wants the other must say so.
+
+ARG GIT_REVISION
+ARG BUILD_DATE
+ARG VERSION
+ARG AUTHOR="Haruaki TAMADA"
+ARG TITLE="oinkie"
+ARG URL="https://tamada.github.io/oinkie"
+ARG SOURCE="https://github.com/tamada/oinkie"
+ARG LICENSE="MIT"
 
 # ==========================================
 # Stage 1: Build the Rust oinkie CLI binary
@@ -25,31 +40,36 @@ COPY assets/lifters ./assets/lifters
 
 # Build the release binary.
 #
-# --features mcp, though the light image is the one to point an MCP client at:
-# nothing the server offers lifts, so this image's Ghidra is dead weight there.
-# Built with the feature anyway because it is the same binary -- a few megabytes
-# -- and leaving it out would mean rebuilding this image on the day lifting
-# does become a tool.
+# --features mcp, once, for both images: it is the same binary either way, a
+# few megabytes larger, and building it for only one of them would mean
+# rebuilding the other on the day lifting becomes an MCP tool. Which of the two
+# an MCP client should be pointed at is a question about the runtime stages
+# below, not about this one.
 RUN cargo build --release --locked --features mcp
 
 # ==========================================
 # Stage 2: Runtime environment with JDK & Ghidra
 # ==========================================
-FROM eclipse-temurin:21-jdk-noble AS runner
+FROM eclipse-temurin:21-jdk-noble AS full-image
 
 ARG GIT_REVISION
 ARG BUILD_DATE
 ARG VERSION
+ARG AUTHOR
+ARG TITLE
+ARG URL
+ARG SOURCE
+ARG LICENSE
 
-LABEL org.opencontainers.image.authors="Haruaki TAMADA" \
-      org.opencontainers.image.title="oinkie" \
+LABEL org.opencontainers.image.authors=${AUTHOR} \
+      org.opencontainers.image.title=${TITLE} \
       org.opencontainers.image.description="oinkie with the Ghidra lifter included. Detects software theft by comparing birthmarks extracted from binaries." \
-      org.opencontainers.image.url="https://tamada.github.io/oinkie" \
-      org.opencontainers.image.source="https://github.com/tamada/oinkie" \
+      org.opencontainers.image.url=${URL} \
+      org.opencontainers.image.source=${SOURCE} \
       org.opencontainers.image.version=${VERSION} \
       org.opencontainers.image.revision=${GIT_REVISION} \
       org.opencontainers.image.created=${BUILD_DATE} \
-      org.opencontainers.image.licenses="MIT"
+      org.opencontainers.image.licenses=${LICENSE}
 
 # Install system utilities needed by Ghidra and oinkie
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -74,6 +94,41 @@ RUN  wget --quiet "${GHIDRA_DOWNLOAD_URL}" -O /tmp/ghidra.zip \
   && unzip -q /tmp/ghidra.zip -d /opt \
   && ln -s "/opt/ghidra_${GHIDRA_VERSION}_PUBLIC" "${GHIDRA_HOME}" \
   && rm /tmp/ghidra.zip
+
+# Copy the compiled oinkie binary from the builder stage
+COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie
+
+# Set environment and working directory
+WORKDIR /work
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Default command
+ENTRYPOINT ["oinkie"]
+CMD ["--help"]
+
+# ==========================================
+# Stage 3: Tiny runtime environment for CLI execution (Default)
+# ==========================================
+FROM debian:bookworm-slim AS light-image
+
+ARG GIT_REVISION
+ARG BUILD_DATE
+ARG VERSION
+ARG AUTHOR
+ARG TITLE
+ARG URL
+ARG SOURCE
+ARG LICENSE
+
+LABEL org.opencontainers.image.authors=${AUTHOR} \
+      org.opencontainers.image.title=${TITLE} \
+      org.opencontainers.image.description="oinkie without Ghidra, for programs that are already lifted. Detects software theft by comparing birthmarks extracted from binaries." \
+      org.opencontainers.image.url=${URL} \
+      org.opencontainers.image.source=${SOURCE} \
+      org.opencontainers.image.version=${VERSION} \
+      org.opencontainers.image.revision=${GIT_REVISION} \
+      org.opencontainers.image.created=${BUILD_DATE} \
+      org.opencontainers.image.licenses=${LICENSE}
 
 # Copy the compiled oinkie binary from the builder stage
 COPY --from=builder /usr/src/oinkie/target/release/oinkie /usr/local/bin/oinkie

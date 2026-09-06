@@ -12,6 +12,7 @@ compile-check:
 
 container-local:
     docker build \
+        --target light-image \
         --build-arg GIT_REVISION={{git_revision}} \
         --build-arg BUILD_DATE={{build_date}} \
         --build-arg VERSION={{app_version}} \
@@ -19,9 +20,10 @@ container-local:
         -t {{container_image}}/oinkie:light \
         -t {{container_image}}/oinkie:{{ app_version }} \
         -t {{container_image}}/oinkie:{{ app_version }}-light \
-        -f containers/light/Containerfile \
+        -f Containerfile \
         .
     docker build \
+        --target full-image \
         --build-arg GIT_REVISION={{git_revision}} \
         --build-arg BUILD_DATE={{build_date}} \
         --build-arg VERSION={{ app_version }} \
@@ -29,11 +31,12 @@ container-local:
         -t {{container_image}}/oinkie:ghidra \
         -t {{container_image}}/oinkie:{{ app_version }}-full \
         -t {{container_image}}/oinkie:{{ app_version }}-ghidra \
-        -f containers/full/Containerfile \
+        -f Containerfile \
         .
 
 container:
     docker buildx build --push \
+        --target light-image \
         --platform linux/amd64,linux/arm64 \
         --build-arg GIT_REVISION={{git_revision}} \
         --build-arg BUILD_DATE={{build_date}} \
@@ -42,10 +45,11 @@ container:
         -t {{container_image}}/oinkie:light \
         -t {{container_image}}/oinkie:{{ app_version }} \
         -t {{container_image}}/oinkie:{{ app_version }}-light \
-        -f containers/light/Containerfile \
+        -f Containerfile \
         .
 
     docker buildx build --push \
+        --target full-image \
         --platform linux/amd64,linux/arm64 \
         --build-arg GIT_REVISION={{git_revision}} \
         --build-arg BUILD_DATE={{build_date}} \
@@ -54,5 +58,5 @@ container:
         -t {{container_image}}/oinkie:ghidra \
         -t {{container_image}}/oinkie:{{ app_version }}-full \
         -t {{container_image}}/oinkie:{{ app_version }}-ghidra \
-        -f containers/full/Containerfile \
+        -f Containerfile \
         .
