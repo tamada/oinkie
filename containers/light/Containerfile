@@ -37,7 +37,7 @@ ARG VERSION
 
 LABEL org.opencontainers.image.authors="Haruaki TAMADA" \
       org.opencontainers.image.title="oinkie" \
-      org.opencontainers.image.description="Lightweight oinkie CLI image: The software birthmark toolkit for real-world executables." \
+      org.opencontainers.image.description="oinkie without Ghidra, for programs that are already lifted. Detects software theft by comparing birthmarks extracted from binaries." \
       org.opencontainers.image.url="https://tamada.github.io/oinkie" \
       org.opencontainers.image.source="https://github.com/tamada/oinkie" \
       org.opencontainers.image.version=${VERSION} \

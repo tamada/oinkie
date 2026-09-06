@@ -16,7 +16,7 @@ The `oinkie` command-line utility provides all the subcommands required to perfo
 To view the basic usage and options of the `oinkie` CLI:
 
 ```sh
-Birthmarking toolkit for Ghidra P-Code
+Detects software theft by comparing birthmarks extracted from binaries
 
 Usage: oinkie [OPTIONS] <COMMAND>
 

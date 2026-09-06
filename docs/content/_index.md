@@ -1,6 +1,6 @@
 ---
 title: "oinkie 🐽🐷🐖"
-description: "Detecting software theft, the birthmark toolkit for Ghidra P-code, with Binary Ninja and IDA Pro planned."
+description: "Detects software theft by comparing birthmarks extracted from binaries. Ghidra P-Code today; Binary Ninja and IDA Pro planned."
 date: 2026-06-22
 draft: false
 outputs:
