@@ -1,5 +1,13 @@
 # Binary Lifter with Ghidra
 
+> [!WARNING]
+> `lift.sh` is superseded by `oinkie lift`, and is kept for reference rather
+> than for use. The subcommand finds Ghidra the way the rest of oinkie does,
+> takes any number of inputs with a destination of your choosing, lifts several
+> at a time with `-j`, skips what is already there with `-S`, and reads its own
+> output back before calling a lift a success. The script does none of that, and
+> makes the assumptions listed below.
+
 This directory contains a script `lift.sh` that performs binary lifting using Ghidra. The script takes a target binary as an argument and generates a JSON file containing the lifted PCode representation of the binary.
 
 ## 🏃 Usage
@@ -12,8 +20,11 @@ assets/lifters/ghidra/lift.sh /path/to/target/binary
 
 The `lift.sh` assumes that:
 
-- the working directory is the root of the project (the parent directory of `lifter`), and
-- the path of binary files contains `executables`.
+- the working directory is the root of the project,
+- the path of the binary contains `executables`, since the output directories are
+  derived from it by replacing that word with `ghidra` and `pcodes`, and
+- Ghidra is at `/opt/homebrew/opt/ghidra/libexec` unless `GHIDRA_HOME` says
+  otherwise -- a macOS Homebrew path, where `oinkie lift` searches a list.
 
 The script is to run Ghidra with headless mode (without GUI).
 

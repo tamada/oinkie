@@ -5,7 +5,7 @@ This directory contains the CLI interface of `oinkie` for extracting and compari
 ## 🏃 Usage
 
 ```sh
-Birthmarking toolkit for Ghidra P-Code
+Detects software theft by comparing birthmarks extracted from binaries
 
 Usage: oinkie [OPTIONS] <COMMAND>
 
