@@ -7,7 +7,7 @@ This directory contains a script `lift.sh` that performs binary lifting using Gh
 To use the `lift.sh` script, run the following command in your terminal:
 
 ```sh
-lifter/lift.sh /path/to/target/binary
+assets/lifters/ghidra/lift.sh /path/to/target/binary
 ```
 
 The `lift.sh` assumes that:
@@ -110,7 +110,7 @@ in about two seconds instead of a Ghidra round trip:
 
 ```sh
 just compile-check                       # the built-in script
-lifter/compile-check.sh path/to/Yours.java
+assets/lifters/ghidra/compile-check.sh path/to/Yours.java
 ```
 
 Ghidra is found the way `oinkie` finds it: `GHIDRA_HOME`, then

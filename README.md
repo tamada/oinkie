@@ -56,7 +56,7 @@ Next, we should lift the binary files to the OIR format.
 The current version of `oinkie` was only tested by lifting with [Ghidra](https://www.ghidradocs.com) and generated the OIR format.
 The future version will support [Binary Ninja](https://binary.ninja), and [IDA Pro](https://hex-rays.com/ida-pro).
 
-See also ([`lifter/README.md`](lifter/README.md)).
+See also ([`assets/lifters/ghidra/README.md`](assets/lifters/ghidra/README.md)).
 
 ### 3️⃣ Extracts the birthmarks from the lifted IR files
 
