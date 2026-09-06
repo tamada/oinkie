@@ -19,8 +19,14 @@ COPY src        ./src
 COPY cli        ./cli
 COPY lifter     ./lifter
 
-# Build the release binary
-RUN cargo build --release --locked
+# Build the release binary.
+#
+# --features mcp, though the light image is the one to point an MCP client at:
+# nothing the server offers lifts, so this image's Ghidra is dead weight there.
+# Built with the feature anyway because it is the same binary -- a few megabytes
+# -- and leaving it out would mean rebuilding this image on the day lifting
+# does become a tool.
+RUN cargo build --release --locked --features mcp
 
 # ==========================================
 # Stage 2: Runtime environment with JDK & Ghidra

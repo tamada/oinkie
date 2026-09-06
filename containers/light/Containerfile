@@ -19,8 +19,12 @@ COPY src        ./src
 COPY cli        ./cli
 COPY lifter     ./lifter
 
-# Build the release binary
-RUN cargo build --release --locked
+# Build the release binary.
+#
+# --features mcp, or this image has no `oinkie mcp`. This is the image to point
+# an MCP client at: nothing the server offers lifts, so the Ghidra and JDK the
+# full image carries would be a gigabyte of dead weight on that path.
+RUN cargo build --release --locked --features mcp
 
 # ==========================================
 # Stage 2: Tiny runtime environment for CLI execution

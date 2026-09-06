@@ -16,6 +16,7 @@ Commands:
   compare      Compare birthmarks and output the similarity score
   reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
   run          Extract birthmarks and compare them in one command
+  mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
   help         Print this message or the help of the given subcommand(s)
 
 Options:
@@ -219,3 +220,26 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ```
+
+### `mcp` command
+
+Serves the pipeline over the Model Context Protocol, on stdin and stdout, so an
+agent can drive it. Behind the `mcp` cargo feature; the released binaries and
+both container images are built with it.
+
+```sh
+Serve oinkie over the Model Context Protocol, on stdin and stdout
+
+Usage: oinkie mcp [OPTIONS]
+
+Options:
+  -r, --root <DIRECTORY>  Directory the tools may read and write under. May be given more than once.
+                          Every path a tool is handed, input and output alike, has to resolve inside one of
+                          these; anything else is refused. Defaults to the working directory.
+                          The paths the tools receive are written by a language model rather than by you,
+                          which is the whole reason this exists.
+  -h, --help              Print help
+```
+
+The tools it offers, how to configure a client, and why lifting is not among
+them are in [`mcp/README.md`](mcp/README.md).

@@ -26,6 +26,7 @@ This toolkit extracts them from the binary code and compares them to calculate t
 The high similarity suggests that either program is suspected of being a copy of the other.
 
 - [Usage of the CLI interface](cli/README.md)
+- [Serving oinkie to an agent over MCP](cli/mcp/README.md)
 
 ## What is the software birthmark?
 
