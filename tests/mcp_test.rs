@@ -489,12 +489,42 @@ fn test_a_client_speaking_an_older_protocol_is_answered_in_its_own_version() {
             r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"old","version":"0"}}}"#,
         ],
     );
-    let result = &reply(&messages, 1)["result"];
+    let message = reply(&messages, 1);
+    // The top-level `error`, not `result.error`. The latter is null whether
+    // the call succeeded or failed -- on failure there is no `result` at all,
+    // and indexing null yields null -- so asserting on it could not fail.
     assert!(
-        result["error"].is_null(),
-        "an older client was refused: {result}"
+        message["error"].is_null(),
+        "an older client was refused: {message}"
     );
-    assert_eq!(result["protocolVersion"].as_str(), Some("2024-11-05"));
+    assert_eq!(
+        message["result"]["protocolVersion"].as_str(),
+        Some("2024-11-05")
+    );
+}
+
+/// A version the server has never heard of is answered in one it does support,
+/// rather than refused. Worth pinning because it is not the obvious behaviour:
+/// a client from the future, or one with a typo, still gets a usable session
+/// instead of an error it would have to interpret.
+#[test]
+fn test_a_version_the_server_does_not_know_falls_back_rather_than_failing() {
+    let (messages, _) = talk_raw(
+        &[],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{},"clientInfo":{"name":"odd","version":"0"}}}"#,
+        ],
+    );
+    let message = reply(&messages, 1);
+    assert!(message["error"].is_null(), "{message}");
+    let negotiated = message["result"]["protocolVersion"]
+        .as_str()
+        .expect("a version was still agreed");
+    assert_ne!(negotiated, "1999-01-01", "that version does not exist");
+    assert!(
+        negotiated.starts_with("202"),
+        "and the fallback should be a real one: {negotiated}"
+    );
 }
 
 /// A method the server does not have is a protocol error, not a crash and not
