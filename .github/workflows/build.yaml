@@ -52,7 +52,7 @@ jobs:
       # it is in there. Cold, with no cache, this takes 26s locally.
       - name: Build the light container image
         if: matrix.os == 'ubuntu-latest'
-        run: docker build -f containers/light/Containerfile -t oinkie:ci .
+        run: docker build --target light-image -f Containerfile -t oinkie:ci .
 
       # The image is only worth building if it runs, and the one thing it must
       # do that the host binary does not is serve MCP over `docker run -i`.
