@@ -77,9 +77,15 @@ done
 # the manifest -- it exits 101 rather than fixing it. Leaving the lock behind
 # therefore breaks the release it is preparing.
 #
-# `--workspace` so that only this package's own entry moves, and `--offline` so
-# that a release runner resolves nothing from the network here. Between them
-# the change is a single line. `cargo generate-lockfile` would also work and is
-# the wrong tool: it rebuilds the whole lock, and dependency resolutions can
-# move with it.
-cargo update --workspace --offline
+# `--workspace` is what keeps this to a single line: it limits the update to
+# this package's own entry, and cargo says as much while it runs -- "60
+# unchanged dependencies". `cargo generate-lockfile` would also sync the lock
+# and is the wrong tool, because it rebuilds the whole thing and dependency
+# resolutions can move with it.
+#
+# Not `--offline`. It was here, on the reasoning that a release runner should
+# resolve nothing from the network, and it made the bump fail on the only
+# machine that matters: a fresh runner has no crates.io index, and `--offline`
+# forbids fetching one, so resolution cannot succeed at all (#102). It passed
+# every local test because a developer's registry is already warm.
+cargo update --workspace
