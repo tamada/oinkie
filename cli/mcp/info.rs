@@ -127,7 +127,7 @@ pub fn vocabulary() -> Vocabulary {
                 .to_string(),
             "Inputs are files already lifted to the Oinkie IR (the JSON that 'oinkie lift' \
              writes). Lifting itself is not exposed over MCP: it runs a whole decompiler per \
-             binary, for minutes at a time."
+             binary, for as long as that binary takes. Run 'oinkie lift' yourself first."
                 .to_string(),
         ],
     }

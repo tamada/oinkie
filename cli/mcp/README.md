@@ -101,19 +101,22 @@ written somewhere surprising.
 
 ## 🚫 Lifting is not here
 
-There is no `oinkie_lift`. Run [`oinkie lift`](../../lifter/README.md) yourself and
-point the tools at what it produced.
+There is no `oinkie_lift`, and there is not going to be one. Run
+[`oinkie lift`](../../assets/lifters/ghidra/README.md) yourself and point the
+tools at what it produced — on a host with Ghidra installed, or in the `full`
+image, which bundles it.
 
-Three reasons, any one of which would be enough:
+It is the one step whose shape does not fit a tool call. It starts a whole
+decompiler process per binary, and how long that takes is set by the binary
+rather than by the request: a hello-world lifts in a few seconds, and something
+worth comparing takes considerably longer, with the client blocked on a single
+call for the whole of it. `--script` is the other half — a replacement lifting
+script is arbitrary code inside Ghidra, which is a reasonable thing to put in a
+person's hands and not in a model's.
 
-- it runs a whole decompiler process per binary, for minutes at a time, which no
-  client's timeout accommodates;
-- `--script` takes a replacement lifting script, which is arbitrary code running
-  inside Ghidra — not something to hand to a model; and
-- `analyzeHeadless` exits successfully even when its script throws, so failure
-  has to be inferred rather than reported.
-
-Each of those needs an answer of its own before lifting could be offered here.
+None of that says lifting is dangerous. A model with a shell can run `oinkie
+lift` like anyone else, and it is welcome to. The line here is about which step
+belongs inside a request and response, not about what may be run.
 
 ## 🩺 When something is wrong
 

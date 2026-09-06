@@ -424,9 +424,9 @@ impl ServerHandler for Oinkie {
                  program is a copy of the other.\n\n\
                  Inputs are files already lifted to the Oinkie IR, the JSON that \
                  `oinkie lift` writes. Lifting is deliberately not exposed here: it runs a \
-                 whole decompiler process per binary, for minutes at a time, and a \
-                 replacement lifting script is arbitrary code. Run `oinkie lift` yourself \
-                 first.\n\n\
+                 whole decompiler process per binary, for as long as that binary takes, and \
+                 a replacement lifting script is arbitrary code. Run `oinkie lift` yourself \
+                 first -- on a host with Ghidra, or in the `full` image.\n\n\
                  Call oinkie_info before naming a birthmark type, an algorithm or an \
                  analysis. The names are precise and the lists are generated from the parser."
                 .to_string(),
