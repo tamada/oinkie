@@ -73,10 +73,14 @@ jobs:
             target: x86_64-unknown-linux-gnu
             architecture: amd64
             os_name: linux
+            # the runner can execute what it just built, so the artifact itself
+            # can be asked whether it serves MCP
+            native: true
           - os: macos-latest
             target: aarch64-apple-darwin
             architecture: arm64
             os_name: darwin
+            native: true
           - os: macos-latest
             target: x86_64-apple-darwin
             architecture: amd64
@@ -98,6 +102,13 @@ jobs:
           cargo install cargo-zigbuild
           # --features mcp: without it the published binary has no `oinkie mcp`.
           cargo zigbuild --release --features mcp --target ${{ matrix.target }}
+
+      # Only where the runner can execute what it just built -- two of the four
+      # targets are cross-compiled. Those two are enough: the flag that would go
+      # missing is the same one for every target.
+      - name: Verify the binary serves MCP
+        if: matrix.native
+        run: ./.github/scripts/verify_mcp.sh target/${{ matrix.target }}/release/oinkie
 
       - name: Create distribution files.
         env:

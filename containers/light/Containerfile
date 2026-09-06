@@ -17,7 +17,11 @@ COPY Cargo.toml .
 COPY Cargo.lock .
 COPY src        ./src
 COPY cli        ./cli
-COPY lifter     ./lifter
+# The lifting script is embedded into the binary with `include_str!`, so it
+# has to be in the build context. `assets/lifters` rather than all of
+# `assets`, which also holds shell completions and result-summarising
+# scripts that the build does not read.
+COPY assets/lifters ./assets/lifters
 
 # Build the release binary.
 #

@@ -20,13 +20,21 @@ fn talk(requests: &[&str]) -> (Vec<Value>, String) {
 
 /// The same, with the server confined to the given directories.
 fn talk_under(roots: &[&std::path::Path], requests: &[&str]) -> (Vec<Value>, String) {
-    let mut stdin = String::from(
-        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}
-{"jsonrpc":"2.0","method":"notifications/initialized"}
-"#,
-    );
-    for r in requests {
-        stdin.push_str(r);
+    let mut lines = vec![
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"test","version":"0"}}}"#,
+        r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+    ];
+    lines.extend_from_slice(requests);
+    talk_raw(roots, &lines)
+}
+
+/// Sends exactly what it is given, with no handshake of its own -- for the
+/// tests that are about the handshake, or about what the server does with
+/// input no client would send.
+fn talk_raw(roots: &[&std::path::Path], lines: &[&str]) -> (Vec<Value>, String) {
+    let mut stdin = String::new();
+    for l in lines {
+        stdin.push_str(l);
         stdin.push('\n');
     }
 
@@ -467,5 +475,102 @@ fn test_a_program_outside_the_root_is_refused() {
             .unwrap_or_default()
             .contains("outside every allowed"),
         "{result}"
+    );
+}
+
+/// A client older than this build still gets a session. Every other test here
+/// sends the version this was written against, so without this one the
+/// negotiation is exercised at exactly one value -- the one that cannot fail.
+#[test]
+fn test_a_client_speaking_an_older_protocol_is_answered_in_its_own_version() {
+    let (messages, _) = talk_raw(
+        &[],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"old","version":"0"}}}"#,
+        ],
+    );
+    let message = reply(&messages, 1);
+    // The top-level `error`, not `result.error`. The latter is null whether
+    // the call succeeded or failed -- on failure there is no `result` at all,
+    // and indexing null yields null -- so asserting on it could not fail.
+    assert!(
+        message["error"].is_null(),
+        "an older client was refused: {message}"
+    );
+    assert_eq!(
+        message["result"]["protocolVersion"].as_str(),
+        Some("2024-11-05")
+    );
+}
+
+/// A version the server has never heard of is answered in one it does support,
+/// rather than refused. Worth pinning because it is not the obvious behaviour:
+/// a client from the future, or one with a typo, still gets a usable session
+/// instead of an error it would have to interpret.
+#[test]
+fn test_a_version_the_server_does_not_know_falls_back_rather_than_failing() {
+    let (messages, _) = talk_raw(
+        &[],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"1999-01-01","capabilities":{},"clientInfo":{"name":"odd","version":"0"}}}"#,
+        ],
+    );
+    let message = reply(&messages, 1);
+    assert!(message["error"].is_null(), "{message}");
+    let negotiated = message["result"]["protocolVersion"]
+        .as_str()
+        .expect("a version was still agreed");
+    assert_ne!(negotiated, "1999-01-01", "that version does not exist");
+    assert!(
+        negotiated.starts_with("202"),
+        "and the fallback should be a real one: {negotiated}"
+    );
+}
+
+/// A method the server does not have is a protocol error, not a crash and not
+/// a silent nothing.
+#[test]
+fn test_an_unknown_method_is_refused_as_one() {
+    let (messages, _) =
+        talk(&[r#"{"jsonrpc":"2.0","id":9,"method":"tools/nonesuch","params":{}}"#]);
+    // -32601 is JSON-RPC's "method not found"
+    assert_eq!(reply(&messages, 9)["error"]["code"].as_i64(), Some(-32601));
+}
+
+/// Something that is not JSON at all arrives eventually -- a wrapper writing a
+/// diagnostic into the pipe, a half-written line. The session has to survive
+/// it, or one stray byte ends the server for good.
+#[test]
+fn test_a_line_that_is_not_json_does_not_end_the_session() {
+    let (messages, _) = talk_raw(
+        &[],
+        &[
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}"#,
+            r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#,
+            "this is not json",
+            r#"{"jsonrpc":"2.0","id":5,"method":"tools/list","params":{}}"#,
+        ],
+    );
+    let tools = reply(&messages, 5)["result"]["tools"]
+        .as_array()
+        .expect("the server answered after the garbage");
+    assert_eq!(tools.len(), 5, "{messages:#?}");
+}
+
+/// A required argument left out is the caller's mistake and is reported inside
+/// the result, as a tool error rather than a protocol one, so that a model
+/// sees it and can try again. Worth pinning: it is rmcp's doing rather than
+/// ours, and it is the only path where the two kinds are decided elsewhere.
+#[test]
+fn test_a_missing_required_argument_comes_back_as_a_tool_error() {
+    let (messages, _) = talk(&[
+        r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"oinkie_run","arguments":{}}}"#,
+    ]);
+    let result = &reply(&messages, 7)["result"];
+    assert_eq!(result["isError"].as_bool(), Some(true), "{result}");
+    let said = result["content"][0]["text"].as_str().unwrap_or_default();
+    assert!(
+        said.contains("files"),
+        "the message has to name what is missing: {said}"
     );
 }
