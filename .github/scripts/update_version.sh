@@ -15,6 +15,19 @@
 
 set -eu
 
+# Every path below is relative to the repository root, and always was -- run
+# from anywhere else, this used to fail at the first sed with
+# `Cargo.toml: No such file or directory`. Going there rather than saying so
+# removes the precondition instead of documenting it.
+cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
+
+# cargo is needed for the lock file below. Said here, because `cargo: not
+# found` three-quarters of the way through a release does not explain itself.
+command -v cargo > /dev/null || {
+    echo "$0: cargo is not on PATH, and Cargo.lock cannot be brought along without it" >&2
+    exit 1
+}
+
 usage() {
     echo "usage: $0 <version>        e.g. $0 0.4.0" >&2
     echo "  the leading v of a tag name is accepted and ignored" >&2
@@ -58,3 +71,15 @@ for f in README.md docs/content/_index.md; do
         -e "s|(releases/tag/v)${V}|\1${TO_VERSION}|g" \
         -e "s|(oinkie:)${V}|\1${TO_VERSION}|g"
 done
+
+# Cargo.lock names this package's version too, and the container builds with
+# `cargo build --locked`, which refuses to reconcile a lock that disagrees with
+# the manifest -- it exits 101 rather than fixing it. Leaving the lock behind
+# therefore breaks the release it is preparing.
+#
+# `--workspace` so that only this package's own entry moves, and `--offline` so
+# that a release runner resolves nothing from the network here. Between them
+# the change is a single line. `cargo generate-lockfile` would also work and is
+# the wrong tool: it rebuilds the whole lock, and dependency resolutions can
+# move with it.
+cargo update --workspace --offline
