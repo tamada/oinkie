@@ -38,15 +38,8 @@ impl<L: Lifter> Lifter for Verifying<L> {
     }
 }
 
-#[derive(Debug, ValueEnum, Clone, Copy, Serialize, Deserialize)]
-#[clap(rename_all = "kebab-case")]
-pub enum LifterType {
-    Ghidra,
-    IDAPro,
-    BinaryNinja,
-}
-
-/// The intermediate representation a lifted program is written in.
+/// The intermediate representation a lifted program is written in, and the
+/// only thing a caller names to ask for a lift.
 ///
 /// Named after the representation rather than the tool that produced it,
 /// because one tool can produce several and they are not interchangeable —
@@ -55,11 +48,17 @@ pub enum LifterType {
 /// at: whether two birthmarks can be compared, and which `Op` type can read
 /// the file.
 ///
-/// Variants are declared ahead of the lifters that produce them, the way
-/// [`LifterType`] already declares backends that are not implemented yet.
-/// Binary Ninja is absent on purpose: it lifts to LLIL, MLIL or HLIL, and
-/// which of those is worth using has to be settled by measurement rather than
-/// named in advance.
+/// This used to sit beside a `LifterType` that named the tool, and `lift`
+/// took both. The pair could disagree — a Ghidra lifter asked for HLIL — so
+/// something had to check, report and be tested for a state that only existed
+/// because there were two enums. There is one now, and that state cannot be
+/// written down. It is the finer of the two: a representation implies its
+/// tool, while a tool does not imply a representation.
+///
+/// Variants are declared ahead of the lifters that produce them, so a name
+/// here is not a promise that this build can lift it. [`Self::readable`] is
+/// the list that can be read back, and [`LifterBuilder::build`] is what says
+/// whether it can be written.
 #[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 #[clap(rename_all = "kebab-case")]
@@ -69,9 +68,17 @@ pub enum Ir {
     #[default]
     GhidraPcode,
     /// The Hex-Rays microcode, the representation IDA Pro's decompiler works
-    /// in. Unlike Binary Ninja's, there is only one of it, so it can be named
-    /// before the lifter that reads it exists.
+    /// in. There is only one of it, unlike Binary Ninja's three.
     IdaMicrocode,
+    /// Binary Ninja's Low Level IL: one expression per machine instruction,
+    /// registers and flags still explicit.
+    BinaryNinjaLlil,
+    /// Binary Ninja's Medium Level IL: stack and registers resolved into
+    /// variables, calls carrying their parameters.
+    BinaryNinjaMlil,
+    /// Binary Ninja's High Level IL: control flow recovered, the level its
+    /// decompiler output is rendered from.
+    BinaryNinjaHlil,
 }
 
 impl Ir {
@@ -83,13 +90,83 @@ impl Ir {
     pub fn readable() -> &'static [Ir] {
         &[Ir::GhidraPcode]
     }
+
+    /// The tool that produces this representation, as it should appear in
+    /// messages.
+    ///
+    /// Several representations share one tool, which is the asymmetry that
+    /// makes the representation the thing to name and the tool the thing to
+    /// derive.
+    pub fn tool(&self) -> &'static str {
+        match self {
+            Ir::GhidraPcode => "Ghidra",
+            Ir::IdaMicrocode => "IDA Pro",
+            Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => "Binary Ninja",
+        }
+    }
+
+    /// Where the tool behind this representation is looked for.
+    ///
+    /// Keyed on the representation because that is what the caller names, and
+    /// answered per tool, so the three Binary Ninja levels share one
+    /// installation rather than each describing it again.
+    pub fn home_spec(&self) -> HomeSpec {
+        match self {
+            Ir::GhidraPcode => HomeSpec {
+                tool: self.tool(),
+                env: "GHIDRA_HOME",
+                candidates: &[
+                    "/opt/homebrew/opt/ghidra/libexec",
+                    "/usr/local/opt/ghidra/libexec",
+                    "/opt/ghidra/libexec",
+                ],
+            },
+            Ir::IdaMicrocode => HomeSpec {
+                tool: self.tool(),
+                env: "IDA_HOME",
+                candidates: &[],
+            },
+            Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => HomeSpec {
+                tool: self.tool(),
+                env: "BINARY_NINJA_HOME",
+                candidates: &[],
+            },
+        }
+    }
+
+    /// Finds the tool's installation: what the user passed, then the
+    /// environment variable, then the usual locations.
+    pub fn find_home(&self, home_opt: Option<&Path>) -> Result<PathBuf> {
+        if let Some(h) = home_opt {
+            return Ok(h.to_path_buf());
+        }
+        self.home_spec()
+            .find_in(|k| std::env::var(k).ok(), |p| p.exists())
+    }
 }
 
 impl std::fmt::Display for Ir {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl Ir {
+    /// This representation's name, which is also what is written into the
+    /// `ir` field of a lifted file.
+    ///
+    /// Spelled out rather than derived, and matching what `serde`'s
+    /// kebab-case rename produces. The two have to agree: a file's `ir` field
+    /// is written by `serde` and a birthmark's is parsed by [`std::str::FromStr`],
+    /// so a name that differed between them would make a birthmark
+    /// unreadable against the file it came from.
+    fn as_str(&self) -> &'static str {
         match self {
-            Ir::GhidraPcode => write!(f, "ghidra-pcode"),
-            Ir::IdaMicrocode => write!(f, "ida-microcode"),
+            Ir::GhidraPcode => "ghidra-pcode",
+            Ir::IdaMicrocode => "ida-microcode",
+            Ir::BinaryNinjaLlil => "binary-ninja-llil",
+            Ir::BinaryNinjaMlil => "binary-ninja-mlil",
+            Ir::BinaryNinjaHlil => "binary-ninja-hlil",
         }
     }
 }
@@ -101,6 +178,9 @@ impl std::str::FromStr for Ir {
         match s {
             "ghidra-pcode" => Ok(Ir::GhidraPcode),
             "ida-microcode" => Ok(Ir::IdaMicrocode),
+            "binary-ninja-llil" => Ok(Ir::BinaryNinjaLlil),
+            "binary-ninja-mlil" => Ok(Ir::BinaryNinjaMlil),
+            "binary-ninja-hlil" => Ok(Ir::BinaryNinjaHlil),
             _ => Err(crate::Error::Parse(format!(
                 "{s}: unknown intermediate representation"
             ))),
@@ -174,69 +254,18 @@ impl HomeSpec {
     }
 }
 
-impl LifterType {
-    /// The tool's name as it should appear in messages.
-    pub fn name(&self) -> &'static str {
-        match self {
-            LifterType::Ghidra => "Ghidra",
-            LifterType::IDAPro => "IDA Pro",
-            LifterType::BinaryNinja => "Binary Ninja",
-        }
-    }
-
-    /// Where this backend's installation is looked for.
-    ///
-    /// Every backend here has one. It was an `Option` while angr was listed:
-    /// angr is a Python library, imported rather than installed somewhere
-    /// oinkie could point at, and it was the only `None`. A backend shaped
-    /// that way can make this optional again when one arrives, rather than
-    /// the type carrying a case nothing produces.
-    pub fn home_spec(&self) -> HomeSpec {
-        match self {
-            LifterType::Ghidra => HomeSpec {
-                tool: self.name(),
-                env: "GHIDRA_HOME",
-                candidates: &[
-                    "/opt/homebrew/opt/ghidra/libexec",
-                    "/usr/local/opt/ghidra/libexec",
-                    "/opt/ghidra/libexec",
-                ],
-            },
-            LifterType::IDAPro => HomeSpec {
-                tool: self.name(),
-                env: "IDA_HOME",
-                candidates: &[],
-            },
-            LifterType::BinaryNinja => HomeSpec {
-                tool: self.name(),
-                env: "BINARY_NINJA_HOME",
-                candidates: &[],
-            },
-        }
-    }
-
-    /// Finds this backend's installation: what the user passed, then the
-    /// environment variable, then the usual locations.
-    pub fn find_home(&self, home_opt: Option<&Path>) -> Result<PathBuf> {
-        if let Some(h) = home_opt {
-            return Ok(h.to_path_buf());
-        }
-        self.home_spec()
-            .find_in(|k| std::env::var(k).ok(), |p| p.exists())
-    }
-}
-
 pub struct LifterBuilder {
-    lifter_type: LifterType,
+    ir: Ir,
     home: Option<PathBuf>,
     script: Option<PathBuf>,
     intermediate_dir: Option<PathBuf>,
 }
 
 impl LifterBuilder {
-    pub fn new(lifter_type: LifterType) -> Self {
+    /// Takes the representation to produce, which is also what picks the tool.
+    pub fn new(ir: Ir) -> Self {
         Self {
-            lifter_type,
+            ir,
             home: None,
             script: None,
             intermediate_dir: None,
@@ -259,9 +288,12 @@ impl LifterBuilder {
     }
 
     pub fn build(self) -> Result<Box<dyn Lifter + Sync>> {
-        match self.lifter_type {
-            LifterType::Ghidra => {
-                let home = self.lifter_type.find_home(self.home.as_deref())?;
+        // Every representation is spelled out rather than falling through to
+        // one "not implemented" arm, so that adding a variant to `Ir` stops
+        // the build here and asks whether this one can be written.
+        match self.ir {
+            Ir::GhidraPcode => {
+                let home = self.ir.find_home(self.home.as_deref())?;
                 Ok(Box::new(Verifying(
                     crate::ghidra::lifter::GhidraLifter::new(
                         home,
@@ -270,19 +302,73 @@ impl LifterBuilder {
                     ),
                 )))
             }
-            LifterType::IDAPro => Err(crate::Error::Parse(
-                "IDA Pro lifter is not yet implemented.".to_string(),
-            )),
-            LifterType::BinaryNinja => Err(crate::Error::Parse(
-                "Binary Ninja lifter is not yet implemented.".to_string(),
-            )),
+            Ir::IdaMicrocode => Err(not_implemented(self.ir)),
+            Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => {
+                Err(not_implemented(self.ir))
+            }
         }
     }
+}
+
+/// What a representation nobody has written a lifter for reports.
+///
+/// Names the representation as well as the tool, because the caller asked for
+/// the representation and "Binary Ninja is not implemented" would not say
+/// which of its three they were refused.
+fn not_implemented(ir: Ir) -> crate::Error {
+    crate::Error::Parse(format!(
+        "no lifter writes {ir} yet: the {} backend is not implemented",
+        ir.tool()
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
+
+    /// Every representation has one name, spelled three independent times.
+    ///
+    /// `serde` derives it from `rename_all`, `clap` derives its own from
+    /// another `rename_all`, and [`Ir::as_str`] is a hand-written match. All
+    /// three are load-bearing and none of them consults the others: a lifted
+    /// program's `ir` field is written and read by `serde`, a birthmark's
+    /// metadata is parsed by `FromStr`, and `--ir` is parsed by `clap`.
+    ///
+    /// A variant they disagreed about would not fail to compile. It would
+    /// accept `--ir binary-ninja-llil` and write something else into the file,
+    /// or extract a birthmark that no longer matches the program it came from.
+    #[test]
+    fn test_every_representation_spells_itself_the_same_way_three_times() {
+        for ir in Ir::value_variants() {
+            let json = serde_json::to_string(ir).unwrap();
+            let via_serde = json.trim_matches('"');
+            assert_eq!(via_serde, ir.to_string(), "serde and Display disagree");
+
+            let via_clap = ir.to_possible_value().unwrap();
+            assert_eq!(
+                via_clap.get_name(),
+                ir.to_string(),
+                "clap and Display disagree"
+            );
+
+            assert_eq!(
+                &<Ir as FromStr>::from_str(via_serde).unwrap(),
+                ir,
+                "FromStr does not read what serde writes: {via_serde}"
+            );
+        }
+    }
+
+    /// Every representation resolves to a tool, which is the property that let
+    /// the tool stop being a separate argument.
+    #[test]
+    fn test_every_representation_names_a_tool() {
+        for ir in Ir::value_variants() {
+            assert!(!ir.tool().is_empty(), "{ir} names no tool");
+            assert!(!ir.home_spec().env.is_empty(), "{ir} names no variable");
+        }
+    }
 
     /// The search never runs: `--home` is taken as given, without checking
     /// that it exists, so that the error names the path the user actually
@@ -290,12 +376,12 @@ mod tests {
     #[test]
     fn test_the_home_the_user_passed_wins() {
         let opt = PathBuf::from("/custom/ghidra/home");
-        assert_eq!(LifterType::Ghidra.find_home(Some(&opt)).unwrap(), opt);
+        assert_eq!(Ir::GhidraPcode.find_home(Some(&opt)).unwrap(), opt);
     }
 
     #[test]
     fn test_the_environment_variable_is_read_when_no_home_was_passed() {
-        let spec = LifterType::Ghidra.home_spec();
+        let spec = Ir::GhidraPcode.home_spec();
         let home = spec
             .find_in(
                 |k| (k == "GHIDRA_HOME").then(|| "/env/ghidra/home".to_string()),
@@ -310,7 +396,7 @@ mod tests {
     /// side: with both available, the variable is what comes back.
     #[test]
     fn test_the_environment_variable_beats_an_installed_ghidra() {
-        let spec = LifterType::Ghidra.home_spec();
+        let spec = Ir::GhidraPcode.home_spec();
         let home = spec
             .find_in(|_| Some("/env/ghidra/home".to_string()), |_| true)
             .unwrap();
@@ -319,7 +405,7 @@ mod tests {
 
     #[test]
     fn test_the_usual_locations_are_searched_when_the_variable_is_unset() {
-        let spec = LifterType::Ghidra.home_spec();
+        let spec = Ir::GhidraPcode.home_spec();
         let last = Path::new(spec.candidates.last().unwrap());
         let home = spec.find_in(|_| None, |p| p == last).unwrap();
         assert_eq!(home, last);
@@ -330,7 +416,7 @@ mod tests {
     /// answer to it.
     #[test]
     fn test_the_first_of_several_installations_wins() {
-        let spec = LifterType::Ghidra.home_spec();
+        let spec = Ir::GhidraPcode.home_spec();
         let home = spec.find_in(|_| None, |_| true).unwrap();
         assert_eq!(home, PathBuf::from(spec.candidates[0]));
     }
@@ -341,7 +427,7 @@ mod tests {
     /// checked only that nothing panicked.
     #[test]
     fn test_a_ghidra_that_is_nowhere_says_what_to_set_and_where_it_looked() {
-        let spec = LifterType::Ghidra.home_spec();
+        let spec = Ir::GhidraPcode.home_spec();
         let err = spec.find_in(|_| None, |_| false).unwrap_err().to_string();
         assert!(err.contains("--home"), "does not offer --home: {err}");
         assert!(
@@ -358,7 +444,7 @@ mod tests {
     /// install it in one of nowhere.
     #[test]
     fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
-        let spec = LifterType::IDAPro.home_spec();
+        let spec = Ir::IdaMicrocode.home_spec();
         let err = spec
             .find_in(|_| None, |_| panic!("there is nothing to look at"))
             .unwrap_err()

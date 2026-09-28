@@ -40,19 +40,27 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 '-d+[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files' \
 '--dest=[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files' \
-'-l+[Specify the lifter type]:LIFTER_TYPE:(ghidra ida-pro binary-ninja)' \
-'--lifter-type=[Specify the lifter type]:LIFTER_TYPE:(ghidra ida-pro binary-ninja)' \
-'-H+[Path to the lifter'\''s installation directory. If not specified, the lifter'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files' \
-'--home=[Path to the lifter'\''s installation directory. If not specified, the lifter'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files' \
+'-r+[Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.]:IR:((ghidra-pcode\:"Ghidra'\''s P-Code, as refined by the decompiler — what \`HighFunction\` yields, rather than raw lifted P-Code"
+ida-microcode\:"The Hex-Rays microcode, the representation IDA Pro'\''s decompiler works in. There is only one of it, unlike Binary Ninja'\''s three"
+binary-ninja-llil\:"Binary Ninja'\''s Low Level IL\: one expression per machine instruction, registers and flags still explicit"
+binary-ninja-mlil\:"Binary Ninja'\''s Medium Level IL\: stack and registers resolved into variables, calls carrying their parameters"
+binary-ninja-hlil\:"Binary Ninja'\''s High Level IL\: control flow recovered, the level its decompiler output is rendered from"))' \
+'--ir=[Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.]:IR:((ghidra-pcode\:"Ghidra'\''s P-Code, as refined by the decompiler — what \`HighFunction\` yields, rather than raw lifted P-Code"
+ida-microcode\:"The Hex-Rays microcode, the representation IDA Pro'\''s decompiler works in. There is only one of it, unlike Binary Ninja'\''s three"
+binary-ninja-llil\:"Binary Ninja'\''s Low Level IL\: one expression per machine instruction, registers and flags still explicit"
+binary-ninja-mlil\:"Binary Ninja'\''s Medium Level IL\: stack and registers resolved into variables, calls carrying their parameters"
+binary-ninja-hlil\:"Binary Ninja'\''s High Level IL\: control flow recovered, the level its decompiler output is rendered from"))' \
+'-H+[Path to the installation directory of the tool behind --ir. If not specified, that tool'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files' \
+'--home=[Path to the installation directory of the tool behind --ir. If not specified, that tool'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files' \
 '-i+[Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.]:DIRECTORY:_files' \
 '--intermediate=[Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.]:DIRECTORY:_files' \
-'--script=[Path to a custom lifting script, replacing the built-in one. The language is the lifter'\''s own\: Java for Ghidra. It must write {input file name}.json into its working directory.]:SCRIPT:_files' \
+'--script=[Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir\: Java for Ghidra. It must write {input file name}.json into its working directory.]:SCRIPT:_files' \
 '-j+[Lift up to N files at a time (default\: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.]:N:_default' \
 '--jobs=[Lift up to N files at a time (default\: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.]:N:_default' \
 '-S[Skip if the resultant JSON file already exists]' \
 '--skip[Skip if the resultant JSON file already exists]' \
-'-h[Print help]' \
-'--help[Print help]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
 '*::files -- Path to the binary or intermediate files to lift:_files' \
 && ret=0
 ;;

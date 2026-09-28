@@ -461,7 +461,7 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
         .with_message("Lifting binaries...");
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
-    let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.lifter_type())
+    let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.ir())
         .home(opts.home().map(|p| p.to_path_buf()))
         .script(opts.script().map(|p| p.to_path_buf()))
         .intermediate_dir(opts.intermediate_dir().map(|p| p.to_path_buf()))
@@ -648,21 +648,48 @@ mod tests {
     #[test]
     fn test_find_ghidra_home_from_opt() {
         let opt = PathBuf::from("/custom/path");
-        let result = LifterType::Ghidra.find_home(Some(&opt)).unwrap();
+        let result = Ir::GhidraPcode.find_home(Some(&opt)).unwrap();
         assert_eq!(result, opt);
     }
 
-    /// The two backends that are not implemented still have to say what to
-    /// set, since a message naming GHIDRA_HOME for Binary Ninja is worse than
-    /// no message at all.
+    /// The backends that are not implemented still have to say what to set,
+    /// since a message naming GHIDRA_HOME for Binary Ninja is worse than no
+    /// message at all.
     #[test]
     fn test_each_backend_names_its_own_environment_variable() {
-        for (lifter, env) in [
-            (LifterType::Ghidra, "GHIDRA_HOME"),
-            (LifterType::IDAPro, "IDA_HOME"),
-            (LifterType::BinaryNinja, "BINARY_NINJA_HOME"),
+        for (ir, env) in [
+            (Ir::GhidraPcode, "GHIDRA_HOME"),
+            (Ir::IdaMicrocode, "IDA_HOME"),
+            (Ir::BinaryNinjaLlil, "BINARY_NINJA_HOME"),
+            (Ir::BinaryNinjaMlil, "BINARY_NINJA_HOME"),
+            (Ir::BinaryNinjaHlil, "BINARY_NINJA_HOME"),
         ] {
-            assert_eq!(lifter.home_spec().env, env, "{}", lifter.name());
+            assert_eq!(ir.home_spec().env, env, "{ir}");
+        }
+    }
+
+    /// Asking for a representation nothing can write says which
+    /// representation, not just which tool.
+    ///
+    /// Binary Ninja is the case that needs it: three representations share one
+    /// backend, so "Binary Ninja is not implemented" would leave the caller
+    /// unsure which of the three they had been refused.
+    #[test]
+    fn test_an_unwritable_representation_is_named_in_the_refusal() {
+        for ir in [
+            Ir::BinaryNinjaLlil,
+            Ir::BinaryNinjaMlil,
+            Ir::BinaryNinjaHlil,
+        ] {
+            let err = match LifterBuilder::new(ir).build() {
+                Err(e) => e.to_string(),
+                Ok(_) => panic!("{ir} was built, but no lifter writes it"),
+            };
+            assert!(err.contains(&ir.to_string()), "does not name {ir}: {err}");
+            assert!(
+                err.contains("Binary Ninja"),
+                "does not name the tool: {err}"
+            );
         }
     }
 

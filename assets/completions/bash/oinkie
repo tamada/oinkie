@@ -289,7 +289,7 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__lift)
-            opts="-d -l -H -i -j -S -h --dest --lifter-type --home --intermediate --script --jobs --skip --help [FILES]..."
+            opts="-d -r -H -i -j -S -h --dest --ir --home --intermediate --script --jobs --skip --help [FILES]..."
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -303,12 +303,12 @@ _oinkie() {
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;
-                --lifter-type)
-                    COMPREPLY=($(compgen -W "ghidra ida-pro binary-ninja" -- "${cur}"))
+                --ir)
+                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
                     return 0
                     ;;
-                -l)
-                    COMPREPLY=($(compgen -W "ghidra ida-pro binary-ninja" -- "${cur}"))
+                -r)
+                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
                     return 0
                     ;;
                 --home)
