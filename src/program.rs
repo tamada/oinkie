@@ -68,13 +68,15 @@ where
 /// decision belongs to the `ir` field the file carries, and this is where it
 /// is made.
 ///
-/// One variant is not an oversight. Ghidra is the only lifter implemented, so
-/// it is the only representation with an operation type to read into; naming
-/// the others here would mean inventing types for opcodes nobody has seen yet.
-/// Adding a lifter adds a variant, and the compiler then points at every place
-/// that has to account for it — which is the property the enum exists for.
+/// `ida-microcode` is absent because nothing reads it: naming it here would
+/// mean inventing a type for opcodes nobody has seen yet. Adding a lifter adds
+/// a variant, and the compiler then points at every place that has to account
+/// for it — which is the property the enum exists for.
 pub enum AnyProgram {
     GhidraPcode(Program<crate::ghidra::Op>),
+    BinaryNinjaLlil(Program<crate::binaryninja::Op<crate::binaryninja::Llil>>),
+    BinaryNinjaMlil(Program<crate::binaryninja::Op<crate::binaryninja::Mlil>>),
+    BinaryNinjaHlil(Program<crate::binaryninja::Op<crate::binaryninja::Hlil>>),
 }
 
 /// Just enough of a lifted file to learn which representation it is in.
@@ -85,6 +87,23 @@ pub enum AnyProgram {
 struct IrProbe {
     #[serde(default)]
     ir: Ir,
+}
+
+/// Applies one expression to whichever [`Program`] an [`AnyProgram`] holds.
+///
+/// Every method below forwards identically, and writing the four arms out
+/// each time is four chances to forward one of them to the wrong thing.
+/// Adding a variant still stops the build, because the match here becomes
+/// non-exhaustive -- the compiler asks once instead of a dozen times.
+macro_rules! dispatch {
+    ($self:expr, $p:ident => $body:expr) => {
+        match $self {
+            Self::GhidraPcode($p) => $body,
+            Self::BinaryNinjaLlil($p) => $body,
+            Self::BinaryNinjaMlil($p) => $body,
+            Self::BinaryNinjaHlil($p) => $body,
+        }
+    };
 }
 
 impl AnyProgram {
@@ -107,33 +126,34 @@ impl AnyProgram {
             Ir::GhidraPcode => serde_json::from_slice(&bytes)
                 .map(Self::GhidraPcode)
                 .map_err(json_err),
+            Ir::BinaryNinjaLlil => serde_json::from_slice(&bytes)
+                .map(Self::BinaryNinjaLlil)
+                .map_err(json_err),
+            Ir::BinaryNinjaMlil => serde_json::from_slice(&bytes)
+                .map(Self::BinaryNinjaMlil)
+                .map_err(json_err),
+            Ir::BinaryNinjaHlil => serde_json::from_slice(&bytes)
+                .map(Self::BinaryNinjaHlil)
+                .map_err(json_err),
             ir => Err(Error::UnsupportedIr(path.to_path_buf(), ir)),
         }
     }
 
     /// The representation this program's operations are written in.
     pub fn ir(&self) -> Ir {
-        match self {
-            Self::GhidraPcode(p) => p.ir(),
-        }
+        dispatch!(self, p => p.ir())
     }
 
     pub fn name(&self) -> &str {
-        match self {
-            Self::GhidraPcode(p) => p.name(),
-        }
+        dispatch!(self, p => p.name())
     }
 
     pub fn path(&self) -> &Path {
-        match self {
-            Self::GhidraPcode(p) => p.path(),
-        }
+        dispatch!(self, p => p.path())
     }
 
     pub fn len(&self) -> usize {
-        match self {
-            Self::GhidraPcode(p) => p.len(),
-        }
+        dispatch!(self, p => p.len())
     }
 
     pub fn is_empty(&self) -> bool {
@@ -141,23 +161,17 @@ impl AnyProgram {
     }
 
     pub fn set_json_path(&mut self, path: PathBuf) {
-        match self {
-            Self::GhidraPcode(p) => p.set_json_path(path),
-        }
+        dispatch!(self, p => p.set_json_path(path))
     }
 }
 
 impl crate::prelude::CsvInfo for AnyProgram {
     fn csv_info(&self) -> String {
-        match self {
-            Self::GhidraPcode(p) => p.csv_info(),
-        }
+        dispatch!(self, p => p.csv_info())
     }
 
     fn names(&self) -> Vec<String> {
-        match self {
-            Self::GhidraPcode(p) => p.names(),
-        }
+        dispatch!(self, p => p.names())
     }
 }
 

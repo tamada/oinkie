@@ -671,26 +671,19 @@ mod tests {
     /// Asking for a representation nothing can write says which
     /// representation, not just which tool.
     ///
-    /// Binary Ninja is the case that needs it: three representations share one
-    /// backend, so "Binary Ninja is not implemented" would leave the caller
-    /// unsure which of the three they had been refused.
+    /// It read Binary Ninja's three levels until they were implemented, which
+    /// was the case that needed it: sharing one backend, "Binary Ninja is not
+    /// implemented" would not have said which of the three was refused. IDA
+    /// Pro is the only one left, and the message is built the same way.
     #[test]
     fn test_an_unwritable_representation_is_named_in_the_refusal() {
-        for ir in [
-            Ir::BinaryNinjaLlil,
-            Ir::BinaryNinjaMlil,
-            Ir::BinaryNinjaHlil,
-        ] {
-            let err = match LifterBuilder::new(ir).build() {
-                Err(e) => e.to_string(),
-                Ok(_) => panic!("{ir} was built, but no lifter writes it"),
-            };
-            assert!(err.contains(&ir.to_string()), "does not name {ir}: {err}");
-            assert!(
-                err.contains("Binary Ninja"),
-                "does not name the tool: {err}"
-            );
-        }
+        let ir = Ir::IdaMicrocode;
+        let err = match LifterBuilder::new(ir).build() {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("{ir} was built, but no lifter writes it"),
+        };
+        assert!(err.contains(&ir.to_string()), "does not name {ir}: {err}");
+        assert!(err.contains("IDA Pro"), "does not name the tool: {err}");
     }
 
     /// A similarity CSV as `compare` writes one, written to a temp file so

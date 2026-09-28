@@ -4,6 +4,7 @@ use ndarray::ShapeError;
 
 use crate::prelude::BirthmarkType;
 
+pub mod binaryninja;
 mod birthmarks;
 mod compare;
 pub mod extractor;
@@ -322,8 +323,18 @@ mod tests {
             ),
             (
                 Error::UnsupportedIr(PathBuf::from("foreign.json"), Ir::IdaMicrocode),
-                "foreign.json: no reader for ida-microcode; this build can read ghidra-pcode"
-                    .to_string(),
+                // The readable list is built from `Ir::readable()` rather
+                // than written out, so that adding a reader does not make
+                // this a message to re-copy. The separate test below is what
+                // says the list is the right one.
+                format!(
+                    "foreign.json: no reader for ida-microcode; this build can read {}",
+                    crate::lift::Ir::readable()
+                        .iter()
+                        .map(|ir| ir.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
             ),
             (
                 Error::InvalidPcode(9999),
@@ -396,11 +407,10 @@ mod tests {
     /// The message has to name every representation this build can read, and
     /// separate them.
     ///
-    /// Honest about its reach: `Ir::readable()` holds one entry today, so the
-    /// separator half cannot fail yet — `join("")` and `join(", ")` produce
-    /// the same string for one item. It is here for the build that adds a
-    /// second reader, which is exactly when a broken join would ship
-    /// unnoticed.
+    /// The separator half was written while `Ir::readable()` held one entry,
+    /// where `join("")` and `join(", ")` produce the same string and it could
+    /// not fail. Binary Ninja's three levels made it four, so it now checks
+    /// something — which is what it was put there for.
     #[test]
     fn test_an_unreadable_representation_lists_what_can_be_read() {
         let rendered =

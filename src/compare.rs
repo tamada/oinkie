@@ -518,13 +518,25 @@ impl Comparator {
         p2: &'a AnyProgram,
         aggregator: &Aggregator,
     ) -> Result<Comparison<'a, AnyProgram>> {
-        if p1.ir() != p2.ir() {
-            return Err(Error::IrMismatch(p1.ir(), p2.ir()));
-        }
+        // The mismatch is the fall-through rather than a check before the
+        // match, so that there is one place where a pair is either scored or
+        // refused. Written as a guard first, the match would still need an
+        // arm for every mixed pair -- arms nothing can reach, since equal
+        // representations are the same variant.
         let (matrix, similarities, duration) = match (p1, p2) {
             (AnyProgram::GhidraPcode(a), AnyProgram::GhidraPcode(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
+            (AnyProgram::BinaryNinjaLlil(a), AnyProgram::BinaryNinjaLlil(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::BinaryNinjaMlil(a), AnyProgram::BinaryNinjaMlil(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::BinaryNinjaHlil(a), AnyProgram::BinaryNinjaHlil(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            _ => return Err(Error::IrMismatch(p1.ir(), p2.ir())),
         };
         Ok(Comparison::new(p1, p2, matrix, similarities, duration))
     }

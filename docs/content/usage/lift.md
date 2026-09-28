@@ -28,7 +28,7 @@ oinkie lift [OPTIONS] [FILES]...
 * `-r, --ir <IR>`  
   The intermediate representation to produce. `[default: ghidra-pcode]` `[possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]`  
   This also picks the tool, because a representation is only produced by one of them — `ghidra-pcode` means Ghidra, and the three `binary-ninja-*` levels all mean Binary Ninja. Naming the representation rather than the tool is what makes `-r binary-ninja-mlil` a complete request; naming the tool would not be, since Binary Ninja lifts to three.  
-  Only `ghidra-pcode` is implemented. The others are named so that the refusal says which representation you asked for, which matters most where one tool has several.
+  `ghidra-pcode` and the three `binary-ninja-*` levels are implemented. `ida-microcode` is named so that the refusal says which representation you asked for.
 * `-H, --home <HOME>`  
   Path to the installation directory of the tool behind `--ir`. If not specified, that tool's own environment variable (`GHIDRA_HOME` for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
 * `-i, --intermediate <DIRECTORY>`  

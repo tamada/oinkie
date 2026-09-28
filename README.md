@@ -7,7 +7,7 @@
 
 [![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.5.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 
-Detects software theft by comparing birthmarks extracted from binaries. Ghidra P-Code today; Binary Ninja and IDA Pro planned.
+Detects software theft by comparing birthmarks extracted from binaries. Ghidra P-Code and Binary Ninja's three ILs today; IDA Pro planned.
 
 ![Logo of oinkie](.github/assets/oinkie.png)
 

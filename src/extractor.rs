@@ -93,8 +93,12 @@ impl Extractor {
     /// The birthmark is the same either way; this only spares the caller from
     /// deciding which lifter produced the file, which the file already says.
     pub fn extract_any(&self, p: &crate::program::AnyProgram) -> Result<Birthmark> {
+        use crate::program::AnyProgram;
         match p {
-            crate::program::AnyProgram::GhidraPcode(p) => self.extract_each(p),
+            AnyProgram::GhidraPcode(p) => self.extract_each(p),
+            AnyProgram::BinaryNinjaLlil(p) => self.extract_each(p),
+            AnyProgram::BinaryNinjaMlil(p) => self.extract_each(p),
+            AnyProgram::BinaryNinjaHlil(p) => self.extract_each(p),
         }
     }
 }
