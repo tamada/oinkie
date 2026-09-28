@@ -509,9 +509,14 @@ impl Comparator {
     /// operations, so a comparison across them would measure the disagreement
     /// between the lifters rather than anything about the programs. That is
     /// refused here for the same reason it is refused for birthmarks in
-    /// [`Self::compare_birthmarks`]. Only one representation can be read
-    /// today, so nothing reachable is refused yet; the check is what keeps
-    /// that true when a second one arrives.
+    /// [`Self::compare_birthmarks`].
+    ///
+    /// The refusal is the match's fall-through rather than a guard before it,
+    /// so a pair is either scored by an arm that names both representations or
+    /// refused. It became reachable with Binary Ninja: until then one
+    /// representation could be read and nothing could form a mixed pair.
+    /// Ghidra's P-Code and Binary Ninja's LLIL of the same binary do not even
+    /// agree on which functions it has, which is what the refusal is for.
     pub fn compare_any<'a>(
         &self,
         p1: &'a AnyProgram,

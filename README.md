@@ -53,10 +53,14 @@ Note that `oinkie` does not care about the binary formats; it only looks at the 
 ### 2️⃣​ Lifts the binary files to the intermediate representation (IR)
 
 Next, we should lift the binary files to the OIR format.
-The current version of `oinkie` was only tested by lifting with [Ghidra](https://www.ghidradocs.com) and generated the OIR format.
-The future version will support [Binary Ninja](https://binary.ninja), and [IDA Pro](https://hex-rays.com/ida-pro).
+`oinkie` lifts with [Ghidra](https://www.ghidradocs.com), to its P-Code, and
+with [Binary Ninja](https://binary.ninja), to any of its three intermediate
+languages. Each is a separate representation and birthmarks are not compared
+across them. [IDA Pro](https://hex-rays.com/ida-pro) is planned.
 
-See also ([`assets/lifters/ghidra/README.md`](assets/lifters/ghidra/README.md)).
+See also ([`assets/lifters/README.md`](assets/lifters/README.md)), and each
+backend's own notes: ([Ghidra](assets/lifters/ghidra/README.md)),
+([Binary Ninja](assets/lifters/binaryninja/README.md)).
 
 ### 3️⃣ Extracts the birthmarks from the lifted IR files
 

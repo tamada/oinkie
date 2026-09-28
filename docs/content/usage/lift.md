@@ -1,12 +1,14 @@
 ---
 title: "1. Lifting Binaries (`lift` command)"
-description: "How to lift binary executable files to P-code JSON format using Ghidra."
+description: "How to lift binary executable files to the Oinkie IR with Ghidra or Binary Ninja."
 date: 2026-06-22
 draft: false
 weight: 50
 ---
 
-The **lift** command converts compiled binary executable files into the Oinkie Intermediate Representation (OIR) JSON format. The current implementation utilizes **Ghidra** in headless mode (without GUI) to translate machine-specific assembly instructions into platform-agnostic P-code.
+The **lift** command converts compiled binary executable files into the Oinkie Intermediate Representation (OIR) JSON format. It drives **Ghidra** in headless mode, producing its P-Code, or **Binary Ninja**, producing any of its three intermediate languages. `--ir` chooses which, and the choice is recorded in the file, because the two vocabularies are not interchangeable.
+
+The examples below use Ghidra's P-Code. For Binary Ninja, see the [lifter's own notes](https://github.com/tamada/oinkie/blob/main/assets/lifters/binaryninja/README.md).
 
 ---
 

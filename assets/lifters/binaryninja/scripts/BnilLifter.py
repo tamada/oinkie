@@ -48,7 +48,20 @@ CALL_TARGET_INDEX = {"llil": 0, "mlil": 1, "hlil": 0}
 
 
 def il_for(func, level):
-    return {"llil": func.llil, "mlil": func.mlil, "hlil": func.hlil}[level]
+    """The requested IL, and only the requested one.
+
+    Written as a chain rather than as a dict keyed by level, because a dict
+    literal evaluates every value before it is indexed: `{"llil": func.llil,
+    ...}[level]` asks Binary Ninja for all three ILs of every function in order
+    to return one of them. That is analysis nobody asked for, and it makes a
+    level that happens to be unavailable for one function fail a lift that
+    never wanted it.
+    """
+    if level == "llil":
+        return func.llil
+    if level == "mlil":
+        return func.mlil
+    return func.hlil
 
 
 def call_target(op, inputs, level):
@@ -91,12 +104,20 @@ def symbol_table(bv, keys, level):
 
     At HLIL the key is already the name and the entry is an identity, which is
     the honest record of a level that resolved the symbol before oinkie saw it.
+
+    The keys are sorted, and that is not cosmetic. They are collected in a set,
+    whose iteration order varies between runs with Python's hash seed, so
+    without this two lifts of one binary produce files that differ only in the
+    order of this table -- 2794 differing lines on a Go binary, with every
+    entry the same. Ghidra's lifter is byte-stable, a re-lift that changes
+    nothing should show as changing nothing, and a fixture should be
+    regenerable and diffable.
     """
     if level == "hlil":
-        return {key: key for key in keys}
+        return {key: key for key in sorted(keys)}
 
     table = {}
-    for key in keys:
+    for key in sorted(keys):
         try:
             address = int(key, 16)
         except ValueError:
