@@ -11,7 +11,7 @@ Software birthmarking has been researched extensively. Below is a collection of 
 ## 📜 Publications by Haruaki Tamada (Creator)
 
 1. *Haruaki Tamada*, **Cross-Platform Software Theft Detection via Intermediate-Representation Birthmarks: How Statically Linked Libraries Distort Similarity**, International Journal of Software Innovation, 2026 (submitted).
-    * **Contribution:** Follows the intermediate-representation birthmarking below into the distortion statically linked libraries introduce, where library code compiled into the binary is counted as the program's own.
+    * **Contribution:** Extending our SNPD 2026 study of intermediate-representation birthmarks, this article resolves one problem it left open — the dilution effect caused by statically linked library code — by subtracting a toolchain-matched reference executable, which both restores the similarity of identical logic and removes spurious similarity between unrelated programs.
 
 2. *Nikolay Fedorov, Akito Monden, Hiroki Inayoshi, Haruaki Tamada, and Masateru Tsunoda*, **Project-wise Comparison of Software Birthmarks Using Weighted Partial Similarity**, IEEE Transactions on Software Engineering, 2026 (submitted).　[ [arXiv](https://arxiv.org/abs/2606.25418) ]
     * **Contribution:** Established a framework for project-wise comparison by symmetric aggregation of module-level similarities, then addressed its two failure modes: a weighting scheme favouring larger modules, to suppress incidental similarity from small ones, and a partial similarity over only the top fraction of module pairs, to catch reuse of a small subset of a project. Evaluated on 35 open-source Java projects across ten categories, scored by the harmonic mean of resilience and credibility.
