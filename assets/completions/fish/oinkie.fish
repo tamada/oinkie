@@ -42,7 +42,6 @@ complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this 
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s d -l dest -d 'Specify the directory for putting the resultant JSON files of the lifted programs (default: \'./pcodes\' directory)' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s l -l lifter-type -d 'Specify the lifter type' -r -f -a "ghidra\t''
-angr\t''
 ida-pro\t''
 binary-ninja\t''"
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s H -l home -d 'Path to the lifter\'s installation directory. If not specified, the lifter\'s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.' -r -F

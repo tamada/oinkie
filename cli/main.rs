@@ -652,7 +652,7 @@ mod tests {
         assert_eq!(result, opt);
     }
 
-    /// The three backends that are not implemented still have to say what to
+    /// The two backends that are not implemented still have to say what to
     /// set, since a message naming GHIDRA_HOME for Binary Ninja is worse than
     /// no message at all.
     #[test]
@@ -662,14 +662,8 @@ mod tests {
             (LifterType::IDAPro, "IDA_HOME"),
             (LifterType::BinaryNinja, "BINARY_NINJA_HOME"),
         ] {
-            let spec = lifter.home_spec().expect("this backend has an install dir");
-            assert_eq!(spec.env, env, "{}", lifter.name());
+            assert_eq!(lifter.home_spec().env, env, "{}", lifter.name());
         }
-        // angr is imported rather than installed, so --home means nothing for
-        // it and the error says so instead of naming a variable.
-        assert!(LifterType::Angr.home_spec().is_none());
-        let err = LifterType::Angr.find_home(None).unwrap_err().to_string();
-        assert!(err.contains("angr"), "unhelpful message: {err}");
     }
 
     /// A similarity CSV as `compare` writes one, written to a temp file so

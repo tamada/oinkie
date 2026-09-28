@@ -26,7 +26,7 @@ oinkie lift [OPTIONS] [FILES]...
 * `-d, --dest <DIRECTORY>`  
   Specify the directory to place the resulting JSON files of the lifted P-code. Defaults to the `./pcodes` directory. `[default: pcodes]`
 * `-l, --lifter-type <LIFTER_TYPE>`  
-  Specify the lifter type to use. `[default: ghidra]` `[possible values: ghidra, angr, ida-pro, binary-ninja]`  
+  Specify the lifter type to use. `[default: ghidra]` `[possible values: ghidra, ida-pro, binary-ninja]`  
   Only `ghidra` is implemented; the others are named so that the error says which one you asked for.
 * `-H, --home <HOME>`  
   Path to the lifter's installation directory. If not specified, the lifter's own environment variable (`GHIDRA_HOME` for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
