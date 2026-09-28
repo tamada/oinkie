@@ -20,7 +20,11 @@ Since **oinkie** is written in Rust (using the 2024 edition), you will need the 
 ### 2. Ghidra (for Binary Lifting)
 To analyze binaries, **oinkie** relies on Ghidra for lifting compiled machine code to Pcode.
 - [Download Ghidra](https://ghidra-sre.org/)
-- **Java Development Kit (JDK):** Ghidra requires a compatible JDK (typically JDK 17 or later).
+- **Java Development Kit (JDK):** JDK 21 or later, which is what Ghidra 12's own
+  class files need. A JDK that is too old does not say so: Ghidra asks for a
+  path instead, and in a non-interactive shell that surfaces as
+  `Unable to prompt user for JDK path, no TTY detected`. Setting `JAVA_HOME`
+  is what makes it name the version it rejected.
 - **Environment Variable:** Set the `GHIDRA_HOME` environment variable to the directory where Ghidra is installed.
   ```sh
   export GHIDRA_HOME=/path/to/ghidra
