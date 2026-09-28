@@ -40,8 +40,8 @@ fn is_the_callers_fault(e: &Error) -> bool {
         // `Parse` is a catch-all carrying a string, and the strings it carries
         // come from both sides: "Invalid aggregator" is the caller's, while
         // "Ghidra headless analyzer not found", "could not start N lift jobs"
-        // and "angr is not yet implemented" are not. Nothing in the variant
-        // says which.
+        // and "IDA Pro lifter is not yet implemented" are not. Nothing in the
+        // variant says which.
         //
         // So it does not claim the caller is at fault. Telling a model it
         // asked wrongly when it did not is the more expensive mistake -- it

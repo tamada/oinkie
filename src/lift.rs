@@ -42,7 +42,6 @@ impl<L: Lifter> Lifter for Verifying<L> {
 #[clap(rename_all = "kebab-case")]
 pub enum LifterType {
     Ghidra,
-    Angr,
     IDAPro,
     BinaryNinja,
 }
@@ -180,21 +179,21 @@ impl LifterType {
     pub fn name(&self) -> &'static str {
         match self {
             LifterType::Ghidra => "Ghidra",
-            LifterType::Angr => "angr",
             LifterType::IDAPro => "IDA Pro",
             LifterType::BinaryNinja => "Binary Ninja",
         }
     }
 
-    /// Where this backend's installation is looked for, or `None` for one that
-    /// has no installation directory to find.
+    /// Where this backend's installation is looked for.
     ///
-    /// angr is the `None`: it is a Python library, imported rather than
-    /// installed somewhere oinkie could point at. It is here as the reminder
-    /// that the shape does not fit every backend.
-    pub fn home_spec(&self) -> Option<HomeSpec> {
+    /// Every backend here has one. It was an `Option` while angr was listed:
+    /// angr is a Python library, imported rather than installed somewhere
+    /// oinkie could point at, and it was the only `None`. A backend shaped
+    /// that way can make this optional again when one arrives, rather than
+    /// the type carrying a case nothing produces.
+    pub fn home_spec(&self) -> HomeSpec {
         match self {
-            LifterType::Ghidra => Some(HomeSpec {
+            LifterType::Ghidra => HomeSpec {
                 tool: self.name(),
                 env: "GHIDRA_HOME",
                 candidates: &[
@@ -202,18 +201,17 @@ impl LifterType {
                     "/usr/local/opt/ghidra/libexec",
                     "/opt/ghidra/libexec",
                 ],
-            }),
-            LifterType::Angr => None,
-            LifterType::IDAPro => Some(HomeSpec {
+            },
+            LifterType::IDAPro => HomeSpec {
                 tool: self.name(),
                 env: "IDA_HOME",
                 candidates: &[],
-            }),
-            LifterType::BinaryNinja => Some(HomeSpec {
+            },
+            LifterType::BinaryNinja => HomeSpec {
                 tool: self.name(),
                 env: "BINARY_NINJA_HOME",
                 candidates: &[],
-            }),
+            },
         }
     }
 
@@ -223,13 +221,8 @@ impl LifterType {
         if let Some(h) = home_opt {
             return Ok(h.to_path_buf());
         }
-        let Some(spec) = self.home_spec() else {
-            return Err(crate::Error::Parse(format!(
-                "{} has no installation directory to find, so --home means nothing for it",
-                self.name()
-            )));
-        };
-        spec.find_in(|k| std::env::var(k).ok(), |p| p.exists())
+        self.home_spec()
+            .find_in(|k| std::env::var(k).ok(), |p| p.exists())
     }
 }
 
@@ -277,9 +270,6 @@ impl LifterBuilder {
                     ),
                 )))
             }
-            LifterType::Angr => Err(crate::Error::Parse(
-                "angr lifter is not yet implemented.".to_string(),
-            )),
             LifterType::IDAPro => Err(crate::Error::Parse(
                 "IDA Pro lifter is not yet implemented.".to_string(),
             )),
@@ -305,7 +295,7 @@ mod tests {
 
     #[test]
     fn test_the_environment_variable_is_read_when_no_home_was_passed() {
-        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let spec = LifterType::Ghidra.home_spec();
         let home = spec
             .find_in(
                 |k| (k == "GHIDRA_HOME").then(|| "/env/ghidra/home".to_string()),
@@ -320,7 +310,7 @@ mod tests {
     /// side: with both available, the variable is what comes back.
     #[test]
     fn test_the_environment_variable_beats_an_installed_ghidra() {
-        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let spec = LifterType::Ghidra.home_spec();
         let home = spec
             .find_in(|_| Some("/env/ghidra/home".to_string()), |_| true)
             .unwrap();
@@ -329,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_the_usual_locations_are_searched_when_the_variable_is_unset() {
-        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let spec = LifterType::Ghidra.home_spec();
         let last = Path::new(spec.candidates.last().unwrap());
         let home = spec.find_in(|_| None, |p| p == last).unwrap();
         assert_eq!(home, last);
@@ -340,7 +330,7 @@ mod tests {
     /// answer to it.
     #[test]
     fn test_the_first_of_several_installations_wins() {
-        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let spec = LifterType::Ghidra.home_spec();
         let home = spec.find_in(|_| None, |_| true).unwrap();
         assert_eq!(home, PathBuf::from(spec.candidates[0]));
     }
@@ -351,7 +341,7 @@ mod tests {
     /// checked only that nothing panicked.
     #[test]
     fn test_a_ghidra_that_is_nowhere_says_what_to_set_and_where_it_looked() {
-        let spec = LifterType::Ghidra.home_spec().unwrap();
+        let spec = LifterType::Ghidra.home_spec();
         let err = spec.find_in(|_| None, |_| false).unwrap_err().to_string();
         assert!(err.contains("--home"), "does not offer --home: {err}");
         assert!(
@@ -368,7 +358,7 @@ mod tests {
     /// install it in one of nowhere.
     #[test]
     fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
-        let spec = LifterType::IDAPro.home_spec().unwrap();
+        let spec = LifterType::IDAPro.home_spec();
         let err = spec
             .find_in(|_| None, |_| panic!("there is nothing to look at"))
             .unwrap_err()

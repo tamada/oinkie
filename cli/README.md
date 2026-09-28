@@ -39,7 +39,7 @@ Arguments:
 
 Options:
   -d, --dest <DIRECTORY>           Specify the directory for putting the resultant JSON files of the lifted programs (default: './pcodes' directory) [default: pcodes]
-  -l, --lifter-type <LIFTER_TYPE>  Specify the lifter type [default: ghidra] [possible values: ghidra, angr, ida-pro, binary-ninja]
+  -l, --lifter-type <LIFTER_TYPE>  Specify the lifter type [default: ghidra] [possible values: ghidra, ida-pro, binary-ninja]
   -H, --home <HOME>                Path to the lifter's installation directory. If not specified, the lifter's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
   -i, --intermediate <DIRECTORY>   Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.
       --script <SCRIPT>            Path to a custom lifting script, replacing the built-in one. The language is the lifter's own: Java for Ghidra. It must write {input file name}.json into its working directory.

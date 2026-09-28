@@ -304,11 +304,11 @@ _oinkie() {
                     return 0
                     ;;
                 --lifter-type)
-                    COMPREPLY=($(compgen -W "ghidra angr ida-pro binary-ninja" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "ghidra ida-pro binary-ninja" -- "${cur}"))
                     return 0
                     ;;
                 -l)
-                    COMPREPLY=($(compgen -W "ghidra angr ida-pro binary-ninja" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "ghidra ida-pro binary-ninja" -- "${cur}"))
                     return 0
                     ;;
                 --home)
