@@ -44,19 +44,19 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
         'oinkie;lift' {
             [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files of the lifted programs (default: ''./pcodes'' directory)')
             [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files of the lifted programs (default: ''./pcodes'' directory)')
-            [CompletionResult]::new('-l', '-l', [CompletionResultType]::ParameterName, 'Specify the lifter type')
-            [CompletionResult]::new('--lifter-type', '--lifter-type', [CompletionResultType]::ParameterName, 'Specify the lifter type')
-            [CompletionResult]::new('-H', '-H ', [CompletionResultType]::ParameterName, 'Path to the lifter''s installation directory. If not specified, the lifter''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.')
-            [CompletionResult]::new('--home', '--home', [CompletionResultType]::ParameterName, 'Path to the lifter''s installation directory. If not specified, the lifter''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.')
+            [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.')
+            [CompletionResult]::new('--ir', '--ir', [CompletionResultType]::ParameterName, 'Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.')
+            [CompletionResult]::new('-H', '-H ', [CompletionResultType]::ParameterName, 'Path to the installation directory of the tool behind --ir. If not specified, that tool''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.')
+            [CompletionResult]::new('--home', '--home', [CompletionResultType]::ParameterName, 'Path to the installation directory of the tool behind --ir. If not specified, that tool''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.')
             [CompletionResult]::new('-i', '-i', [CompletionResultType]::ParameterName, 'Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.')
             [CompletionResult]::new('--intermediate', '--intermediate', [CompletionResultType]::ParameterName, 'Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.')
-            [CompletionResult]::new('--script', '--script', [CompletionResultType]::ParameterName, 'Path to a custom lifting script, replacing the built-in one. The language is the lifter''s own: Java for Ghidra. It must write {input file name}.json into its working directory.')
+            [CompletionResult]::new('--script', '--script', [CompletionResultType]::ParameterName, 'Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory.')
             [CompletionResult]::new('-j', '-j', [CompletionResultType]::ParameterName, 'Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.')
             [CompletionResult]::new('--jobs', '--jobs', [CompletionResultType]::ParameterName, 'Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.')
             [CompletionResult]::new('-S', '-S ', [CompletionResultType]::ParameterName, 'Skip if the resultant JSON file already exists')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip if the resultant JSON file already exists')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
         'oinkie;extract' {

@@ -37,8 +37,8 @@ fn test_lift_command() {
         .arg("lift")
         .arg("-d")
         .arg(&dest)
-        .arg("-l")
-        .arg("ghidra")
+        .arg("-r")
+        .arg("ghidra-pcode")
         .arg("testdata/hello_world/bin/hello_clang")
         .assert();
 

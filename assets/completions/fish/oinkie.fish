@@ -41,15 +41,17 @@ complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "run" -d 'Extract birt
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s d -l dest -d 'Specify the directory for putting the resultant JSON files of the lifted programs (default: \'./pcodes\' directory)' -r -F
-complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s l -l lifter-type -d 'Specify the lifter type' -r -f -a "ghidra\t''
-ida-pro\t''
-binary-ninja\t''"
-complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s H -l home -d 'Path to the lifter\'s installation directory. If not specified, the lifter\'s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.' -r -F
+complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s r -l ir -d 'Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.' -r -f -a "ghidra-pcode\t'Ghidra\'s P-Code, as refined by the decompiler — what `HighFunction` yields, rather than raw lifted P-Code'
+ida-microcode\t'The Hex-Rays microcode, the representation IDA Pro\'s decompiler works in. There is only one of it, unlike Binary Ninja\'s three'
+binary-ninja-llil\t'Binary Ninja\'s Low Level IL: one expression per machine instruction, registers and flags still explicit'
+binary-ninja-mlil\t'Binary Ninja\'s Medium Level IL: stack and registers resolved into variables, calls carrying their parameters'
+binary-ninja-hlil\t'Binary Ninja\'s High Level IL: control flow recovered, the level its decompiler output is rendered from'"
+complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s H -l home -d 'Path to the installation directory of the tool behind --ir. If not specified, that tool\'s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s i -l intermediate -d 'Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.' -r -F
-complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -l script -d 'Path to a custom lifting script, replacing the built-in one. The language is the lifter\'s own: Java for Ghidra. It must write {input file name}.json into its working directory.' -r -F
+complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -l script -d 'Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory.' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s j -l jobs -d 'Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s S -l skip -d 'Skip if the resultant JSON file already exists'
-complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s h -l help -d 'Print help'
+complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c oinkie -n "__fish_oinkie_using_subcommand extract" -s d -l dest -d 'Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: \'./birthmarks\' directory)' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand extract" -s b -l birthmark-type -d 'Type of birthmark to extract. fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. For example, \'op-seq\' extracts the sequence of operations as a birthmark, while \'fc-freq\' extracts the frequency of function calls. k-grams are written with the k in the name: \'op-3gram-set\'. Any k parses, not only the ones \'oinkie info\' lists. The full birthmark types can be found by running \'oinkie info\'.' -r -f -a "fc-seq\t'the sequence of method calls in a program'
 fc-freq\t'the frequency of method calls in a program'

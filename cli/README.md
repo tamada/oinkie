@@ -39,10 +39,10 @@ Arguments:
 
 Options:
   -d, --dest <DIRECTORY>           Specify the directory for putting the resultant JSON files of the lifted programs (default: './pcodes' directory) [default: pcodes]
-  -l, --lifter-type <LIFTER_TYPE>  Specify the lifter type [default: ghidra] [possible values: ghidra, ida-pro, binary-ninja]
-  -H, --home <HOME>                Path to the lifter's installation directory. If not specified, the lifter's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
+  -r, --ir <IR>                    Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool. [default: ghidra-pcode] [possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]
+  -H, --home <HOME>                Path to the installation directory of the tool behind --ir. If not specified, that tool's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
   -i, --intermediate <DIRECTORY>   Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.
-      --script <SCRIPT>            Path to a custom lifting script, replacing the built-in one. The language is the lifter's own: Java for Ghidra. It must write {input file name}.json into its working directory.
+      --script <SCRIPT>            Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory.
   -j, --jobs <N>                   Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in. [default: 1]
   -S, --skip                       Skip if the resultant JSON file already exists
   -h, --help                       Print help

@@ -126,14 +126,20 @@ pub struct LiftOpts {
     )]
     dest: PathBuf,
 
-    #[clap(short = 'l', long, value_enum, default_value_t = LifterType::Ghidra, help = "Specify the lifter type")]
-    lifter_type: LifterType,
+    #[clap(
+        short = 'r',
+        long,
+        value_enum,
+        default_value_t = Ir::default(),
+        help = "Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool."
+    )]
+    ir: Ir,
 
     #[clap(
         short = 'H',
         long,
         value_name = "HOME",
-        help = "Path to the lifter's installation directory. If not specified, the lifter's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set."
+        help = "Path to the installation directory of the tool behind --ir. If not specified, that tool's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set."
     )]
     home: Option<PathBuf>,
 
@@ -148,7 +154,7 @@ pub struct LiftOpts {
     #[clap(
         long,
         value_name = "SCRIPT",
-        help = "Path to a custom lifting script, replacing the built-in one. The language is the lifter's own: Java for Ghidra. It must write {input file name}.json into its working directory."
+        help = "Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory."
     )]
     script: Option<PathBuf>,
 
@@ -193,8 +199,8 @@ impl LiftOpts {
         &self.dest
     }
 
-    pub fn lifter_type(&self) -> LifterType {
-        self.lifter_type
+    pub fn ir(&self) -> Ir {
+        self.ir
     }
 
     pub fn home(&self) -> Option<&Path> {
