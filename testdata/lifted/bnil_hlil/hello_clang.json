@@ -1,6 +1,6 @@
 {
-  "program": "hello_gcc",
-  "path": "testdata/hello_world/bin/hello_gcc",
+  "program": "hello_clang",
+  "path": "testdata/bin/hello_clang",
   "ir": "binary-ninja-hlil",
   "symbols": {
     "_printf": "_printf"

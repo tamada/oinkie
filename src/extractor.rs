@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn test_extract_function_calls_resolves_the_symbol() {
         let program: Program<crate::ghidra::Op> =
-            std::path::Path::new("testdata/hello_world/pcodes/hello_clang.json")
+            std::path::Path::new("testdata/lifted/pcodes/hello_clang.json")
                 .try_into()
                 .expect("failed to load the fixture");
         let function = program.iter().next().expect("fixture has no function");
@@ -308,8 +308,8 @@ mod tests {
     #[test]
     fn test_fc_birthmarks_are_not_empty() {
         for fixture in [
-            "testdata/hello_world/pcodes/hello_clang.json",
-            "testdata/hello_world/pcodes/hello_gcc.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
         ] {
             let program: Program<crate::ghidra::Op> = std::path::Path::new(fixture)
                 .try_into()

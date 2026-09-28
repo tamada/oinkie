@@ -39,7 +39,7 @@ fn test_lift_command() {
         .arg(&dest)
         .arg("-r")
         .arg("ghidra-pcode")
-        .arg("testdata/hello_world/bin/hello_clang")
+        .arg("testdata/bin/hello_clang")
         .assert();
 
     result.success();
@@ -78,7 +78,7 @@ fn test_the_lifter_home_is_read_from_the_environment() {
         .arg("lift")
         .arg("-d")
         .arg(&dest)
-        .arg("testdata/hello_world/bin/hello_clang")
+        .arg("testdata/bin/hello_clang")
         .assert()
         .failure()
         .stderr(predicate::str::contains(
@@ -128,8 +128,8 @@ fn test_extract_command() {
         .arg(&dest)
         .arg("-b")
         .arg("op-seq")
-        .arg("testdata/hello_world/pcodes/hello_clang.json")
-        .arg("testdata/hello_world/pcodes/hello_gcc.json")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_gcc.json")
         .assert()
         .success();
 
@@ -165,7 +165,7 @@ fn test_extract_names_a_kgram_the_way_the_library_does() {
         .arg(&dest)
         .arg("-b")
         .arg("op-3gram-set")
-        .arg("testdata/hello_world/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
         .assert()
         .success();
     assert_eq!(fs::read_dir(&dest).unwrap().count(), 1);
@@ -177,7 +177,7 @@ fn test_extract_names_a_kgram_the_way_the_library_does() {
         .arg(temp_dir.path().join("unused"))
         .arg("-b")
         .arg("op-tri-gram-set")
-        .arg("testdata/hello_world/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
         .assert()
         .failure()
         .stderr(predicate::str::contains("unknown birthmark type"));
@@ -204,8 +204,8 @@ fn test_a_kgram_frequency_birthmark_can_be_written_and_read_back() {
     let through_a_file = temp_dir.path().join("through-a-file");
     let in_memory = temp_dir.path().join("in-memory");
     let inputs = [
-        "testdata/hello_world/pcodes/hello_clang.json",
-        "testdata/hello_world/pcodes/hello_gcc.json",
+        "testdata/lifted/pcodes/hello_clang.json",
+        "testdata/lifted/pcodes/hello_gcc.json",
     ];
 
     Command::cargo_bin("oinkie")
@@ -278,8 +278,8 @@ fn test_compare_command() {
         .arg(&birthmarks_dir)
         .arg("-b")
         .arg("op-seq")
-        .arg("testdata/hello_world/pcodes/hello_clang.json")
-        .arg("testdata/hello_world/pcodes/hello_gcc.json")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_gcc.json")
         .assert()
         .success();
 
@@ -326,8 +326,8 @@ fn test_run_command() {
         .arg("all")
         .arg("-d")
         .arg(&similarities_dir)
-        .arg("testdata/hello_world/pcodes/hello_clang.json")
-        .arg("testdata/hello_world/pcodes/hello_gcc.json")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_gcc.json")
         .assert()
         .success();
 
@@ -355,8 +355,8 @@ fn test_reaggregate_command() {
         .arg(&birthmarks_dir)
         .arg("-b")
         .arg("op-seq")
-        .arg("testdata/hello_world/pcodes/hello_clang.json")
-        .arg("testdata/hello_world/pcodes/hello_gcc.json")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_gcc.json")
         .assert()
         .success();
 
@@ -424,7 +424,7 @@ fn test_lift_command_intermediate_dir_is_created_and_resolved_once() {
         .prefix("oinkie_test")
         .tempdir()
         .unwrap();
-    let input = fs::canonicalize("testdata/hello_world/bin/hello_clang").unwrap();
+    let input = fs::canonicalize("testdata/bin/hello_clang").unwrap();
     let dest = temp_dir.path().join("lifted");
 
     Command::cargo_bin("oinkie")
@@ -471,7 +471,7 @@ fn test_lift_escapes_a_quote_in_a_function_name() {
         .arg("lift")
         .arg("-d")
         .arg(&dest)
-        .arg("testdata/quoted_names/bin/udl")
+        .arg("testdata/bin/udl")
         .assert()
         .success();
 
@@ -516,16 +516,14 @@ fn test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift() {
         .arg("testdata/scripts/BrokenLifter.java")
         .arg("-d")
         .arg(&dest)
-        .arg("testdata/hello_world/bin/hello_clang")
+        .arg("testdata/bin/hello_clang")
         .assert()
         .failure()
         // The binary the user asked about, matched as the whole path and with
         // the colon that follows it. Matching "hello_clang" alone proved
         // nothing: the output is named hello_clang.json, so the assertion
         // passed on a message that did not mention the binary at all.
-        .stderr(predicate::str::contains(
-            "testdata/hello_world/bin/hello_clang:",
-        ))
+        .stderr(predicate::str::contains("testdata/bin/hello_clang:"))
         // the file that is wrong, which the cause names
         .stderr(predicate::str::contains("hello_clang.json"))
         // and that the lifter claimed success, which is what points at the script

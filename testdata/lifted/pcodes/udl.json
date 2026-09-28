@@ -1,6 +1,6 @@
 {
   "program": "udl",
-  "path": "testdata/quoted_names/bin/udl",
+  "path": "testdata/bin/udl",
   "ir": "ghidra-pcode",
   "symbols": {
     "0x100000498": "operator\"\"__km",

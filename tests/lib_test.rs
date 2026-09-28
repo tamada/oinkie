@@ -9,8 +9,8 @@ fn load_program(path: &str) -> Program<Op> {
 
 #[test]
 fn test_extractor_and_comparator() {
-    let p1 = load_program("testdata/hello_world/pcodes/hello_clang.json");
-    let p2 = load_program("testdata/hello_world/pcodes/hello_gcc.json");
+    let p1 = load_program("testdata/lifted/pcodes/hello_clang.json");
+    let p2 = load_program("testdata/lifted/pcodes/hello_gcc.json");
 
     let combinations = vec![
         (BirthmarkType::OpSeq, Algorithm::Jaccard),
@@ -75,8 +75,8 @@ fn test_extractor_and_comparator() {
 
 #[test]
 fn test_pairing_strategies() {
-    let p1 = load_program("testdata/hello_world/pcodes/hello_clang.json");
-    let p2 = load_program("testdata/hello_world/pcodes/hello_gcc.json");
+    let p1 = load_program("testdata/lifted/pcodes/hello_clang.json");
+    let p2 = load_program("testdata/lifted/pcodes/hello_gcc.json");
     let programs = vec![p1, p2];
 
     assert_eq!(PairingStrategy::AllAndSelf.compare_count(&programs), 3);
@@ -103,7 +103,7 @@ fn test_empty_comparisons() {
     // Tests what happens when programs have 0 elements
     // This requires creating an empty program or mock if possible
     // We can also test mismatched types
-    let p1 = load_program("testdata/hello_world/pcodes/hello_clang.json");
+    let p1 = load_program("testdata/lifted/pcodes/hello_clang.json");
     let ext1 = Extractor::new(BirthmarkType::OpSeq);
     let ext2 = Extractor::new(BirthmarkType::FcSeq);
 

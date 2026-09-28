@@ -1022,8 +1022,8 @@ mod tests {
     #[test]
     fn test_compare_any_agrees_with_the_typed_comparison() {
         let paths = [
-            "testdata/hello_world/pcodes/hello_clang.json",
-            "testdata/hello_world/pcodes/hello_gcc.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
         ];
         let typed: Vec<Program<crate::ghidra::Op>> = paths
             .iter()

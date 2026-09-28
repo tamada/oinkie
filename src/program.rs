@@ -354,7 +354,7 @@ mod tests {
     /// The point of the dispatch: the file decides, not the caller.
     #[test]
     fn test_any_program_reads_ghidra_pcode() {
-        let program = AnyProgram::load(Path::new("testdata/hello_world/pcodes/hello_clang.json"))
+        let program = AnyProgram::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))
             .expect("the fixture must load");
         assert_eq!(program.ir(), Ir::GhidraPcode);
         assert_eq!(program.name(), "hello_clang");
@@ -452,7 +452,7 @@ mod tests {
     /// parsing the same text directly.
     #[test]
     fn test_reading_the_file_whole_parses_what_the_text_says() {
-        let fixture = Path::new("testdata/hello_world/pcodes/hello_clang.json");
+        let fixture = Path::new("testdata/lifted/pcodes/hello_clang.json");
         let loaded: Program<crate::ghidra::Op> = fixture.try_into().unwrap();
         let parsed: Program<crate::ghidra::Op> =
             serde_json::from_str(&std::fs::read_to_string(fixture).unwrap()).unwrap();
@@ -467,8 +467,8 @@ mod tests {
     #[test]
     fn test_fixtures_record_their_ir() {
         for fixture in [
-            "testdata/hello_world/pcodes/hello_clang.json",
-            "testdata/hello_world/pcodes/hello_gcc.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
         ] {
             let program: Program<crate::ghidra::Op> = Path::new(fixture)
                 .try_into()

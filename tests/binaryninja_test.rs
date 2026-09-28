@@ -1,12 +1,12 @@
 //! What the committed Binary Ninja fixtures say about the reader.
 //!
 //! Binary Ninja is licensed and cannot be installed on a CI runner, so
-//! nothing here lifts. The fixtures under `testdata/hello_world/bnil` were
+//! nothing here lifts. The fixtures under `testdata/lifted/bnil_*` were
 //! produced by `oinkie lift` on a machine that has it, and reading them back
 //! is what keeps the reader honest where the lifter cannot run.
 //!
 //! The fixtures carry a repository-relative `path`, edited after lifting the
-//! way `pcodes/` already is: a fresh lift records the absolute path it
+//! way `lifted/pcodes/` already is: a fresh lift records the absolute path it
 //! canonicalised, which is particular to the machine that ran it.
 
 use oinkie::prelude::*;
@@ -19,8 +19,8 @@ const LEVELS: [(&str, Ir); 3] = [
 ];
 
 fn fixture(level: &str, name: &str) -> PathBuf {
-    Path::new("testdata/hello_world/bnil")
-        .join(level)
+    Path::new("testdata/lifted")
+        .join(format!("bnil_{level}"))
         .join(name)
 }
 

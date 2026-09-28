@@ -1,9 +1,9 @@
 {
-  "program": "hello_clang",
-  "path": "testdata/hello_world/bin/hello_clang",
+  "program": "hello_gcc",
+  "path": "testdata/bin/hello_gcc",
   "ir": "binary-ninja-mlil",
   "symbols": {
-    "0x100000480": "_printf"
+    "0x100000580": "_printf"
   },
   "functions": [
     {
@@ -13,7 +13,7 @@
           "op": "MLIL_CALL",
           "inputs": [
             "[]",
-            "0x100000480",
+            "0x100000580",
             "[<MediumLevelILConstPtr: \"Hello World\">]"
           ]
         },

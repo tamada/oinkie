@@ -70,7 +70,7 @@ in CI lifts with it — see [the note on all the lifters](../README.md) for why
 that is accepted rather than worked around. Two things stand in for it here:
 
 - `python3 -m py_compile` on this script, on every push;
-- fixtures under `testdata/hello_world/bnil/`, lifted on a machine that has
+- fixtures under `testdata/lifted/bnil_*/`, lifted on a machine that has
   Binary Ninja and committed, which `tests/binaryninja_test.rs` reads back.
   They carry a repository-relative `path`, edited after lifting the way
   `pcodes/` already is, because a fresh lift records the absolute path it

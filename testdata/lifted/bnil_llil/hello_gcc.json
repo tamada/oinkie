@@ -1,9 +1,9 @@
 {
-  "program": "hello_clang",
-  "path": "testdata/hello_world/bin/hello_clang",
+  "program": "hello_gcc",
+  "path": "testdata/bin/hello_gcc",
   "ir": "binary-ninja-llil",
   "symbols": {
-    "0x100000480": "_printf"
+    "0x100000580": "_printf"
   },
   "functions": [
     {
@@ -48,13 +48,13 @@
           "op": "LLIL_SET_REG",
           "inputs": [
             "x0",
-            "x0 + 0x48c"
+            "x0 + 0x590"
           ]
         },
         {
           "op": "LLIL_CALL",
           "inputs": [
-            "0x100000480"
+            "0x100000580"
           ]
         },
         {
