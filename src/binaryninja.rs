@@ -31,6 +31,24 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) mod lifter;
 
+/// The word the lifting script takes for a representation, or `None` for one
+/// that is not Binary Ninja's.
+///
+/// Exhaustive over [`crate::lift::Ir`] on purpose. The lifter used to hold
+/// this as a match with an `unreachable!` arm for the representations that
+/// cannot reach it, which is a branch nothing can exercise and nothing can
+/// check; adding a Binary Ninja level and forgetting it here is now a `None`
+/// that turns into a refusal, and adding one anywhere is a build failure.
+pub(crate) fn level(ir: crate::lift::Ir) -> Option<&'static str> {
+    use crate::lift::Ir;
+    match ir {
+        Ir::BinaryNinjaLlil => Some("llil"),
+        Ir::BinaryNinjaMlil => Some("mlil"),
+        Ir::BinaryNinjaHlil => Some("hlil"),
+        Ir::GhidraPcode | Ir::IdaMicrocode => None,
+    }
+}
+
 /// One of Binary Ninja's intermediate languages, as far as reading its
 /// operations requires.
 pub trait Level {
@@ -155,6 +173,35 @@ mod tests {
 
         let hlil: Op<Hlil> = op("HLIL_CALL", &["_printf", "[]"]);
         assert_eq!(hlil.symbol_key().as_deref(), Some("_printf"));
+    }
+
+    /// The operands and the destination are handed back as the script wrote
+    /// them. `ret` is `None` for most operations because Binary Ninja reports
+    /// no variable written, and the op-* families read `inputs` rather than
+    /// the mnemonic alone.
+    #[test]
+    fn test_the_operands_and_the_destination_are_what_was_read() {
+        let mut set: Op<Llil> = op("LLIL_SET_REG", &["x0", "0x100000000"]);
+        assert_eq!(set.inputs(), ["x0".to_string(), "0x100000000".to_string()]);
+        assert_eq!(set.ret(), None);
+
+        set.out = Some("x0".to_string());
+        assert_eq!(set.ret(), Some("x0"));
+
+        let empty: Op<Hlil> = op("HLIL_NOP", &[]);
+        assert!(empty.inputs().is_empty());
+    }
+
+    /// Only Binary Ninja's representations name a level, and each names its
+    /// own. The `None` half is what lets the lifter refuse rather than panic.
+    #[test]
+    fn test_only_binary_ninjas_representations_name_a_level() {
+        use crate::lift::Ir;
+        assert_eq!(level(Ir::BinaryNinjaLlil), Some("llil"));
+        assert_eq!(level(Ir::BinaryNinjaMlil), Some("mlil"));
+        assert_eq!(level(Ir::BinaryNinjaHlil), Some("hlil"));
+        assert_eq!(level(Ir::GhidraPcode), None);
+        assert_eq!(level(Ir::IdaMicrocode), None);
     }
 
     /// An operation that is not a call names no symbol, however its operands

@@ -315,11 +315,19 @@ impl LifterBuilder {
             }
             Ir::IdaMicrocode => Err(not_implemented(self.ir)),
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => {
+                // `level` is exhaustive over `Ir`, so a `None` here would mean
+                // a representation reached this arm without being given a
+                // level -- an inconsistency between two matches rather than
+                // anything a caller did. Refusing says so; panicking would
+                // not, and would be a branch nothing can exercise.
+                let Some(level) = crate::binaryninja::level(self.ir) else {
+                    return Err(not_implemented(self.ir));
+                };
                 let home = self.ir.find_home(self.home.as_deref())?;
                 Ok(Box::new(Verifying(
                     crate::binaryninja::lifter::BinaryNinjaLifter::new(
                         home,
-                        self.ir,
+                        level,
                         self.script,
                         self.intermediate_dir,
                     ),
