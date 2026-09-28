@@ -66,7 +66,8 @@ breaking either produces something that looks like it worked:
 ## 🧪 Testing
 
 Binary Ninja is licensed and cannot be installed on a CI runner, so nothing
-in CI lifts with it. Two things stand in for that:
+in CI lifts with it — see [the note on all the lifters](../README.md) for why
+that is accepted rather than worked around. Two things stand in for it here:
 
 - `python3 -m py_compile` on this script, on every push;
 - fixtures under `testdata/hello_world/bnil/`, lifted on a machine that has
