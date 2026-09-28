@@ -197,8 +197,9 @@ Here is an example of the generated JSON file:
 
 ```json
 {
-    "program": "factorizer",
-    "path": "/home/tamada/products/oinkie/testdata/factorizer/factorizer.json",
+    "program": "example",
+    "path": "bin/example",
+    "ir": "ghidra-pcode",
     "symbols": {
         "0x1000006b0": "_atoll",
         "0x1000006bc": "_printf",
