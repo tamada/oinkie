@@ -50,6 +50,20 @@ pub enum Error {
         ir = .1
     )]
     NoCallOperations(PathBuf, crate::lift::Ir),
+    /// An `fc-*` birthmark was asked of a program whose calls name nothing the
+    /// symbol table holds.
+    ///
+    /// Separate from [`Self::NoCallOperations`] because it sends the reader
+    /// somewhere else. That one says no operation was recognised as a call;
+    /// this says calls were found and none of them resolved, which is the
+    /// lifter's symbol table or its `symbol_key`, not its `is_call`.
+    #[error(
+        "{path}: calls were found ({calls} in total), but none of them names anything in the symbol table, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either every call is indirect, or oinkie's reader for {ir} keys the symbol table differently from the way that representation renders a callee",
+        path = .0.display(),
+        ir = .1,
+        calls = .2
+    )]
+    UnresolvedCalls(PathBuf, crate::lift::Ir, usize),
     /// A lifter reported success but wrote a file that cannot be read back.
     ///
     /// Named for the binary as well as for the JSON, because the binary is
@@ -221,6 +235,7 @@ mod tests {
             Error::IncompatibleAnalysis(_, _) => "IncompatibleAnalysis",
             Error::IrMismatch(_, _) => "IrMismatch",
             Error::NoCallOperations(_, _) => "NoCallOperations",
+            Error::UnresolvedCalls(_, _, _) => "UnresolvedCalls",
             Error::UnreadableOutput(_, _) => "UnreadableOutput",
             Error::UnsupportedIr(_, _) => "UnsupportedIr",
             Error::InvalidPcode(_) => "InvalidPcode",
@@ -304,6 +319,10 @@ mod tests {
             (
                 Error::IrMismatch(Ir::GhidraPcode, Ir::IdaMicrocode),
                 "cannot compare ghidra-pcode against ida-microcode: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond".to_string(),
+            ),
+            (
+                Error::UnresolvedCalls(PathBuf::from("bin/sample"), Ir::GhidraPcode, 3),
+                "bin/sample: calls were found (3 in total), but none of them names anything in the symbol table, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either every call is indirect, or oinkie's reader for ghidra-pcode keys the symbol table differently from the way that representation renders a callee".to_string(),
             ),
             (
                 Error::NoCallOperations(PathBuf::from("bin/sample"), Ir::GhidraPcode),
