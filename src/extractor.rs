@@ -105,16 +105,14 @@ impl Extractor {
 
 fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Result<Birthmark> {
     let now = std::time::Instant::now();
-    // An fc-* birthmark of a program that calls nothing is empty, and two
-    // empty birthmarks score 1.0 against each other. Refusing here turns the
-    // most likely cause -- a lifter whose `is_call` recognises none of its own
-    // opcodes -- from a false positive into a message.
+    // An fc-* birthmark of a program that calls nothing is empty, and two empty
+    // birthmarks score 1.0 against each other, so unrelated programs come back
+    // identical. Both ways of reaching that are refused here.
     if matches!(
         bt,
         BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq
-    ) && !p.iter().any(|f| f.iter().any(|op| op.is_call()))
-    {
-        return Err(Error::NoCallOperations(p.path().to_path_buf(), p.ir()));
+    ) {
+        refuse_an_empty_family(p)?;
     }
     let elements = p
         .iter()
@@ -192,6 +190,49 @@ where
     })
 }
 
+/// Refuses a program from which no `fc-*` birthmark could hold anything.
+///
+/// `extract_function_calls` is three filters -- is it a call, does it name a
+/// key, does the table hold that key -- and a program can empty the result at
+/// either of the last two. Only the first was guarded, which is how two
+/// lifters shipped with an `fc-*` family that was silently empty (#115): the
+/// microcode renders a global as `$name` and the table was keyed by the
+/// resolved name, and Binary Ninja's HLIL resolves the callee before oinkie
+/// sees it, so a table keyed by address matched nothing.
+///
+/// The two refusals are separate because they send the reader somewhere else.
+/// Nothing being a call is `is_call`; nothing resolving is the symbol table or
+/// `symbol_key`.
+///
+/// Refusing rather than returning an empty birthmark is the same judgement the
+/// first of these already made: an empty one carries no evidence either way
+/// and yet scores 1.0 against another empty one, so a message is strictly more
+/// informative than the number.
+fn refuse_an_empty_family<T: crate::Op>(p: &Program<T>) -> Result<()> {
+    let calls = p
+        .iter()
+        .flat_map(|f| f.iter())
+        .filter(|op| op.is_call())
+        .count();
+    if calls == 0 {
+        return Err(Error::NoCallOperations(p.path().to_path_buf(), p.ir()));
+    }
+    let resolved = p.iter().any(|f| {
+        f.iter()
+            .filter(|op| op.is_call())
+            .filter_map(|op| op.symbol_key())
+            .any(|key| p.symbol(&key).is_some())
+    });
+    if !resolved {
+        return Err(Error::UnresolvedCalls(
+            p.path().to_path_buf(),
+            p.ir(),
+            calls,
+        ));
+    }
+    Ok(())
+}
+
 fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<String> {
     f.iter()
         .filter(|op| op.is_call())
@@ -216,6 +257,92 @@ fn extract_function_calls_freq<T: crate::Op>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A program whose calls resolve to nothing, written by hand rather than
+    /// lifted: the reader does not care where the JSON came from, and no real
+    /// binary is needed to describe a call through a register.
+    fn a_program_whose_calls_resolve_to_nothing() -> crate::program::AnyProgram {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("indirect.json");
+        // CALLIND is a call, and `symbol_key` yields nothing for one: its
+        // target lives in a register, resolved at run time.
+        std::fs::write(
+            &path,
+            r#"{"program":"indirect","path":"bin/indirect","ir":"ghidra-pcode",
+                "symbols":{"0x1000": "_printf"},
+                "functions":[{"name":"main","ops":[
+                  {"op":"CALLIND","inputs":["(register, 0x20, 8)"]},
+                  {"op":"CALLIND","inputs":["(register, 0x28, 8)"]}]}]}"#,
+        )
+        .unwrap();
+        crate::program::AnyProgram::load(&path).unwrap()
+    }
+
+    /// The failure this refuses is silent: every call passes `is_call`, so the
+    /// older guard let it through, and each fc-* birthmark came back empty --
+    /// two of which score as a perfect match, reporting unrelated programs as
+    /// identical.
+    #[test]
+    fn test_calls_that_resolve_to_nothing_are_refused() {
+        let p = a_program_whose_calls_resolve_to_nothing();
+        for bt in ["fc-set", "fc-seq", "fc-freq"] {
+            let e = match Extractor::new(BirthmarkType::try_from(bt).unwrap()).extract_any(&p) {
+                Err(e) => e,
+                Ok(b) => panic!(
+                    "{bt}: an empty birthmark was returned: {} elements",
+                    b.len()
+                ),
+            };
+            let rendered = e.to_string();
+            assert!(
+                matches!(e, Error::UnresolvedCalls(_, _, 2)),
+                "{bt}: wrong refusal: {rendered}"
+            );
+            assert!(
+                rendered.contains("symbol table"),
+                "{bt}: does not say where to look: {rendered}"
+            );
+        }
+    }
+
+    /// The two refusals are not interchangeable. This one has calls; the other
+    /// has none, and a reader sent to the symbol table when `is_call` is what
+    /// matched nothing would look in the wrong place.
+    #[test]
+    fn test_the_two_empty_family_refusals_are_distinct() {
+        let unresolved = a_program_whose_calls_resolve_to_nothing();
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("callless.json");
+        std::fs::write(
+            &path,
+            r#"{"program":"callless","path":"bin/callless","ir":"ghidra-pcode",
+                "symbols":{},
+                "functions":[{"name":"main","ops":[
+                  {"op":"COPY","out":"(register, 0x0, 8)","inputs":["(const, 0x1, 8)"]}]}]}"#,
+        )
+        .unwrap();
+        let callless = crate::program::AnyProgram::load(&path).unwrap();
+
+        let bt = BirthmarkType::try_from("fc-set").unwrap();
+        let a = Extractor::new(bt.clone())
+            .extract_any(&unresolved)
+            .unwrap_err();
+        let b = Extractor::new(bt).extract_any(&callless).unwrap_err();
+        assert!(matches!(a, Error::UnresolvedCalls(_, _, _)), "{a}");
+        assert!(matches!(b, Error::NoCallOperations(_, _)), "{b}");
+    }
+
+    /// The op-* families say nothing about calls, so neither refusal applies
+    /// to them. A program of unresolvable calls still has operations.
+    #[test]
+    fn test_the_op_families_are_not_refused_for_unresolvable_calls() {
+        let p = a_program_whose_calls_resolve_to_nothing();
+        let b = Extractor::new(BirthmarkType::try_from("op-set").unwrap())
+            .extract_any(&p)
+            .expect("op-set does not depend on symbols");
+        assert_eq!(b.len(), 1);
+    }
+
     use std::io::Write;
     use tempfile::tempdir;
 

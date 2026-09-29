@@ -28,7 +28,7 @@ fn is_the_callers_fault(e: &Error) -> bool {
 
         // The program really has no calls, so no fc-* birthmark of it exists.
         // The caller can ask for a different birthmark, so it is theirs.
-        Error::NoCallOperations(_, _) => true,
+        Error::NoCallOperations(_, _) | Error::UnresolvedCalls(_, _, _) => true,
 
         // Something went wrong inside, or in a file oinkie itself produced.
         Error::Csv(_)
