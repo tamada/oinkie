@@ -1,6 +1,6 @@
 [package]
 name = "oinkie"
-version = "0.5.0"
+version = "0.6.0"
 description = "Detects software theft by comparing birthmarks extracted from binaries"
 edition = "2024"
 # crates.io refuses an upload without a licence. The file has been here since
