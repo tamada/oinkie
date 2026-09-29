@@ -64,7 +64,15 @@ fn get_hash(path: &Path) -> Result<String> {
         hasher.update(&tail);
     }
     let hash = hasher.finalize();
-    Ok(format!("{:x}", hash)[..HASH_PREFIX_LEN].to_string())
+    // Written out rather than `format!("{:x}")`: sha2 0.11 returns an
+    // `Output` that does not implement `LowerHex`. Only the prefix is kept, so
+    // only that many bytes are rendered.
+    Ok(hash
+        .iter()
+        .take(HASH_PREFIX_LEN.div_ceil(2))
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()[..HASH_PREFIX_LEN]
+        .to_string())
 }
 
 pub struct Extractor {
