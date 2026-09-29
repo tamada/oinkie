@@ -173,9 +173,10 @@ jobs:
   # one step here that cannot be undone: a version can be yanked but never
   # re-uploaded. Anything that was going to fail should have failed already.
   #
-  # Skipped entirely until CARGO_REGISTRY_TOKEN exists, so that adding this
-  # workflow does not publish anything by itself. The first upload is a
-  # decision, not a side effect of merging.
+  # It used to skip when CARGO_REGISTRY_TOKEN was unset, so that adding the job
+  # published nothing by itself. There is no such secret now and no such skip:
+  # a release that cannot authenticate fails, because the alternative is a
+  # tagged release with no crate and nothing saying so.
   crates-io:
     runs-on: ubuntu-latest
     # release-notes as well as the artefacts. It runs in parallel with them, so
