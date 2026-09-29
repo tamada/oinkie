@@ -7,6 +7,11 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      # One runner failing should not cancel the others. Three platforms are
+      # three answers, and hiding two of them because the first came back first
+      # is how a Windows job was cancelled twice while the question being asked
+      # was whether Windows works.
+      fail-fast: false
       matrix:
         os:
           - ubuntu-latest
