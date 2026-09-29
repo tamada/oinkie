@@ -28,9 +28,44 @@ import sys
 from pathlib import Path, PurePosixPath
 
 # [text](target), with the target stopping at whitespace or a closing paren.
-LINK = re.compile(r"\[[^\]]*\]\(\s*(<[^>]*>|[^)\s]+)")
+INLINE = re.compile(r"\[[^\]]*\]\(\s*(<[^>]*>|[^)\s]+)")
+
+# [label]: target, the definition half of a reference-style link. Without this
+# a link written `[text][label]` is never checked, which would make the whole
+# check optional -- anyone could bypass it by choosing the other syntax.
+DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)", re.MULTILINE)
+
+# A fence opens and closes with three or more backticks or tildes.
+FENCE = re.compile(r"^\s*(```+|~~~+)")
+
+# A run of backticks and everything up to the matching run.
+SPAN = re.compile(r"(`+)(?:(?!\1).)*?\1", re.DOTALL)
 
 CONTENT = Path("docs/content")
+
+
+def without_code(text):
+    """The text with code regions blanked, keeping every other offset intact.
+
+    Link-shaped text inside a fenced example or a code span is not a link, and
+    treating one as a link fails a push over documentation that is correct.
+    This repository's READMEs are mostly examples, so it is a question of when
+    rather than whether.
+
+    Characters are replaced with spaces rather than removed so that offsets --
+    and so the reported line numbers -- still point at the real file.
+    """
+    lines = text.split("\n")
+    inside = False
+    kept = []
+    for line in lines:
+        if FENCE.match(line):
+            inside = not inside
+            kept.append(" " * len(line))
+            continue
+        kept.append(" " * len(line) if inside else line)
+    blanked = "\n".join(kept)
+    return SPAN.sub(lambda m: " " * len(m.group(0)), blanked)
 
 
 def tracked_markdown():
@@ -41,7 +76,10 @@ def tracked_markdown():
 
 
 def targets(text):
-    for match in LINK.finditer(text):
+    """Every internal destination in the text, inline and reference alike."""
+    scannable = without_code(text)
+    matches = list(INLINE.finditer(scannable)) + list(DEFINITION.finditer(scannable))
+    for match in sorted(matches, key=lambda m: m.start()):
         href = match.group(1).strip("<>")
         # Anchors and queries name a place within a page, not another page.
         href = href.split("#", 1)[0].split("?", 1)[0]

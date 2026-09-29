@@ -38,10 +38,39 @@ jobs:
             './**/*.md'
           fail: false
 
-      - name: Open an issue for what rotted
+      # Without this the job opens a new issue every Monday for as long as a
+      # link stays broken, so a site that goes away for a month leaves four
+      # issues saying the same thing. Finding the open one first turns the
+      # weekly run into an update.
+      - name: Find the open link-rot issue, if there is one
+        id: existing
+        if: steps.lychee.outputs.exit_code != 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Matched exactly rather than by label, so that this needs no repository
+          # metadata to exist before the first run. It has to stay the same as the
+          # title below.
+          TITLE: External links have rotted
+        run: |
+          number=$(gh issue list \
+            --state open \
+            --search "$TITLE in:title" \
+            --limit 1 \
+            --json number,title \
+            --jq "[.[] | select(.title == \"$TITLE\")][0].number // empty")
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          if [ -n "$number" ]; then
+            echo "updating #$number"
+          else
+            echo "none open; a new one will be created"
+          fi
+
+      - name: Say what rotted
         if: steps.lychee.outputs.exit_code != 0
         uses: peter-evans/create-issue-from-file@v5
         with:
           title: External links have rotted
           content-filepath: ./lychee/out.md
           labels: documentation
+          # Empty when none is open, which is what makes this create one.
+          issue-number: ${{ steps.existing.outputs.number }}
