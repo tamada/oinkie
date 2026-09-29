@@ -58,39 +58,45 @@ fn test_every_compiled_in_file_is_listed_here() {
     );
 }
 
-/// Nothing in `Cargo.toml`'s `exclude` covers a file that has to ship.
+/// Nothing that is compiled in is left out of the `.crate`.
 ///
-/// Checked against the manifest rather than by packaging, so it runs without
-/// `cargo package` and fails with the offending rule named.
+/// Asked of `cargo package --list` rather than of the `exclude` list, because
+/// `exclude` takes gitignore globs and this was first written as a prefix
+/// check. That check passed while `"/assets/lifters/**/*.py"` dropped both
+/// Python lifting scripts -- a rule no `starts_with` can see, and exactly the
+/// kind someone reaches for when trimming a package.
+///
+/// Reimplementing cargo's matching would be a second implementation to keep in
+/// step with the first. Asking cargo costs about a tenth of a second and cannot
+/// disagree with it.
 #[test]
-fn test_exclude_does_not_drop_a_compiled_in_file() {
-    let manifest = std::fs::read_to_string("Cargo.toml").unwrap();
-    let block = manifest
-        .split_once("exclude = [")
-        .expect("Cargo.toml has no exclude list")
-        .1
-        .split_once(']')
+fn test_the_package_carries_every_compiled_in_file() {
+    let output = std::process::Command::new(env!("CARGO"))
+        .args(["package", "--list", "--allow-dirty"])
+        .output()
+        .expect("cargo package --list did not run");
+    assert!(
+        output.status.success(),
+        "cargo package --list failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let listed: Vec<&str> = std::str::from_utf8(&output.stdout)
         .unwrap()
-        .0;
-    let rules: Vec<&str> = block
         .lines()
-        .filter_map(|l| l.trim().trim_end_matches(',').strip_prefix('"'))
-        .filter_map(|l| l.strip_suffix('"'))
+        .map(str::trim)
         .collect();
-    assert!(!rules.is_empty(), "no exclude rules were parsed");
 
     for file in COMPILED_IN {
         assert!(
             Path::new(file).exists(),
             "{file} is compiled in but is not there"
         );
-        for rule in &rules {
-            let prefix = rule.trim_start_matches('/');
-            assert!(
-                !file.starts_with(prefix),
-                "exclude rule {rule:?} drops {file}, which is compiled in"
-            );
-        }
+        assert!(
+            listed.contains(&file),
+            "{file} is compiled in but `exclude` keeps it out of the package, so the \
+             published crate would not build. Listed: {} files",
+            listed.len()
+        );
     }
 }
 

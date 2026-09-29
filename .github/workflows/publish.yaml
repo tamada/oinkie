@@ -178,7 +178,10 @@ jobs:
   # decision, not a side effect of merging.
   crates-io:
     runs-on: ubuntu-latest
-    needs: [publish, container]
+    # release-notes as well as the artefacts. It runs in parallel with them, so
+    # without it a broken release note could still be failing while this
+    # uploaded -- which is the opposite of what putting this job last is for.
+    needs: [publish, container, release-notes]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
