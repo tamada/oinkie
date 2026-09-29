@@ -23,14 +23,21 @@ container-local:
         -f Containerfile \
         .
     docker build \
-        --target full-image \
+        --target ghidra-image \
         --build-arg GIT_REVISION={{git_revision}} \
         --build-arg BUILD_DATE={{build_date}} \
         --build-arg VERSION={{ app_version }} \
-        -t {{container_image}}/oinkie:full \
         -t {{container_image}}/oinkie:ghidra \
-        -t {{container_image}}/oinkie:{{ app_version }}-full \
         -t {{container_image}}/oinkie:{{ app_version }}-ghidra \
+        -f Containerfile \
+        .
+    docker build \
+        --target mcp-image \
+        --build-arg GIT_REVISION={{git_revision}} \
+        --build-arg BUILD_DATE={{build_date}} \
+        --build-arg VERSION={{ app_version }} \
+        -t {{container_image}}/oinkie:mcp \
+        -t {{container_image}}/oinkie:{{ app_version }}-mcp \
         -f Containerfile \
         .
 
@@ -49,14 +56,25 @@ container:
         .
 
     docker buildx build --push \
-        --target full-image \
+        --target ghidra-image \
         --platform linux/amd64,linux/arm64 \
         --build-arg GIT_REVISION={{git_revision}} \
         --build-arg BUILD_DATE={{build_date}} \
         --build-arg VERSION={{ app_version }} \
-        -t {{container_image}}/oinkie:full \
         -t {{container_image}}/oinkie:ghidra \
-        -t {{container_image}}/oinkie:{{ app_version }}-full \
         -t {{container_image}}/oinkie:{{ app_version }}-ghidra \
+        -f Containerfile \
+        .
+
+    # Only the default command differs from light-image, so the layers are
+    # already built and pushed by the time this runs.
+    docker buildx build --push \
+        --target mcp-image \
+        --platform linux/amd64,linux/arm64 \
+        --build-arg GIT_REVISION={{git_revision}} \
+        --build-arg BUILD_DATE={{build_date}} \
+        --build-arg VERSION={{ app_version }} \
+        -t {{container_image}}/oinkie:mcp \
+        -t {{container_image}}/oinkie:{{ app_version }}-mcp \
         -f Containerfile \
         .

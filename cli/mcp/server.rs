@@ -426,7 +426,7 @@ impl ServerHandler for Oinkie {
                  `oinkie lift` writes. Lifting is deliberately not exposed here: it runs a \
                  whole decompiler process per binary, for as long as that binary takes, and \
                  a replacement lifting script is arbitrary code. Run `oinkie lift` yourself \
-                 first -- on a host with Ghidra, or in the `full` image.\n\n\
+                 first -- on a host with Ghidra, or in the `ghidra` image.\n\n\
                  Call oinkie_info before naming a birthmark type, an algorithm or an \
                  analysis. The names are precise and the lists are generated from the parser."
                 .to_string(),

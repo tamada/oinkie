@@ -37,13 +37,18 @@ jobs:
       # a missing output because analyzeHeadless exits 0 either way. The jars
       # and the JDK are already here for the steps above, so checking it costs
       # about two seconds.
-      # One image, one architecture, and that covers both images.
+      # Two of the three runtime stages, on one architecture.
       #
-      # The two Containerfiles copy exactly the same paths and share their
-      # whole builder stage, so building either exercises the build context of
-      # both. What the full image adds beyond that is a 400 MB Ghidra download,
-      # whose URL and checksum change only when someone edits them; the release
-      # builds it, and that is soon enough.
+      # All three share one builder stage, so building any of them exercises
+      # the build context -- the COPY paths, the `include_str!` reaches, the
+      # cargo build -- for all of them. What `ghidra-image` adds beyond that is
+      # a 400 MB download whose URL and checksum change only when someone edits
+      # them; the release builds it, and that is soon enough.
+      #
+      # `mcp-image` is built here even though it adds no layer to `light-image`,
+      # because what it does add is a stage name and a default command, and
+      # neither is exercised by building anything else. A typo in either would
+      # otherwise surface when a client started the image.
       #
       # Building rather than checking that the COPY sources exist: a path check
       # catches a moved directory and nothing else -- not a COPY naming the
@@ -59,6 +64,18 @@ jobs:
       - name: Verify the image serves MCP
         if: matrix.os == 'ubuntu-latest'
         run: ./.github/scripts/verify_mcp.sh --image oinkie:ci
+
+      - name: Build the mcp container image
+        if: matrix.os == 'ubuntu-latest'
+        run: docker build --target mcp-image -f Containerfile -t oinkie:ci-mcp .
+
+      # Without --no-args this runs `oinkie mcp --root .`, which the image's own
+      # default command already says. Passing it is what tells us the default is
+      # right: it is the whole of what this stage adds, and the only place it is
+      # read is a client's startup.
+      - name: Verify the mcp image needs no arguments
+        if: matrix.os == 'ubuntu-latest'
+        run: ./.github/scripts/verify_mcp.sh --image oinkie:ci-mcp --no-args
 
       # No network and no build: it reads the Markdown and looks at the
       # filesystem, so it costs seconds rather than adding to the six minutes

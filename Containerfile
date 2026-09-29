@@ -1,10 +1,23 @@
-# One build, two images: `full-image`, which carries Ghidra, and `light-image`,
-# which does not. They share the builder stage below, and that sharing is the
-# point of the file: when this was two files with identical builder halves, a
-# directory that moved had to be fixed in both, and was fixed in neither (#91).
+# One build, three images.
 #
-# `docker build` with no --target builds the *last* stage, which is
-# `light-image`. Anything that wants the other must say so.
+# - `ghidra-image` carries Ghidra, so it can lift.
+# - `light-image` does not, so it is for programs already lifted.
+# - `mcp-image` is `light-image` with a different default command. The binary is
+#   identical -- `--features mcp` is passed once, below, for all three -- so the
+#   only thing this stage adds is not having to write `mcp --root /work` in
+#   every client's configuration file.
+#
+# There is no Ghidra-plus-MCP image, and that is not an oversight: the MCP
+# server exposes no lift tool, so bundling a decompiler with it would carry a
+# gigabyte that nothing in that image can reach. Anyone wanting both runs
+# `ghidra-image`, which is the CLI and the server in one.
+#
+# They share the builder stage below, and that sharing is the point of the file:
+# when this was two files with identical builder halves, a directory that moved
+# had to be fixed in both, and was fixed in neither (#91).
+#
+# `docker build` with no --target builds the *last* stage. Anything that wants
+# another must say so, and every caller here does.
 
 ARG GIT_REVISION
 ARG BUILD_DATE
@@ -50,7 +63,7 @@ RUN cargo build --release --locked --features mcp
 # ==========================================
 # Stage 2: Runtime environment with JDK & Ghidra
 # ==========================================
-FROM eclipse-temurin:21-jdk-noble AS full-image
+FROM eclipse-temurin:21-jdk-noble AS ghidra-image
 
 ARG GIT_REVISION
 ARG BUILD_DATE
@@ -107,7 +120,7 @@ ENTRYPOINT ["oinkie"]
 CMD ["--help"]
 
 # ==========================================
-# Stage 3: Tiny runtime environment for CLI execution (Default)
+# Stage 3: Tiny runtime environment for CLI execution
 # ==========================================
 FROM debian:bookworm-slim AS light-image
 
@@ -140,3 +153,20 @@ ENV PATH="/usr/local/bin:${PATH}"
 # Default command
 ENTRYPOINT ["oinkie"]
 CMD ["--help"]
+
+
+# ==========================================
+# Stage 4: The MCP server (Default)
+# ==========================================
+# Nothing but a default command. `light-image` already serves MCP -- the binary
+# is the same one -- so this exists to turn
+#
+#     docker run -i --rm -v "$PWD:/work" …/oinkie:light mcp --root /work
+#
+# into the same line without the last three words. Deriving from light-image
+# rather than repeating it means there is one runtime to keep correct.
+#
+# `-i` and no `-t`: stdio carries JSON-RPC, and a TTY breaks its framing.
+FROM light-image AS mcp-image
+
+CMD ["mcp", "--root", "/work"]

@@ -37,8 +37,10 @@ cargo build --release --features mcp
 }
 ```
 
-For a container, use the **light** image — the tools here never lift, so the
-Ghidra in the full image is a gigabyte of dead weight:
+For a container, use the **mcp** image. It is the light one with
+`mcp --root /work` as its default command, so the configuration does not have
+to say it. Not `ghidra` — the tools here never lift, so its decompiler is a
+gigabyte of dead weight on this path:
 
 ```json
 {
@@ -48,8 +50,7 @@ Ghidra in the full image is a gigabyte of dead weight:
       "args": [
         "run", "-i", "--rm",
         "-v", "/path/to/your/work:/work",
-        "quay.io/tama5/oinkie:light",
-        "mcp", "--root", "/work"
+        "quay.io/tama5/oinkie:mcp"
       ]
     }
   }
@@ -98,7 +99,7 @@ written somewhere surprising.
 
 There is no `oinkie_lift`, and there is not going to be one. Run
 [`oinkie lift`](../lift) yourself and point the tools at what it produced — on a
-host with Ghidra installed, or in the `full` image, which bundles it.
+host with Ghidra installed, or in the `ghidra` image, which bundles it.
 
 It is the one step whose shape does not fit a tool call. It starts a whole
 decompiler process per binary, and how long that takes is set by the binary
