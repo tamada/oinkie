@@ -128,14 +128,25 @@ jobs:
           # out would be a stranger.
           cargo build --no-default-features --lib
 
-      # Unix runners have Ghidra, so everything runs. Windows does not, so the
-      # tests that start it are skipped by name -- the rest is what Windows is
-      # being asked about.
+      # Unix runners have Ghidra, and the tests that start it need to be told
+      # where: the action exports GHIDRA_INSTALL_DIR, and oinkie reads
+      # GHIDRA_HOME. The coverage step below already does this, which is why
+      # nothing noticed -- it was the only place tests ran.
+      #
+      # Windows has no Ghidra, so the whole serial(ghidra) group is skipped by
+      # the file it lives in. Skipping by test name was tried and is wrong:
+      # `--skip test_lift` misses
+      # `test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift`,
+      # which starts a Ghidra like the rest.
       - name: test
         shell: bash
+        env:
+          GHIDRA_HOME: ${{ env.GHIDRA_INSTALL_DIR }}
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cargo test --features mcp -- --skip test_lift
+            cargo test --features mcp --lib --bins
+            cargo test --features mcp --test lib_test --test mcp_test \
+              --test binaryninja_test --test ida_test --test package_test
           else
             cargo test --features mcp
           fi
