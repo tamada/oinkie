@@ -1,0 +1,40 @@
+{
+  "program": "hello_gcc",
+  "path": "testdata/bin/hello_gcc",
+  "ir": "binary-ninja-hlil",
+  "symbols": {
+    "_printf": "_printf"
+  },
+  "functions": [
+    {
+      "name": "_main",
+      "ops": [
+        {
+          "op": "HLIL_CALL",
+          "inputs": [
+            "_printf",
+            "[<HighLevelILConstPtr: \"Hello World\">]"
+          ]
+        },
+        {
+          "op": "HLIL_RET",
+          "inputs": [
+            "[<HighLevelILConst: 0>]"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "_printf",
+      "ops": [
+        {
+          "op": "HLIL_TAILCALL",
+          "inputs": [
+            "_printf",
+            "[<HighLevelILVar: arg1>]"
+          ]
+        }
+      ]
+    }
+  ]
+}

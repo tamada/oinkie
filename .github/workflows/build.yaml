@@ -65,6 +65,11 @@ jobs:
           ./assets/lifters/ghidra/compile-check.sh \
             assets/lifters/ghidra/scripts/HighPCodeLifter.java \
             testdata/scripts/BrokenLifter.java
+          # Binary Ninja is licensed and cannot be installed here, so nothing
+          # on a runner can run this script. Parsing it is what is left, and
+          # it catches the failure that would otherwise reach a user as
+          # Binary Ninja exiting non-zero with a traceback.
+          python3 -m py_compile assets/lifters/binaryninja/scripts/BnilLifter.py
 
       - name: build
         run: |

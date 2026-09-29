@@ -1,0 +1,51 @@
+{
+  "program": "hello_clang",
+  "path": "testdata/bin/hello_clang",
+  "ir": "binary-ninja-mlil",
+  "symbols": {
+    "0x100000480": "_printf"
+  },
+  "functions": [
+    {
+      "name": "_main",
+      "ops": [
+        {
+          "op": "MLIL_CALL",
+          "inputs": [
+            "[]",
+            "0x100000480",
+            "[<MediumLevelILConstPtr: \"Hello World\">]"
+          ]
+        },
+        {
+          "op": "MLIL_SET_VAR",
+          "inputs": [
+            "x0",
+            "0"
+          ],
+          "out": "x0"
+        },
+        {
+          "op": "MLIL_RET",
+          "inputs": [
+            "[<MediumLevelILConst: 0>]"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "_printf",
+      "ops": [
+        {
+          "op": "MLIL_TAILCALL",
+          "inputs": [
+            "[<var int64_t x0>, <var int64_t x1>, <var int64_t x2>, <var int64_t x3>, <var int64_t x4>, <var int64_t x5>, <var int64_t x6>, <var int64_t x7>, <var int64_t x8>, <var int64_t x9>, <var int64_t x10>, <var int64_t x11>, <var int64_t x12>, <var int64_t x13>, <var int64_t x14>, <var int64_t x15>, <var int64_t x16>, <var int64_t x17>, <var int64_t x18>, <var int64_t lr>, <var int128_t v0>, <var int128_t v1>, <var int128_t v2>, <var int128_t v3>, <var int128_t v4>, <var int128_t v5>, <var int128_t v6>, <var int128_t v7>, <var int128_t v16>, <var int128_t v17>, <var int128_t v18>, <var int128_t v19>, <var int128_t v20>, <var int128_t v21>, <var int128_t v22>, <var int128_t v23>, <var int128_t v24>, <var int128_t v25>, <var int128_t v26>, <var int128_t v27>, <var int128_t v28>, <var int128_t v29>, <var int128_t v30>, <var int128_t v31>]",
+            "_printf",
+            "[<MediumLevelILVar: arg1>]"
+          ],
+          "out": "x0"
+        }
+      ]
+    }
+  ]
+}

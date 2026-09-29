@@ -93,8 +93,12 @@ impl Extractor {
     /// The birthmark is the same either way; this only spares the caller from
     /// deciding which lifter produced the file, which the file already says.
     pub fn extract_any(&self, p: &crate::program::AnyProgram) -> Result<Birthmark> {
+        use crate::program::AnyProgram;
         match p {
-            crate::program::AnyProgram::GhidraPcode(p) => self.extract_each(p),
+            AnyProgram::GhidraPcode(p) => self.extract_each(p),
+            AnyProgram::BinaryNinjaLlil(p) => self.extract_each(p),
+            AnyProgram::BinaryNinjaMlil(p) => self.extract_each(p),
+            AnyProgram::BinaryNinjaHlil(p) => self.extract_each(p),
         }
     }
 }
@@ -285,7 +289,7 @@ mod tests {
     #[test]
     fn test_extract_function_calls_resolves_the_symbol() {
         let program: Program<crate::ghidra::Op> =
-            std::path::Path::new("testdata/hello_world/pcodes/hello_clang.json")
+            std::path::Path::new("testdata/lifted/pcodes/hello_clang.json")
                 .try_into()
                 .expect("failed to load the fixture");
         let function = program.iter().next().expect("fixture has no function");
@@ -304,8 +308,8 @@ mod tests {
     #[test]
     fn test_fc_birthmarks_are_not_empty() {
         for fixture in [
-            "testdata/hello_world/pcodes/hello_clang.json",
-            "testdata/hello_world/pcodes/hello_gcc.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
         ] {
             let program: Program<crate::ghidra::Op> = std::path::Path::new(fixture)
                 .try_into()

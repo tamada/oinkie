@@ -88,7 +88,12 @@ impl Ir {
     /// two lists are not the same and the difference is what
     /// [`crate::Error::UnsupportedIr`] reports.
     pub fn readable() -> &'static [Ir] {
-        &[Ir::GhidraPcode]
+        &[
+            Ir::GhidraPcode,
+            Ir::BinaryNinjaLlil,
+            Ir::BinaryNinjaMlil,
+            Ir::BinaryNinjaHlil,
+        ]
     }
 
     /// The tool that produces this representation, as it should appear in
@@ -129,7 +134,13 @@ impl Ir {
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => HomeSpec {
                 tool: self.tool(),
                 env: "BINARY_NINJA_HOME",
-                candidates: &[],
+                // The directory holding `bnpython3`, which is the headless
+                // entry point, rather than the bundle or the API directory
+                // beside it.
+                candidates: &[
+                    "/Applications/Binary Ninja.app/Contents/MacOS",
+                    "/opt/binaryninja",
+                ],
             },
         }
     }
@@ -304,7 +315,23 @@ impl LifterBuilder {
             }
             Ir::IdaMicrocode => Err(not_implemented(self.ir)),
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => {
-                Err(not_implemented(self.ir))
+                // `level` is exhaustive over `Ir`, so a `None` here would mean
+                // a representation reached this arm without being given a
+                // level -- an inconsistency between two matches rather than
+                // anything a caller did. Refusing says so; panicking would
+                // not, and would be a branch nothing can exercise.
+                let Some(level) = crate::binaryninja::level(self.ir) else {
+                    return Err(not_implemented(self.ir));
+                };
+                let home = self.ir.find_home(self.home.as_deref())?;
+                Ok(Box::new(Verifying(
+                    crate::binaryninja::lifter::BinaryNinjaLifter::new(
+                        home,
+                        level,
+                        self.script,
+                        self.intermediate_dir,
+                    ),
+                )))
             }
         }
     }

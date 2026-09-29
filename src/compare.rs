@@ -509,22 +509,39 @@ impl Comparator {
     /// operations, so a comparison across them would measure the disagreement
     /// between the lifters rather than anything about the programs. That is
     /// refused here for the same reason it is refused for birthmarks in
-    /// [`Self::compare_birthmarks`]. Only one representation can be read
-    /// today, so nothing reachable is refused yet; the check is what keeps
-    /// that true when a second one arrives.
+    /// [`Self::compare_birthmarks`].
+    ///
+    /// The refusal is the match's fall-through rather than a guard before it,
+    /// so a pair is either scored by an arm that names both representations or
+    /// refused. It became reachable with Binary Ninja: until then one
+    /// representation could be read and nothing could form a mixed pair.
+    /// Ghidra's P-Code and Binary Ninja's LLIL of the same binary do not even
+    /// agree on which functions it has, which is what the refusal is for.
     pub fn compare_any<'a>(
         &self,
         p1: &'a AnyProgram,
         p2: &'a AnyProgram,
         aggregator: &Aggregator,
     ) -> Result<Comparison<'a, AnyProgram>> {
-        if p1.ir() != p2.ir() {
-            return Err(Error::IrMismatch(p1.ir(), p2.ir()));
-        }
+        // The mismatch is the fall-through rather than a check before the
+        // match, so that there is one place where a pair is either scored or
+        // refused. Written as a guard first, the match would still need an
+        // arm for every mixed pair -- arms nothing can reach, since equal
+        // representations are the same variant.
         let (matrix, similarities, duration) = match (p1, p2) {
             (AnyProgram::GhidraPcode(a), AnyProgram::GhidraPcode(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
+            (AnyProgram::BinaryNinjaLlil(a), AnyProgram::BinaryNinjaLlil(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::BinaryNinjaMlil(a), AnyProgram::BinaryNinjaMlil(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::BinaryNinjaHlil(a), AnyProgram::BinaryNinjaHlil(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            _ => return Err(Error::IrMismatch(p1.ir(), p2.ir())),
         };
         Ok(Comparison::new(p1, p2, matrix, similarities, duration))
     }
@@ -1010,8 +1027,8 @@ mod tests {
     #[test]
     fn test_compare_any_agrees_with_the_typed_comparison() {
         let paths = [
-            "testdata/hello_world/pcodes/hello_clang.json",
-            "testdata/hello_world/pcodes/hello_gcc.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
         ];
         let typed: Vec<Program<crate::ghidra::Op>> = paths
             .iter()

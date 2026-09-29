@@ -34,8 +34,9 @@ The script is to run Ghidra with headless mode (without GUI).
 
 ```json
 {
-    "program": "factorizer", // The name of the lifted program
-    "path": "/home/tamada/products/oinkie/testdata/factorizer/factorizer.json", // The path to the generated JSON file
+    "program": "example", // The name of the lifted program
+    "path": "bin/example", // The binary this was lifted from, not this file
+    "ir": "ghidra-pcode",  // Which representation the operations below are in
     "symbols": {       // A mapping of addresses to function names.
         "0x1000006b0": "_atoll",
         "0x1000006bc": "_printf",

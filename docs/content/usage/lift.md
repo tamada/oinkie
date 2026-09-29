@@ -1,12 +1,14 @@
 ---
 title: "1. Lifting Binaries (`lift` command)"
-description: "How to lift binary executable files to P-code JSON format using Ghidra."
+description: "How to lift binary executable files to the Oinkie IR with Ghidra or Binary Ninja."
 date: 2026-06-22
 draft: false
 weight: 50
 ---
 
-The **lift** command converts compiled binary executable files into the Oinkie Intermediate Representation (OIR) JSON format. The current implementation utilizes **Ghidra** in headless mode (without GUI) to translate machine-specific assembly instructions into platform-agnostic P-code.
+The **lift** command converts compiled binary executable files into the Oinkie Intermediate Representation (OIR) JSON format. It drives **Ghidra** in headless mode, producing its P-Code, or **Binary Ninja**, producing any of its three intermediate languages. `--ir` chooses which, and the choice is recorded in the file, because the two vocabularies are not interchangeable.
+
+The examples below use Ghidra's P-Code. For Binary Ninja, see the [lifter's own notes](https://github.com/tamada/oinkie/blob/main/assets/lifters/binaryninja/README.md).
 
 ---
 
@@ -28,7 +30,7 @@ oinkie lift [OPTIONS] [FILES]...
 * `-r, --ir <IR>`  
   The intermediate representation to produce. `[default: ghidra-pcode]` `[possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]`  
   This also picks the tool, because a representation is only produced by one of them — `ghidra-pcode` means Ghidra, and the three `binary-ninja-*` levels all mean Binary Ninja. Naming the representation rather than the tool is what makes `-r binary-ninja-mlil` a complete request; naming the tool would not be, since Binary Ninja lifts to three.  
-  Only `ghidra-pcode` is implemented. The others are named so that the refusal says which representation you asked for, which matters most where one tool has several.
+  `ghidra-pcode` and the three `binary-ninja-*` levels are implemented. `ida-microcode` is named so that the refusal says which representation you asked for.
 * `-H, --home <HOME>`  
   Path to the installation directory of the tool behind `--ir`. If not specified, that tool's own environment variable (`GHIDRA_HOME` for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
 * `-i, --intermediate <DIRECTORY>`  
@@ -197,8 +199,9 @@ Here is an example of the generated JSON file:
 
 ```json
 {
-    "program": "factorizer",
-    "path": "/home/tamada/products/oinkie/testdata/factorizer/factorizer.json",
+    "program": "example",
+    "path": "bin/example",
+    "ir": "ghidra-pcode",
     "symbols": {
         "0x1000006b0": "_atoll",
         "0x1000006bc": "_printf",

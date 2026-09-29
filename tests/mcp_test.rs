@@ -173,8 +173,8 @@ fn scored_directory(dir: &std::path::Path) -> std::path::PathBuf {
         .args(["run", "-a", "op-set-jaccard", "-d"])
         .arg(&scores)
         .args([
-            "testdata/hello_world/pcodes/hello_clang.json",
-            "testdata/hello_world/pcodes/hello_gcc.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
         ])
         .assert()
         .success();
@@ -206,8 +206,8 @@ fn here() -> std::path::PathBuf {
 /// Deliberately not the two hello worlds: those produce the same birthmark
 /// under every analysis, so any pair of them scores 1.0 and a test built on
 /// them passes for an implementation that returns 1.0 and nothing else.
-const A: &str = "testdata/hello_world/pcodes/hello_clang.json";
-const B: &str = "testdata/quoted_names/pcodes/udl.json";
+const A: &str = "testdata/lifted/pcodes/hello_clang.json";
+const B: &str = "testdata/lifted/pcodes/udl.json";
 
 fn similarities(result: &Value) -> Vec<f64> {
     result["result"]["structuredContent"]["scores"]

@@ -206,3 +206,5 @@ http-client.private.env.json
 # Built Visual Studio Code Extensions
 *.vsix
 
+# Left behind by the py_compile check on the Binary Ninja lifting script.
+__pycache__/
