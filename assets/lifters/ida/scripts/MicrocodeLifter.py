@@ -91,8 +91,20 @@ def instructions(mba):
             insn = insn.next
 
 
+class Refused(Exception):
+    """The decompiler would not produce microcode for a function.
+
+    Raised rather than returned, because the caller's only correct response is
+    to stop. A function missing from the output is a gap in every birthmark
+    taken from it, and the file would not say so: `Headless` treats a process
+    that exits 0 with an output file as a success and does not read its stderr,
+    so a warning here would reach nobody and the partial program would be
+    compared as though it were whole.
+    """
+
+
 def lift_function(ea, maturity):
-    """The microcode of one function, or None when there is none to read."""
+    """The microcode of one function, or None when the address is not one."""
     func = ida_funcs.get_func(ea)
     if func is None:
         return None
@@ -102,12 +114,9 @@ def lift_function(ea, maturity):
         ranges, failure, None, ida_hexrays.DECOMP_NO_WAIT, maturity
     )
     if mba is None:
-        # Reported rather than swallowed: a function the decompiler refused is
-        # a gap in the birthmark, and a lift that hid it would look complete.
-        sys.stderr.write(
-            "oinkie: %s: no microcode (%s)\n" % (idc.get_func_name(ea), failure.str)
+        raise Refused(
+            "%s: no microcode (%s)" % (idc.get_func_name(ea), failure.str)
         )
-        return None
 
     ops = []
     for insn in instructions(mba):
@@ -168,7 +177,15 @@ def main(argv):
         sys.stderr.write("oinkie: the Hex-Rays decompiler is not available\n")
         return 3
 
-    functions, keys = lift(ida_hexrays.MMAT_LVARS)
+    try:
+        functions, keys = lift(ida_hexrays.MMAT_LVARS)
+    except Refused as refused:
+        # Non-zero, so that `Headless` reports it. Writing the file and exiting
+        # 0 would hand back a program with functions missing and nothing to say
+        # which, or that any were.
+        sys.stderr.write("oinkie: %s\n" % refused)
+        return 4
+
     document = {
         "program": idc.get_root_filename(),
         "path": idc.get_input_file_path(),

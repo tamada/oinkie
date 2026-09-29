@@ -22,9 +22,21 @@ IDA has no other representation to ask for.
 
 The warning is conditional, and this is how it decides. A decompiler plugin is
 named `hex<arch>` when it decompiles locally and `hexc<arch>` when it calls
-out, so an installation carrying only `hexc*` has no local decompiler to use.
-IDA Classroom ships the cloud ones; a Professional licence with the decompiler
-ships local ones.
+out. IDA Classroom ships the cloud ones; a Professional licence with the
+decompiler ships local ones.
+
+**A cloud plugin anywhere earns the warning, even beside local ones.** Each
+plugin covers its own architectures, so `hexcx64` next to `hexarm64`
+decompiles x64 in the cloud whatever the ARM64 plugin does. Deciding otherwise
+would need the binary's architecture, which is not known until IDA has read it
+— after the point where a warning is still worth giving. So the message says
+what is installed rather than what will happen, and names both halves. An
+over-warning costs attention; a missed one costs a function that has already
+left the machine.
+
+It goes straight to stderr rather than through the logger, so `--level error`
+and `--level off` do not silence it. A privacy disclosure a verbosity flag can
+turn off is one the user never agreed to turn off.
 
 The API cannot answer this. `get_hexrays_version` reports a version and nothing
 about where the work happens, and `MERR_CLOUD` is an error code — it says a
@@ -100,6 +112,17 @@ with the working directory set to where the output belongs. Three obligations:
 - **Sort anything iterated from a set.** The Binary Ninja script did not and
   wrote a different byte order on every run.
 - **Key the symbol table the way your operations render a callee.**
+
+## 🚫 A refused function fails the lift
+
+`gen_microcode` can decline a function. The script stops rather than skipping
+it, and exits non-zero.
+
+Continuing would be worse than it looks. `Headless` treats a process that exits
+0 with an output file as a success and does not read its stderr, so a warning
+would reach nobody — and the file would hold a program with functions missing
+and no record that any were. Every birthmark taken from it would be computed
+from a part of the program while claiming to describe the whole.
 
 ## 🧪 Testing
 

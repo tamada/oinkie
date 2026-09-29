@@ -70,11 +70,18 @@ pub enum Ir {
     /// yields, rather than raw lifted P-Code.
     #[default]
     GhidraPcode,
-    /// The Hex-Rays microcode, the representation IDA Pro's decompiler works
-    /// in, at `MMAT_LVARS` -- the last of its maturities and the one the
-    /// pseudocode is rendered from.
+    /// The Hex-Rays microcode -- which runs IDA Pro's decompiler, so on an
+    /// installation with a cloud decompiler each function is sent to Hex-Rays'
+    /// servers.
     ///
-    /// The earlier maturities are not offered. They are the decompiler's
+    /// clap renders only this first paragraph as the value's description in
+    /// `--help` and in the shell completions, so the disclosure belongs in it:
+    /// a reader choosing a representation should see it before choosing, not
+    /// after. What is left out of it is detail, not warning.
+    ///
+    /// Read at `MMAT_LVARS`, the last of the decompiler's maturities and the
+    /// one the pseudocode is rendered from. The earlier maturities are not
+    /// offered. They are the decompiler's
     /// pipeline rather than representations it publishes: the same enum holds
     /// `MMAT_ZERO`, "microcode does not exist", and `MMAT_GLBOPT2` is
     /// described by Hex-Rays only as "most global optimization passes are

@@ -39,10 +39,16 @@ impl Lifter for IdaLifter {
             )));
         }
 
+        // Straight to stderr, not through `log`. `--level error` and
+        // `--level off` are ordinary things to pass, and either would silence
+        // a disclosure about where someone's code is going. A privacy warning
+        // that a verbosity flag can turn off is one the user never agreed to
+        // turn off.
+        //
         // Before the process starts, because a warning that arrives once the
         // function has left the machine is a log entry rather than a warning.
         if let Some(message) = crate::ida::cloud::warning(&self.home) {
-            WARNED.call_once(|| log::warn!("{message}"));
+            WARNED.call_once(|| eprintln!("oinkie: {message}"));
         }
 
         Headless {

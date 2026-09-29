@@ -27,28 +27,30 @@
 
 use std::path::Path;
 
-/// What an installation's plugin directory says about its decompiler.
+/// What an installation's plugin directory says about its decompilers.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Verdict {
-    /// Only cloud decompiler plugins are installed, so the only decompiler
-    /// that can run sends the function away. Carries their names.
-    CloudOnly(Vec<String>),
-    /// At least one local decompiler plugin is installed. Carries its name.
-    LocalAvailable(String),
-    /// No decompiler plugin was found, or the directory could not be read.
+    /// At least one cloud decompiler is installed, so a function may be sent.
+    /// Carries the cloud plugins, and any local ones beside them.
+    SomeCloud {
+        cloud: Vec<String>,
+        local: Vec<String>,
+    },
+    /// Every decompiler installed decompiles locally, or none is installed at
+    /// all.
     ///
-    /// Not a warning. Without a decompiler there is no microcode, so the lift
-    /// will fail on its own and say so in IDA's words, which are better than a
-    /// guess made here.
-    Unknown,
+    /// No decompiler is not a warning: without one there is no microcode, so
+    /// the lift fails on its own and says so in IDA's words, which are better
+    /// than a guess made here.
+    NoCloud,
 }
 
-/// Reads `<home>/plugins` and decides.
+/// Reads `<home>/plugins` and sorts the decompiler plugins it finds.
 pub(crate) fn inspect(home: &Path) -> Verdict {
     let Ok(entries) = std::fs::read_dir(home.join("plugins")) else {
-        return Verdict::Unknown;
+        return Verdict::NoCloud;
     };
-    let mut cloud = Vec::new();
+    let (mut cloud, mut local) = (Vec::new(), Vec::new());
     for entry in entries.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
         let Some(stem) = name.split('.').next() else {
@@ -57,33 +59,54 @@ pub(crate) fn inspect(home: &Path) -> Verdict {
         if !stem.starts_with("hex") {
             continue;
         }
+        // `hexc` before `hex`: every cloud name begins with both, so testing
+        // the shorter one first reads every cloud plugin as local.
         if stem.starts_with("hexc") {
             cloud.push(name);
         } else {
-            // One local decompiler is enough: it is the one that will run.
-            return Verdict::LocalAvailable(name);
+            local.push(name);
         }
     }
     if cloud.is_empty() {
-        Verdict::Unknown
-    } else {
-        cloud.sort();
-        Verdict::CloudOnly(cloud)
+        return Verdict::NoCloud;
     }
+    cloud.sort();
+    local.sort();
+    Verdict::SomeCloud { cloud, local }
 }
 
 /// What to tell the user before the first function is sent, or `None` when
 /// nothing is owed.
+///
+/// A cloud plugin anywhere in the installation earns a warning, even beside
+/// local ones, because each plugin covers its own architectures: `hexcx64`
+/// next to `hexarm64` decompiles x64 in the cloud whatever the ARM64 plugin
+/// does. Deciding otherwise would need the binary's architecture, which is not
+/// known until IDA has read it -- after the point where a warning is still
+/// worth giving.
+///
+/// So the message says what is installed rather than what will happen, and
+/// lets the reader see which half their binary falls in. That is weaker than a
+/// verdict and stronger than a guess: an over-warning costs attention, while a
+/// missed one costs a function that has already left the machine.
 pub(crate) fn warning(home: &Path) -> Option<String> {
-    match inspect(home) {
-        Verdict::CloudOnly(plugins) => Some(format!(
-            "This IDA installation has only cloud decompilers ({}), and \
-             microcode cannot be produced without a decompiler. Each function \
-             lifted is sent to Hex-Rays' servers. Nothing has been sent yet.",
-            plugins.join(", ")
-        )),
-        Verdict::LocalAvailable(_) | Verdict::Unknown => None,
+    let Verdict::SomeCloud { cloud, local } = inspect(home) else {
+        return None;
+    };
+    let mut message = format!(
+        "This IDA installation has cloud decompilers ({}). Microcode cannot be \
+         produced without a decompiler, and every function a cloud one handles \
+         is sent to Hex-Rays' servers. Nothing has been sent yet.",
+        cloud.join(", ")
+    );
+    if !local.is_empty() {
+        message.push_str(&format!(
+            " It also has local decompilers ({}); which of them handles this \
+             binary depends on its architecture.",
+            local.join(", ")
+        ));
     }
+    Some(message)
 }
 
 #[cfg(test)]
@@ -103,26 +126,56 @@ mod tests {
     /// The installation this was written against: two cloud decompilers and no
     /// local one.
     #[test]
-    fn test_only_cloud_plugins_is_cloud_only() {
+    fn test_only_cloud_plugins_warns() {
         let dir = install(&["hexcx64.dylib", "hexcarm.dylib", "dbg.dylib"]);
         assert_eq!(
             inspect(dir.path()),
-            Verdict::CloudOnly(vec!["hexcarm.dylib".into(), "hexcx64.dylib".into()])
+            Verdict::SomeCloud {
+                cloud: vec!["hexcarm.dylib".into(), "hexcx64.dylib".into()],
+                local: vec![],
+            }
         );
         let warning = warning(dir.path()).expect("no warning for a cloud-only install");
         assert!(warning.contains("hexcx64.dylib"), "{warning}");
         assert!(warning.contains("Hex-Rays"), "{warning}");
+        assert!(
+            !warning.contains("local decompilers"),
+            "claims a local decompiler that is not there: {warning}"
+        );
     }
 
-    /// A local licence must not be told its functions are being uploaded. One
-    /// local plugin is enough, even beside cloud ones.
+    /// A local plugin beside a cloud one does not silence the warning, because
+    /// each covers its own architectures: `hexcx64` next to `hexarm64`
+    /// decompiles x64 in the cloud whatever the ARM64 plugin does.
+    ///
+    /// This is the case the first version got wrong. It returned on the first
+    /// local plugin it saw and reported that a local decompiler would run,
+    /// which for an x64 binary on this installation is false -- and the cost of
+    /// being wrong that way is a function that has already left the machine.
     #[test]
-    fn test_one_local_plugin_silences_the_warning() {
+    fn test_a_local_plugin_for_another_architecture_does_not_silence_the_warning() {
         let dir = install(&["hexcx64.dylib", "hexarm64.dylib"]);
         assert_eq!(
             inspect(dir.path()),
-            Verdict::LocalAvailable("hexarm64.dylib".into())
+            Verdict::SomeCloud {
+                cloud: vec!["hexcx64.dylib".into()],
+                local: vec!["hexarm64.dylib".into()],
+            }
         );
+        let warning = warning(dir.path()).expect("no warning where a cloud plugin exists");
+        assert!(warning.contains("hexcx64.dylib"), "{warning}");
+        assert!(
+            warning.contains("hexarm64.dylib") && warning.contains("architecture"),
+            "does not say the answer depends on the architecture: {warning}"
+        );
+    }
+
+    /// Only local decompilers: nothing is owed, and saying otherwise would be a
+    /// claim about someone's data that is not true.
+    #[test]
+    fn test_only_local_plugins_says_nothing() {
+        let dir = install(&["hexx64.dylib", "hexarm64.dylib"]);
+        assert_eq!(inspect(dir.path()), Verdict::NoCloud);
         assert_eq!(warning(dir.path()), None);
     }
 
@@ -132,7 +185,7 @@ mod tests {
     #[test]
     fn test_a_cloud_plugin_is_not_mistaken_for_a_local_one() {
         let dir = install(&["hexcarm.dylib"]);
-        assert!(matches!(inspect(dir.path()), Verdict::CloudOnly(_)));
+        assert!(matches!(inspect(dir.path()), Verdict::SomeCloud { .. }));
     }
 
     /// No decompiler at all is not a warning. The lift fails on its own, in
@@ -140,7 +193,7 @@ mod tests {
     #[test]
     fn test_no_decompiler_is_not_a_warning() {
         let dir = install(&["dbg.dylib", "pdb.dylib"]);
-        assert_eq!(inspect(dir.path()), Verdict::Unknown);
+        assert_eq!(inspect(dir.path()), Verdict::NoCloud);
         assert_eq!(warning(dir.path()), None);
     }
 
@@ -149,7 +202,7 @@ mod tests {
     /// this is reached by a typo as much as by anything.
     #[test]
     fn test_an_unreadable_installation_says_nothing() {
-        assert_eq!(inspect(Path::new("/oinkie-no-such-ida")), Verdict::Unknown);
+        assert_eq!(inspect(Path::new("/oinkie-no-such-ida")), Verdict::NoCloud);
         assert_eq!(warning(Path::new("/oinkie-no-such-ida")), None);
     }
 }

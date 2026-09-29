@@ -41,12 +41,12 @@ _arguments "${_arguments_options[@]}" : \
 '-d+[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files' \
 '--dest=[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files' \
 '-r+[Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.]:IR:((ghidra-pcode\:"Ghidra'\''s P-Code, as refined by the decompiler — what \`HighFunction\` yields, rather than raw lifted P-Code"
-ida-microcode\:"The Hex-Rays microcode, the representation IDA Pro'\''s decompiler works in, at \`MMAT_LVARS\` -- the last of its maturities and the one the pseudocode is rendered from"
+ida-microcode\:"The Hex-Rays microcode -- which runs IDA Pro'\''s decompiler, so on an installation with a cloud decompiler each function is sent to Hex-Rays'\'' servers"
 binary-ninja-llil\:"Binary Ninja'\''s Low Level IL\: one expression per machine instruction, registers and flags still explicit"
 binary-ninja-mlil\:"Binary Ninja'\''s Medium Level IL\: stack and registers resolved into variables, calls carrying their parameters"
 binary-ninja-hlil\:"Binary Ninja'\''s High Level IL\: control flow recovered, the level its decompiler output is rendered from"))' \
 '--ir=[Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.]:IR:((ghidra-pcode\:"Ghidra'\''s P-Code, as refined by the decompiler — what \`HighFunction\` yields, rather than raw lifted P-Code"
-ida-microcode\:"The Hex-Rays microcode, the representation IDA Pro'\''s decompiler works in, at \`MMAT_LVARS\` -- the last of its maturities and the one the pseudocode is rendered from"
+ida-microcode\:"The Hex-Rays microcode -- which runs IDA Pro'\''s decompiler, so on an installation with a cloud decompiler each function is sent to Hex-Rays'\'' servers"
 binary-ninja-llil\:"Binary Ninja'\''s Low Level IL\: one expression per machine instruction, registers and flags still explicit"
 binary-ninja-mlil\:"Binary Ninja'\''s Medium Level IL\: stack and registers resolved into variables, calls carrying their parameters"
 binary-ninja-hlil\:"Binary Ninja'\''s High Level IL\: control flow recovered, the level its decompiler output is rendered from"))' \
