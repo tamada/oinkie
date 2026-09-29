@@ -270,10 +270,13 @@ mod tests {
             "../outside/secret",
             "pcodes/../a.json",
         ] {
-            let e = f
-                .roots
-                .resolve(f.root.join(attempt).to_str().unwrap())
-                .unwrap_err();
+            // Joined as text, not with `Path::join`. On Windows a verbatim
+            // path -- the `\\?\C:\...` form `canonicalize` returns -- cannot
+            // hold `..`, so `push` normalises it away and the test would hand
+            // `resolve` a path with nothing left to refuse. What a caller
+            // sends is a string, and this is that string.
+            let attempted = format!("{}/{attempt}", f.root.display());
+            let e = f.roots.resolve(&attempted).unwrap_err();
             assert!(e.message.contains(".."), "{attempt}: {}", e.message);
         }
     }
