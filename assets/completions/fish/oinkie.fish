@@ -42,7 +42,14 @@ complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this 
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s d -l dest -d 'Specify the directory for putting the resultant JSON files of the lifted programs (default: \'./pcodes\' directory)' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s r -l ir -d 'Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.' -r -f -a "ghidra-pcode\t'Ghidra\'s P-Code, as refined by the decompiler — what `HighFunction` yields, rather than raw lifted P-Code'
-ida-microcode\t'The Hex-Rays microcode, the representation IDA Pro\'s decompiler works in. There is only one of it, unlike Binary Ninja\'s three'
+ida-microcode-generated\t'The Hex-Rays microcode as it stands once generated, before any optimisation'
+ida-microcode-preoptimized\t'The Hex-Rays microcode after preoptimisation'
+ida-microcode-locopt\t'The Hex-Rays microcode after local optimisation'
+ida-microcode-calls\t'The Hex-Rays microcode once calls have been resolved into call instructions with arguments'
+ida-microcode-glbopt1\t'The Hex-Rays microcode after the first global optimisation pass'
+ida-microcode-glbopt2\t'The Hex-Rays microcode after the second global optimisation pass'
+ida-microcode-glbopt3\t'The Hex-Rays microcode after the third global optimisation pass'
+ida-microcode-lvars\t'The Hex-Rays microcode once local variables have been allocated, which is the last maturity and the one the pseudocode is rendered from'
 binary-ninja-llil\t'Binary Ninja\'s Low Level IL: one expression per machine instruction, registers and flags still explicit'
 binary-ninja-mlil\t'Binary Ninja\'s Medium Level IL: stack and registers resolved into variables, calls carrying their parameters'
 binary-ninja-hlil\t'Binary Ninja\'s High Level IL: control flow recovered, the level its decompiler output is rendered from'"

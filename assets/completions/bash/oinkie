@@ -304,11 +304,11 @@ _oinkie() {
                     return 0
                     ;;
                 --ir)
-                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode-generated ida-microcode-preoptimized ida-microcode-locopt ida-microcode-calls ida-microcode-glbopt1 ida-microcode-glbopt2 ida-microcode-glbopt3 ida-microcode-lvars binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
                     return 0
                     ;;
                 -r)
-                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
+                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode-generated ida-microcode-preoptimized ida-microcode-locopt ida-microcode-calls ida-microcode-glbopt1 ida-microcode-glbopt2 ida-microcode-glbopt3 ida-microcode-lvars binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
                     return 0
                     ;;
                 --home)

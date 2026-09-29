@@ -72,13 +72,34 @@ def operand(mop):
     return mop.dstr()
 
 
+def walk(insn):
+    """An instruction and every sub-instruction inside its operands.
+
+    A microcode operand can be an instruction of its own. The optimiser folds a
+    call into whatever consumes its result, so at MMAT_CALLS `_main`'s only call
+    sits inside an `m_xds` operand rather than in the block's list. Walking only
+    the list left that maturity with no call at all -- and `extract` refusing
+    every fc-* birthmark of it, which is the refusal working but for the wrong
+    reason.
+
+    Sub-instructions come first, the way an operand is evaluated before the
+    operation that reads it.
+    """
+    for mop in (insn.l, insn.r, insn.d):
+        if mop is not None and mop.t == ida_hexrays.mop_d and mop.d is not None:
+            for nested in walk(mop.d):
+                yield nested
+    yield insn
+
+
 def instructions(mba):
     """Every instruction of every block, in the order IDA holds them."""
     for i in range(mba.qty):
         block = mba.get_mblock(i)
         insn = block.head
         while insn:
-            yield insn
+            for one in walk(insn):
+                yield one
             insn = insn.next
 
 

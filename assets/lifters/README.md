@@ -6,6 +6,8 @@ compiles into the binary, and a README describing that backend's contract.
 - [ghidra](ghidra/README.md) — P-Code, via `analyzeHeadless` and a Java script
 - [binaryninja](binaryninja/README.md) — LLIL, MLIL and HLIL, via `bnpython3`
   and a Python script
+- [ida](ida/README.md) — the Hex-Rays microcode at each of its maturities, via
+  `idat` and an IDAPython script
 
 ## 🧪 What CI can and cannot check
 

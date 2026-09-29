@@ -1,0 +1,83 @@
+{
+  "program": "hello_gcc",
+  "path": "testdata/bin/hello_gcc",
+  "ir": "ida-microcode-locopt",
+  "symbols": {
+    "$__imp__printf": "__imp__printf",
+    "$_printf": "_printf"
+  },
+  "functions": [
+    {
+      "name": "_main",
+      "ops": [
+        {
+          "op": "m_sub",
+          "inputs": [
+            "sp.8",
+            "#0x10.8"
+          ],
+          "out": "sp.8"
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "sp.8"
+          ],
+          "out": "x29.8"
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "&($aHelloWorld).8"
+          ],
+          "out": "x0.8"
+        },
+        {
+          "op": "m_call",
+          "inputs": [
+            "$_printf"
+          ]
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "#0.8"
+          ],
+          "out": "x0.8"
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "%var_s0.8"
+          ],
+          "out": "x29.8"
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "%0x8.8"
+          ],
+          "out": "x30.8"
+        }
+      ]
+    },
+    {
+      "name": "_printf",
+      "ops": [
+        {
+          "op": "m_mov",
+          "inputs": [
+            "&($__imp__printf).8"
+          ],
+          "out": "x16.8"
+        },
+        {
+          "op": "m_call",
+          "inputs": [
+            "$__imp__printf"
+          ]
+        }
+      ]
+    }
+  ]
+}

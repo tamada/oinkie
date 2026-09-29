@@ -1,0 +1,49 @@
+{
+  "program": "hello_clang",
+  "path": "testdata/bin/hello_clang",
+  "ir": "ida-microcode-glbopt1",
+  "symbols": {
+    "$__imp__printf": "__imp__printf",
+    "$_printf": "_printf"
+  },
+  "functions": [
+    {
+      "name": "_main",
+      "ops": [
+        {
+          "op": "m_call",
+          "inputs": [
+            "$_printf"
+          ],
+          "out": "<...:\"const char *\" &($aHelloWorld).8> => int .0"
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "#0.4"
+          ],
+          "out": "w0.4"
+        }
+      ]
+    },
+    {
+      "name": "_printf",
+      "ops": [
+        {
+          "op": "m_call",
+          "inputs": [
+            "$__imp__printf"
+          ],
+          "out": "<...:\"const char *\" x0.8> => int .4"
+        },
+        {
+          "op": "m_mov",
+          "inputs": [
+            "call $__imp__printf<...:\"const char *\" x0.8> => int .4"
+          ],
+          "out": "w0.4"
+        }
+      ]
+    }
+  ]
+}
