@@ -182,22 +182,30 @@ jobs:
     # without it a broken release note could still be failing while this
     # uploaded -- which is the opposite of what putting this job last is for.
     needs: [publish, container, release-notes]
+    permissions:
+      # The OIDC token crates.io trades for a publishing one. Nothing else in
+      # this workflow needs it, so it is granted here rather than at the top.
+      id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Trusted publishing: crates.io recognises this repository and workflow
+      # and issues a token that lives for the length of this job. There is no
+      # long-lived secret in the repository to leak, to rotate, or to forget to
+      # rotate -- which is what the first upload had to use, since crates.io
+      # cannot scope a token to a crate that does not exist yet.
+      - name: Get a publishing token from crates.io
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
       - name: Publish to crates.io
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
-            echo "CARGO_REGISTRY_TOKEN is not set; nothing published."
-            echo "Add it as a repository secret when the crate should go out."
-            exit 0
-          fi
-          # --locked, because the release binaries were built from this
-          # Cargo.lock and a crate resolved differently is a different build.
-          cargo publish --locked
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        # --locked, because the release binaries were built from this
+        # Cargo.lock and a crate resolved differently is a different build.
+        run: cargo publish --locked
 
   finish:
     needs: [start, container, release-notes, crates-io]
