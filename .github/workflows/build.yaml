@@ -41,7 +41,7 @@ jobs:
       #
       # The two Containerfiles copy exactly the same paths and share their
       # whole builder stage, so building either exercises the build context of
-      # both. What the full image adds beyond that is a 400 MB Ghidra download,
+      # both. What the ghidra image adds beyond that is a 400 MB Ghidra download,
       # whose URL and checksum change only when someone edits them; the release
       # builds it, and that is soon enough.
       #

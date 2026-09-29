@@ -47,8 +47,12 @@ desktop app does not start in your project:
 
 ### 🐳 In a container
 
-Both images end in `ENTRYPOINT ["oinkie"]`, so either is already an MCP server.
-Use **`light`**: the tools here never lift, so `full`'s Ghidra and JDK are a
+Use **`mcp`**. Every image ends in `ENTRYPOINT ["oinkie"]`, so any of them can
+serve — this one is `light` with `mcp --root /work` as its default command, so
+the configuration below does not have to say it. The binary is the same 145 MB
+either way.
+
+Not `ghidra`: the tools here never lift, so its decompiler and JDK are a
 gigabyte of dead weight on this path.
 
 ```json
@@ -59,8 +63,7 @@ gigabyte of dead weight on this path.
       "args": [
         "run", "-i", "--rm",
         "-v", "/path/to/your/work:/work",
-        "quay.io/tama5/oinkie:light",
-        "mcp", "--root", "/work"
+        "quay.io/tama5/oinkie:mcp"
       ]
     }
   }
@@ -103,7 +106,7 @@ written somewhere surprising.
 
 There is no `oinkie_lift`, and there is not going to be one. Run
 [`oinkie lift`](../../assets/lifters/ghidra/README.md) yourself and point the
-tools at what it produced — on a host with Ghidra installed, or in the `full`
+tools at what it produced — on a host with Ghidra installed, or in the `ghidra`
 image, which bundles it.
 
 It is the one step whose shape does not fit a tool call. It starts a whole
