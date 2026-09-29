@@ -1376,7 +1376,7 @@ mod tests {
     fn test_refuses_a_comparison_across_representations() {
         let b1 = sample_birthmark();
         let mut b2 = sample_birthmark();
-        b2.metadata.ir = crate::lift::Ir::IdaMicrocode;
+        b2.metadata.ir = crate::lift::Ir::IdaMicrocodeLvars;
 
         match b1.check_comparable_with(&b2) {
             Err(Error::IrMismatch(..)) => {}

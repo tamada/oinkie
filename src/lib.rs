@@ -9,6 +9,7 @@ mod birthmarks;
 mod compare;
 pub mod extractor;
 pub mod ghidra;
+pub mod ida;
 pub mod lift;
 pub mod prelude;
 mod program;
@@ -84,13 +85,6 @@ pub enum Error {
     )]
     UnreadableOutput(PathBuf, #[source] Box<Error>),
     /// A lifted file naming a representation this build cannot read.
-    #[error(
-        "{path}: no reader for {ir}; this build can read {readable}",
-        path = .0.display(),
-        ir = .1,
-        readable = render_readable()
-    )]
-    UnsupportedIr(PathBuf, crate::lift::Ir),
     #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
     #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
@@ -128,14 +122,6 @@ fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::prelude::Algorithm
         algorithm.shape().description(),
         bt.with_shape(algorithm.shape())
     )
-}
-
-fn render_readable() -> String {
-    crate::lift::Ir::readable()
-        .iter()
-        .map(|ir| ir.to_string())
-        .collect::<Vec<_>>()
-        .join(", ")
 }
 
 impl Error {
@@ -237,7 +223,6 @@ mod tests {
             Error::NoCallOperations(_, _) => "NoCallOperations",
             Error::UnresolvedCalls(_, _, _) => "UnresolvedCalls",
             Error::UnreadableOutput(_, _) => "UnreadableOutput",
-            Error::UnsupportedIr(_, _) => "UnsupportedIr",
             Error::InvalidPcode(_) => "InvalidPcode",
             Error::Io(_, _) => "Io",
             Error::Json(_, _) => "Json",
@@ -317,8 +302,8 @@ mod tests {
                     .to_string(),
             ),
             (
-                Error::IrMismatch(Ir::GhidraPcode, Ir::IdaMicrocode),
-                "cannot compare ghidra-pcode against ida-microcode: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond".to_string(),
+                Error::IrMismatch(Ir::GhidraPcode, Ir::IdaMicrocodeLvars),
+                "cannot compare ghidra-pcode against ida-microcode-lvars: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond".to_string(),
             ),
             (
                 Error::UnresolvedCalls(PathBuf::from("bin/sample"), Ir::GhidraPcode, 3),
@@ -338,21 +323,6 @@ mod tests {
                 ),
                 format!(
                     "bin/sample: the lifter reported success, but what it wrote cannot be read back: pcodes/sample.json: JSON error: {json_msg}"
-                ),
-            ),
-            (
-                Error::UnsupportedIr(PathBuf::from("foreign.json"), Ir::IdaMicrocode),
-                // The readable list is built from `Ir::readable()` rather
-                // than written out, so that adding a reader does not make
-                // this a message to re-copy. The separate test below is what
-                // says the list is the right one.
-                format!(
-                    "foreign.json: no reader for ida-microcode; this build can read {}",
-                    crate::lift::Ir::readable()
-                        .iter()
-                        .map(|ir| ir.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
                 ),
             ),
             (
@@ -421,34 +391,6 @@ mod tests {
         assert!(rendered.contains("\n  1. Parse error: a"), "{rendered}");
         assert!(rendered.contains("\n  3. Parse error: c"), "{rendered}");
         assert!(!rendered.contains("0."), "numbered from zero: {rendered}");
-    }
-
-    /// The message has to name every representation this build can read, and
-    /// separate them.
-    ///
-    /// The separator half was written while `Ir::readable()` held one entry,
-    /// where `join("")` and `join(", ")` produce the same string and it could
-    /// not fail. Binary Ninja's three levels made it four, so it now checks
-    /// something — which is what it was put there for.
-    #[test]
-    fn test_an_unreadable_representation_lists_what_can_be_read() {
-        let rendered =
-            Error::UnsupportedIr(PathBuf::from("foreign.json"), crate::lift::Ir::IdaMicrocode)
-                .to_string();
-        for ir in crate::lift::Ir::readable() {
-            assert!(
-                rendered.contains(&ir.to_string()),
-                "{ir} missing: {rendered}"
-            );
-        }
-        let separators = rendered.matches(", ").count();
-        assert_eq!(
-            separators,
-            crate::lift::Ir::readable().len() - 1,
-            "{} readable representations should be separated {} times: {rendered}",
-            crate::lift::Ir::readable().len(),
-            crate::lift::Ir::readable().len() - 1
-        );
     }
 
     /// `impl std::error::Error for Error {}` was empty, so `source()` was

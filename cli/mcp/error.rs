@@ -24,7 +24,7 @@ fn is_the_callers_fault(e: &Error) -> bool {
         | Error::Clap(_) => true,
 
         // A file the caller named, which they can name differently.
-        Error::Io(_, _) | Error::Json(_, _) | Error::UnsupportedIr(_, _) => true,
+        Error::Io(_, _) | Error::Json(_, _) => true,
 
         // No fc-* birthmark of this program can hold anything -- either nothing
         // in it is a call, or its calls name nothing the symbol table holds.

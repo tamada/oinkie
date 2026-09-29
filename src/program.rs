@@ -77,6 +77,14 @@ pub enum AnyProgram {
     BinaryNinjaLlil(Program<crate::binaryninja::Op<crate::binaryninja::Llil>>),
     BinaryNinjaMlil(Program<crate::binaryninja::Op<crate::binaryninja::Mlil>>),
     BinaryNinjaHlil(Program<crate::binaryninja::Op<crate::binaryninja::Hlil>>),
+    IdaMicrocodeGenerated(Program<crate::ida::Op<crate::ida::Generated>>),
+    IdaMicrocodePreoptimized(Program<crate::ida::Op<crate::ida::Preoptimized>>),
+    IdaMicrocodeLocopt(Program<crate::ida::Op<crate::ida::Locopt>>),
+    IdaMicrocodeCalls(Program<crate::ida::Op<crate::ida::Calls>>),
+    IdaMicrocodeGlbopt1(Program<crate::ida::Op<crate::ida::Glbopt1>>),
+    IdaMicrocodeGlbopt2(Program<crate::ida::Op<crate::ida::Glbopt2>>),
+    IdaMicrocodeGlbopt3(Program<crate::ida::Op<crate::ida::Glbopt3>>),
+    IdaMicrocodeLvars(Program<crate::ida::Op<crate::ida::Lvars>>),
 }
 
 /// Just enough of a lifted file to learn which representation it is in.
@@ -102,6 +110,14 @@ macro_rules! dispatch {
             Self::BinaryNinjaLlil($p) => $body,
             Self::BinaryNinjaMlil($p) => $body,
             Self::BinaryNinjaHlil($p) => $body,
+            Self::IdaMicrocodeGenerated($p) => $body,
+            Self::IdaMicrocodePreoptimized($p) => $body,
+            Self::IdaMicrocodeLocopt($p) => $body,
+            Self::IdaMicrocodeCalls($p) => $body,
+            Self::IdaMicrocodeGlbopt1($p) => $body,
+            Self::IdaMicrocodeGlbopt2($p) => $body,
+            Self::IdaMicrocodeGlbopt3($p) => $body,
+            Self::IdaMicrocodeLvars($p) => $body,
         }
     };
 }
@@ -135,7 +151,30 @@ impl AnyProgram {
             Ir::BinaryNinjaHlil => serde_json::from_slice(&bytes)
                 .map(Self::BinaryNinjaHlil)
                 .map_err(json_err),
-            ir => Err(Error::UnsupportedIr(path.to_path_buf(), ir)),
+            Ir::IdaMicrocodeGenerated => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeGenerated)
+                .map_err(json_err),
+            Ir::IdaMicrocodePreoptimized => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodePreoptimized)
+                .map_err(json_err),
+            Ir::IdaMicrocodeLocopt => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeLocopt)
+                .map_err(json_err),
+            Ir::IdaMicrocodeCalls => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeCalls)
+                .map_err(json_err),
+            Ir::IdaMicrocodeGlbopt1 => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeGlbopt1)
+                .map_err(json_err),
+            Ir::IdaMicrocodeGlbopt2 => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeGlbopt2)
+                .map_err(json_err),
+            Ir::IdaMicrocodeGlbopt3 => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeGlbopt3)
+                .map_err(json_err),
+            Ir::IdaMicrocodeLvars => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocodeLvars)
+                .map_err(json_err),
         }
     }
 
@@ -376,25 +415,34 @@ mod tests {
         assert_eq!(program.ir(), Ir::GhidraPcode);
     }
 
-    /// Read as P-Code, a foreign file fails on whichever of its opcodes came
-    /// first, reported as an unknown variant among seventy-five alternatives.
-    /// Naming the representation instead says the one thing the user can act
-    /// on.
+    /// An `ir` this build does not know is refused by the deserializer rather
+    /// than read as something else.
+    ///
+    /// This used to be a different test. While one representation was declared
+    /// without a reader, loading it reported `UnsupportedIr`, and that error
+    /// existed to name it. Every representation has a reader now, so nothing
+    /// constructs it and it is gone; what remains is a name that is not a
+    /// representation at all, which is what a file from a future version looks
+    /// like.
     #[test]
-    fn test_any_program_refuses_a_representation_it_cannot_read() {
+    fn test_any_program_refuses_a_representation_it_does_not_know() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("foreign.json");
         std::fs::write(
             &path,
-            r#"{"program":"foreign","path":"bin/foreign","ir":"ida-microcode",
+            r#"{"program":"foreign","path":"bin/foreign","ir":"llvm-ir",
                 "symbols":{},"functions":[{"name":"main","ops":[
-                  {"op":"m_call","inputs":["r0"]}]}]}"#,
+                  {"op":"call","inputs":["r0"]}]}]}"#,
         )
         .unwrap();
-        match AnyProgram::load(&path) {
-            Err(Error::UnsupportedIr(_, ir)) => assert_eq!(ir, Ir::IdaMicrocode),
-            other => panic!("expected UnsupportedIr, got {other:?}", other = other.err()),
-        }
+        let err = match AnyProgram::load(&path) {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("a representation with no reader was loaded"),
+        };
+        assert!(
+            err.contains("llvm-ir"),
+            "does not name what it could not read: {err}"
+        );
     }
 
     /// The closed opcode enum is the one Ghidra assumption that fails loudly,

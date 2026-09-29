@@ -55,10 +55,13 @@ impl<L: Lifter> Lifter for Verifying<L> {
 /// written down. It is the finer of the two: a representation implies its
 /// tool, while a tool does not imply a representation.
 ///
-/// Variants are declared ahead of the lifters that produce them, so a name
-/// here is not a promise that this build can lift it. [`Self::readable`] is
-/// the list that can be read back, and [`LifterBuilder::build`] is what says
-/// whether it can be written.
+/// Every variant here can be both written and read today, which has not
+/// always been so: representations are declared when they are named and filled
+/// in later, and while one was unreadable there was a `readable()` list and an
+/// `UnsupportedIr` to report against it. Both went when IDA's maturities
+/// landed and nothing was left to refuse. The guard that remains is the
+/// exhaustive match in [`crate::program::AnyProgram::load`], which is what
+/// stops a new variant being added without a decision about reading it.
 #[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 #[clap(rename_all = "kebab-case")]
@@ -67,9 +70,29 @@ pub enum Ir {
     /// yields, rather than raw lifted P-Code.
     #[default]
     GhidraPcode,
-    /// The Hex-Rays microcode, the representation IDA Pro's decompiler works
-    /// in. There is only one of it, unlike Binary Ninja's three.
-    IdaMicrocode,
+    /// The Hex-Rays microcode as it stands once generated, before any
+    /// optimisation.
+    ///
+    /// Producing microcode at all means running IDA Pro's decompiler, and on
+    /// an installation whose only decompiler is the cloud one that means the
+    /// function is sent to Hex-Rays' servers. `lift` says so before it starts.
+    IdaMicrocodeGenerated,
+    /// The Hex-Rays microcode after preoptimisation.
+    IdaMicrocodePreoptimized,
+    /// The Hex-Rays microcode after local optimisation.
+    IdaMicrocodeLocopt,
+    /// The Hex-Rays microcode once calls have been resolved into call
+    /// instructions with arguments.
+    IdaMicrocodeCalls,
+    /// The Hex-Rays microcode after the first global optimisation pass.
+    IdaMicrocodeGlbopt1,
+    /// The Hex-Rays microcode after the second global optimisation pass.
+    IdaMicrocodeGlbopt2,
+    /// The Hex-Rays microcode after the third global optimisation pass.
+    IdaMicrocodeGlbopt3,
+    /// The Hex-Rays microcode once local variables have been allocated, which
+    /// is the last maturity and the one the pseudocode is rendered from.
+    IdaMicrocodeLvars,
     /// Binary Ninja's Low Level IL: one expression per machine instruction,
     /// registers and flags still explicit.
     BinaryNinjaLlil,
@@ -82,20 +105,6 @@ pub enum Ir {
 }
 
 impl Ir {
-    /// The representations this build can actually read a lifted file in.
-    ///
-    /// [`Ir`] names representations ahead of the code that reads them, so the
-    /// two lists are not the same and the difference is what
-    /// [`crate::Error::UnsupportedIr`] reports.
-    pub fn readable() -> &'static [Ir] {
-        &[
-            Ir::GhidraPcode,
-            Ir::BinaryNinjaLlil,
-            Ir::BinaryNinjaMlil,
-            Ir::BinaryNinjaHlil,
-        ]
-    }
-
     /// The tool that produces this representation, as it should appear in
     /// messages.
     ///
@@ -105,7 +114,14 @@ impl Ir {
     pub fn tool(&self) -> &'static str {
         match self {
             Ir::GhidraPcode => "Ghidra",
-            Ir::IdaMicrocode => "IDA Pro",
+            Ir::IdaMicrocodeGenerated
+            | Ir::IdaMicrocodePreoptimized
+            | Ir::IdaMicrocodeLocopt
+            | Ir::IdaMicrocodeCalls
+            | Ir::IdaMicrocodeGlbopt1
+            | Ir::IdaMicrocodeGlbopt2
+            | Ir::IdaMicrocodeGlbopt3
+            | Ir::IdaMicrocodeLvars => "IDA Pro",
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => "Binary Ninja",
         }
     }
@@ -126,10 +142,23 @@ impl Ir {
                     "/opt/ghidra/libexec",
                 ],
             },
-            Ir::IdaMicrocode => HomeSpec {
+            Ir::IdaMicrocodeGenerated
+            | Ir::IdaMicrocodePreoptimized
+            | Ir::IdaMicrocodeLocopt
+            | Ir::IdaMicrocodeCalls
+            | Ir::IdaMicrocodeGlbopt1
+            | Ir::IdaMicrocodeGlbopt2
+            | Ir::IdaMicrocodeGlbopt3
+            | Ir::IdaMicrocodeLvars => HomeSpec {
                 tool: self.tool(),
                 env: "IDA_HOME",
-                candidates: &[],
+                // The directory holding `idat`, which is the headless entry
+                // point. On macOS that is inside the application bundle.
+                candidates: &[
+                    "/Applications/IDA Professional 9.4.app/Contents/MacOS",
+                    "/Applications/IDA Classroom 9.4.app/Contents/MacOS",
+                    "/opt/ida",
+                ],
             },
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => HomeSpec {
                 tool: self.tool(),
@@ -174,7 +203,14 @@ impl Ir {
     fn as_str(&self) -> &'static str {
         match self {
             Ir::GhidraPcode => "ghidra-pcode",
-            Ir::IdaMicrocode => "ida-microcode",
+            Ir::IdaMicrocodeGenerated => "ida-microcode-generated",
+            Ir::IdaMicrocodePreoptimized => "ida-microcode-preoptimized",
+            Ir::IdaMicrocodeLocopt => "ida-microcode-locopt",
+            Ir::IdaMicrocodeCalls => "ida-microcode-calls",
+            Ir::IdaMicrocodeGlbopt1 => "ida-microcode-glbopt1",
+            Ir::IdaMicrocodeGlbopt2 => "ida-microcode-glbopt2",
+            Ir::IdaMicrocodeGlbopt3 => "ida-microcode-glbopt3",
+            Ir::IdaMicrocodeLvars => "ida-microcode-lvars",
             Ir::BinaryNinjaLlil => "binary-ninja-llil",
             Ir::BinaryNinjaMlil => "binary-ninja-mlil",
             Ir::BinaryNinjaHlil => "binary-ninja-hlil",
@@ -188,7 +224,14 @@ impl std::str::FromStr for Ir {
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "ghidra-pcode" => Ok(Ir::GhidraPcode),
-            "ida-microcode" => Ok(Ir::IdaMicrocode),
+            "ida-microcode-generated" => Ok(Ir::IdaMicrocodeGenerated),
+            "ida-microcode-preoptimized" => Ok(Ir::IdaMicrocodePreoptimized),
+            "ida-microcode-locopt" => Ok(Ir::IdaMicrocodeLocopt),
+            "ida-microcode-calls" => Ok(Ir::IdaMicrocodeCalls),
+            "ida-microcode-glbopt1" => Ok(Ir::IdaMicrocodeGlbopt1),
+            "ida-microcode-glbopt2" => Ok(Ir::IdaMicrocodeGlbopt2),
+            "ida-microcode-glbopt3" => Ok(Ir::IdaMicrocodeGlbopt3),
+            "ida-microcode-lvars" => Ok(Ir::IdaMicrocodeLvars),
             "binary-ninja-llil" => Ok(Ir::BinaryNinjaLlil),
             "binary-ninja-mlil" => Ok(Ir::BinaryNinjaMlil),
             "binary-ninja-hlil" => Ok(Ir::BinaryNinjaHlil),
@@ -313,7 +356,25 @@ impl LifterBuilder {
                     ),
                 )))
             }
-            Ir::IdaMicrocode => Err(not_implemented(self.ir)),
+            Ir::IdaMicrocodeGenerated
+            | Ir::IdaMicrocodePreoptimized
+            | Ir::IdaMicrocodeLocopt
+            | Ir::IdaMicrocodeCalls
+            | Ir::IdaMicrocodeGlbopt1
+            | Ir::IdaMicrocodeGlbopt2
+            | Ir::IdaMicrocodeGlbopt3
+            | Ir::IdaMicrocodeLvars => {
+                let Some(maturity) = crate::ida::maturity(self.ir) else {
+                    return Err(not_implemented(self.ir));
+                };
+                let home = self.ir.find_home(self.home.as_deref())?;
+                Ok(Box::new(Verifying(crate::ida::lifter::IdaLifter::new(
+                    home,
+                    maturity,
+                    self.script,
+                    self.intermediate_dir,
+                ))))
+            }
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => {
                 // `level` is exhaustive over `Ir`, so a `None` here would mean
                 // a representation reached this arm without being given a
@@ -466,24 +527,45 @@ mod tests {
         }
     }
 
-    /// A backend nobody has installed and checked has no candidates, and the
-    /// message has to stop after the variable rather than invite the user to
-    /// install it in one of nowhere.
+    /// A backend with no candidates must stop after the variable rather than
+    /// invite the user to install it in one of nowhere.
+    ///
+    /// The spec is built here rather than taken from an [`Ir`], because every
+    /// representation now names somewhere to look. [`HomeSpec`] is public with
+    /// public fields, so the empty case is still reachable -- and it is what a
+    /// backend added before anyone has checked where it installs looks like,
+    /// which is how both IDA Pro and Binary Ninja began.
     #[test]
     fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
-        let spec = Ir::IdaMicrocode.home_spec();
+        let spec = HomeSpec {
+            tool: "Nowhere",
+            env: "NOWHERE_HOME",
+            candidates: &[],
+        };
         let err = spec
             .find_in(|_| None, |_| panic!("there is nothing to look at"))
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("IDA_HOME"),
+            err.contains("NOWHERE_HOME"),
             "does not name the variable: {err}"
         );
         assert!(
             !err.contains("install it in one of"),
             "offers an empty list: {err}"
         );
+    }
+
+    /// Every representation names somewhere to look, which is the other half
+    /// of the test above: it is what makes that spec a constructed one.
+    #[test]
+    fn test_every_representation_names_somewhere_to_look() {
+        for ir in Ir::value_variants() {
+            assert!(
+                !ir.home_spec().candidates.is_empty(),
+                "{ir} offers no install locations"
+            );
+        }
     }
 }
 
@@ -563,11 +645,16 @@ mod verifying_tests {
         assert!(e.to_string().contains("JSON error"), "{e}");
     }
 
-    /// A representation this build cannot read is caught here too, rather
-    /// than at `extract`.
+    /// An output whose representation this build does not know is caught here
+    /// rather than at `extract`.
+    ///
+    /// It used to name a declared-but-unreadable representation. Every
+    /// declared one has a reader now, so what is left is a name from a future
+    /// version -- which is what a lifter written against a newer oinkie would
+    /// write.
     #[test]
-    fn test_an_output_in_an_unreadable_representation_fails_the_lift() {
-        let json = A_READABLE_PROGRAM.replace("ghidra-pcode", "ida-microcode");
+    fn test_an_output_in_an_unknown_representation_fails_the_lift() {
+        let json = A_READABLE_PROGRAM.replace("ghidra-pcode", "llvm-ir");
         let dir = tempfile::tempdir().unwrap();
         let output = dir.path().join("sample.json");
         std::fs::write(&output, &json).unwrap();
@@ -580,7 +667,7 @@ mod verifying_tests {
         let e = Verifying(Nothing)
             .lift(Path::new("bin/sample"), &output)
             .expect_err("a representation with no reader is not a successful lift");
-        assert!(e.to_string().contains("no reader for ida-microcode"), "{e}");
+        assert!(e.to_string().contains("llvm-ir"), "{e}");
     }
 
     /// A lifter that fails is reported as itself. Wrapping its error in

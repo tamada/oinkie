@@ -99,6 +99,14 @@ impl Extractor {
             AnyProgram::BinaryNinjaLlil(p) => self.extract_each(p),
             AnyProgram::BinaryNinjaMlil(p) => self.extract_each(p),
             AnyProgram::BinaryNinjaHlil(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeGenerated(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodePreoptimized(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeLocopt(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeCalls(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeGlbopt1(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeGlbopt2(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeGlbopt3(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocodeLvars(p) => self.extract_each(p),
         }
     }
 }

@@ -541,6 +541,30 @@ impl Comparator {
             (AnyProgram::BinaryNinjaHlil(a), AnyProgram::BinaryNinjaHlil(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
+            (AnyProgram::IdaMicrocodeGenerated(a), AnyProgram::IdaMicrocodeGenerated(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodePreoptimized(a), AnyProgram::IdaMicrocodePreoptimized(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodeLocopt(a), AnyProgram::IdaMicrocodeLocopt(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodeCalls(a), AnyProgram::IdaMicrocodeCalls(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodeGlbopt1(a), AnyProgram::IdaMicrocodeGlbopt1(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodeGlbopt2(a), AnyProgram::IdaMicrocodeGlbopt2(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodeGlbopt3(a), AnyProgram::IdaMicrocodeGlbopt3(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
+            (AnyProgram::IdaMicrocodeLvars(a), AnyProgram::IdaMicrocodeLvars(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
             _ => return Err(Error::IrMismatch(p1.ir(), p2.ir())),
         };
         Ok(Comparison::new(p1, p2, matrix, similarities, duration))
