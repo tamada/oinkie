@@ -109,12 +109,16 @@ mod tests {
             script_dir: PathBuf::from("/scripts"),
             script_name: OsString::from("BnilLifter.py"),
         };
-        let args = command_line("mlil", &i);
+        // The expected paths are built the way the code builds them rather
+        // than written out as Unix strings. `Path::join` uses the platform's
+        // separator, so a literal "/scripts/BnilLifter.py" asserts the
+        // separator rather than the order -- and fails on Windows for saying
+        // nothing about this function.
         assert_eq!(
-            args,
+            command_line("mlil", &i),
             vec![
-                OsString::from("/scripts/BnilLifter.py"),
-                OsString::from("/bin/sample"),
+                i.script_dir.join(&i.script_name).into_os_string(),
+                i.input.clone().into_os_string(),
                 OsString::from("mlil"),
                 OsString::from("sample.json"),
             ]

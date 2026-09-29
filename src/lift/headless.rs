@@ -256,10 +256,45 @@ mod tests {
 
     /// `true` ignores its arguments and writes nothing, which is the whole
     /// point: it exercises the path handling without needing a decompiler.
+    /// A program that exists and does nothing, wherever the tests are run.
+    ///
+    /// `lift` canonicalizes the program before spawning it, so a path that is
+    /// not there fails before the argument closure runs -- which on Windows
+    /// left six of these tests reporting `args were never built` about
+    /// `/usr/bin/true`.
+    fn a_program_that_exists() -> &'static Path {
+        Path::new(if cfg!(windows) {
+            r"C:\Windows\System32\cmd.exe"
+        } else {
+            "/usr/bin/true"
+        })
+    }
+
+    /// A program that exits 0 and writes its arguments to stdout.
+    ///
+    /// `cmd /C echo` on Windows, `echo` elsewhere. The point is a tool that
+    /// succeeds without leaving the output file behind.
+    fn a_program_that_echoes() -> &'static Path {
+        Path::new(if cfg!(windows) {
+            r"C:\Windows\System32\cmd.exe"
+        } else {
+            "/bin/echo"
+        })
+    }
+
+    /// What that program has to be given to echo `text`.
+    fn echo_args(text: &str) -> Vec<std::ffi::OsString> {
+        if cfg!(windows) {
+            vec!["/C".into(), "echo".into(), text.into()]
+        } else {
+            vec![text.into()]
+        }
+    }
+
     fn headless<'a>(work_dir: Option<&'a Path>, script: Option<&'a Path>) -> Headless<'a> {
         Headless {
             tool: "test",
-            program: Path::new("/usr/bin/true"),
+            program: a_program_that_exists(),
             script,
             default_script: ("script.txt", "built-in"),
             work_dir,
@@ -378,12 +413,13 @@ mod tests {
         let input = dir.path().join("sample.bin");
         std::fs::write(&input, b"binary").unwrap();
 
-        // echo exits 0 and writes to stdout instead of to a file, which is the
-        // shape of the failure: success, no result, and a reason only it knows.
+        // A program that exits 0 and writes to stdout instead of to a file,
+        // which is the shape of the failure: success, no result, and a reason
+        // only it knows.
         let mut h = headless(None, None);
-        h.program = Path::new("/bin/echo");
+        h.program = a_program_that_echoes();
         match h.lift(&input, &dir.path().join("out.json"), |_| {
-            vec!["the script threw".into()]
+            echo_args("the script threw")
         }) {
             Err(Error::Parse(msg)) => assert!(
                 msg.contains("the script threw"),
