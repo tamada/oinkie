@@ -3,8 +3,42 @@ name = "oinkie"
 version = "0.5.0"
 description = "Detects software theft by comparing birthmarks extracted from binaries"
 edition = "2024"
+# crates.io refuses an upload without a licence. The file has been here since
+# the first commit; the manifest had never said so.
+license = "MIT"
+repository = "https://github.com/tamada/oinkie"
+homepage = "https://tamada.github.io/oinkie"
+readme = "README.md"
+keywords = [ "birthmark", "plagiarism", "reverse-engineering", "ghidra", "binary" ]
+# From crates.io's fixed list; anything else is rejected at upload.
+categories = [ "command-line-utilities", "development-tools" ]
+# What a published crate has no use for. Written as exclusions rather than as
+# an `include` whitelist so that a file added beside the lifting scripts is
+# published by default: `src/ghidra/lifter.rs` compiles one in with
+# `include_str!`, and a whitelist that forgot the next one would build here and
+# fail for whoever ran `cargo add`.
+exclude = [
+    "/.github",
+    "/docs",
+    "/testdata",
+    "/Containerfile",
+    "/HANDOVER.md",
+]
 
 [features]
+default = [ "cli" ]
+# What the `oinkie` binary needs and the library does not. Measured rather than
+# assumed: nothing under `src/` mentions env_logger, indicatif or rayon -- the
+# parallelism lives in `cli/main.rs`, which owns its own thread pool.
+#
+# On by default, so `cargo install oinkie` and every build here are unchanged.
+# `cargo add oinkie --no-default-features` is what it buys: a library that does
+# not drag in a logger, a progress bar and a thread pool to read a JSON file.
+#
+# clap is not here. `Ir` and `Algorithm` derive `ValueEnum`, so the library
+# needs it too, and it is the largest of them -- which is why splitting the
+# crate in two would not have bought much more than this does.
+cli = [ "dep:env_logger", "dep:indicatif", "dep:rayon" ]
 gencomp = [ "dep:clap_complete" ]
 # The MCP server. Behind a feature the way `gencomp` is, so that a build that
 # does not want it does not carry tokio and rmcp; the release workflows pass
@@ -19,8 +53,8 @@ chrono = { version = "0.4.44", features = [ "serde" ] }
 clap = { version = "4.6.1", features = [ "derive", "string" ] }
 clap_complete = { version = "4.6.5", optional = true }
 csv = "1.4.0"
-env_logger = "0.11.10"
-indicatif = "0.18.4"
+env_logger = { version = "0.11.10", optional = true }
+indicatif = { version = "0.18.4", optional = true }
 itertools = "0.14.0"
 katexit = "0.1.5"
 lapjv = "0.3.0"
@@ -28,7 +62,7 @@ log = "0.4.32"
 ndarray = "0.16"
 num-derive = "0.4.2"
 num-traits = "0.2.19"
-rayon = "1.12.0"
+rayon = { version = "1.12.0", optional = true }
 # `schemars` is not a direct dependency: rmcp re-exports the version its macros
 # generate against, and depending on a second one is how the derives stop
 # agreeing with the runtime.
@@ -44,6 +78,10 @@ tokio = { version = "1", optional = true, features = [ "rt-multi-thread", "macro
 [[bin]]
 name = "oinkie"
 path = "cli/main.rs"
+# The binary is the CLI, so it cannot be built without what the CLI needs. With
+# `default = ["cli"]` this only takes effect for `--no-default-features`, where
+# it turns a wall of missing-crate errors into cargo saying the feature is off.
+required-features = [ "cli" ]
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
