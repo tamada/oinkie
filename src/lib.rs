@@ -58,7 +58,7 @@ pub enum Error {
     /// this says calls were found and none of them resolved, which is the
     /// lifter's symbol table or its `symbol_key`, not its `is_call`.
     #[error(
-        "{path}: {calls} operations are calls, but none of them names anything in the symbol table, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either every call is indirect, or oinkie's reader for {ir} keys the symbol table differently from the way that representation renders a callee",
+        "{path}: calls were found ({calls} in total), but none of them names anything in the symbol table, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either every call is indirect, or oinkie's reader for {ir} keys the symbol table differently from the way that representation renders a callee",
         path = .0.display(),
         ir = .1,
         calls = .2
@@ -322,7 +322,7 @@ mod tests {
             ),
             (
                 Error::UnresolvedCalls(PathBuf::from("bin/sample"), Ir::GhidraPcode, 3),
-                "bin/sample: 3 operations are calls, but none of them names anything in the symbol table, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either every call is indirect, or oinkie's reader for ghidra-pcode keys the symbol table differently from the way that representation renders a callee".to_string(),
+                "bin/sample: calls were found (3 in total), but none of them names anything in the symbol table, so every fc-* birthmark of it would be empty -- and two empty birthmarks score as a perfect match. Either every call is indirect, or oinkie's reader for ghidra-pcode keys the symbol table differently from the way that representation renders a callee".to_string(),
             ),
             (
                 Error::NoCallOperations(PathBuf::from("bin/sample"), Ir::GhidraPcode),

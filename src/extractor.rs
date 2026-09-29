@@ -209,28 +209,27 @@ where
 /// and yet scores 1.0 against another empty one, so a message is strictly more
 /// informative than the number.
 fn refuse_an_empty_family<T: crate::Op>(p: &Program<T>) -> Result<()> {
-    let calls = p
-        .iter()
-        .flat_map(|f| f.iter())
-        .filter(|op| op.is_call())
-        .count();
-    if calls == 0 {
-        return Err(Error::NoCallOperations(p.path().to_path_buf(), p.ir()));
+    // One pass, returning at the first call that resolves. The count is only
+    // read when none did, and reaching that answer means the whole program was
+    // walked anyway -- so counting here costs a successful extraction nothing,
+    // where counting first cost it a full traversal for a number it threw away.
+    let mut calls = 0usize;
+    for function in p.iter() {
+        for op in function.iter() {
+            if !op.is_call() {
+                continue;
+            }
+            calls += 1;
+            if op.symbol_key().and_then(|key| p.symbol(&key)).is_some() {
+                return Ok(());
+            }
+        }
     }
-    let resolved = p.iter().any(|f| {
-        f.iter()
-            .filter(|op| op.is_call())
-            .filter_map(|op| op.symbol_key())
-            .any(|key| p.symbol(&key).is_some())
-    });
-    if !resolved {
-        return Err(Error::UnresolvedCalls(
-            p.path().to_path_buf(),
-            p.ir(),
-            calls,
-        ));
-    }
-    Ok(())
+    Err(if calls == 0 {
+        Error::NoCallOperations(p.path().to_path_buf(), p.ir())
+    } else {
+        Error::UnresolvedCalls(p.path().to_path_buf(), p.ir(), calls)
+    })
 }
 
 fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<String> {
@@ -330,6 +329,38 @@ mod tests {
         let b = Extractor::new(bt).extract_any(&callless).unwrap_err();
         assert!(matches!(a, Error::UnresolvedCalls(_, _, _)), "{a}");
         assert!(matches!(b, Error::NoCallOperations(_, _)), "{b}");
+    }
+
+    /// The message reads the same for one call as for many.
+    ///
+    /// It said "1 operations are calls" for the single-call case, which is the
+    /// common one: a program with one indirect call and nothing else.
+    #[test]
+    fn test_the_refusal_reads_correctly_for_a_single_call() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("one.json");
+        std::fs::write(
+            &path,
+            r#"{"program":"one","path":"bin/one","ir":"ghidra-pcode",
+                "symbols":{},
+                "functions":[{"name":"main","ops":[
+                  {"op":"CALLIND","inputs":["(register, 0x20, 8)"]}]}]}"#,
+        )
+        .unwrap();
+        let p = crate::program::AnyProgram::load(&path).unwrap();
+        let e = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
+            .extract_any(&p)
+            .unwrap_err()
+            .to_string();
+        assert!(matches!(
+            Extractor::new(BirthmarkType::try_from("fc-set").unwrap()).extract_any(&p),
+            Err(Error::UnresolvedCalls(_, _, 1))
+        ));
+        assert!(
+            !e.contains("1 operations"),
+            "reads as a plural for one call: {e}"
+        );
+        assert!(e.contains("(1 in total)"), "does not say how many: {e}");
     }
 
     /// The op-* families say nothing about calls, so neither refusal applies
