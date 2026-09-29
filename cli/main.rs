@@ -668,22 +668,20 @@ mod tests {
         }
     }
 
-    /// Asking for a representation nothing can write says which
-    /// representation, not just which tool.
+    /// Every representation names its tool, which is what let the tool stop
+    /// being a separate argument.
     ///
-    /// It read Binary Ninja's three levels until they were implemented, which
-    /// was the case that needed it: sharing one backend, "Binary Ninja is not
-    /// implemented" would not have said which of the three was refused. IDA
-    /// Pro is the only one left, and the message is built the same way.
+    /// This replaced a test that asked for a representation nothing could
+    /// write and checked that the refusal named it. There is no such
+    /// representation any more -- Ghidra, Binary Ninja and IDA Pro cover all
+    /// twelve -- so the refusal it asserted cannot be produced, and a test
+    /// that cannot fail is not a test. `Ir::tool` is what that one was really
+    /// about, and `src/lift.rs` asserts it over every variant.
     #[test]
-    fn test_an_unwritable_representation_is_named_in_the_refusal() {
-        let ir = Ir::IdaMicrocode;
-        let err = match LifterBuilder::new(ir).build() {
-            Err(e) => e.to_string(),
-            Ok(_) => panic!("{ir} was built, but no lifter writes it"),
-        };
-        assert!(err.contains(&ir.to_string()), "does not name {ir}: {err}");
-        assert!(err.contains("IDA Pro"), "does not name the tool: {err}");
+    fn test_a_representation_that_is_not_binary_ninjas_has_no_level() {
+        assert_eq!(oinkie::prelude::Ir::GhidraPcode.tool(), "Ghidra");
+        assert_eq!(Ir::IdaMicrocode.tool(), "IDA Pro");
+        assert_eq!(Ir::BinaryNinjaMlil.tool(), "Binary Ninja");
     }
 
     /// A similarity CSV as `compare` writes one, written to a temp file so

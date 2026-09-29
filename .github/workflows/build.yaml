@@ -70,6 +70,7 @@ jobs:
           # it catches the failure that would otherwise reach a user as
           # Binary Ninja exiting non-zero with a traceback.
           python3 -m py_compile assets/lifters/binaryninja/scripts/BnilLifter.py
+          python3 -m py_compile assets/lifters/ida/scripts/MicrocodeLifter.py
 
       - name: build
         run: |

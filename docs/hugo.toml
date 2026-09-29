@@ -6,7 +6,7 @@ theme = ["github.com/tamada/hugo_theme_mod", "github.com/nunocoracao/blowfish/v2
 
 [params]
 logo = "oinkie.png"
-description = "Detects software theft by comparing birthmarks extracted from binaries. Ghidra P-Code and Binary Ninja's three ILs today; IDA Pro planned."
+description = "Detects software theft by comparing birthmarks extracted from binaries, lifted by Ghidra, Binary Ninja or IDA Pro."
 dateFormat = "2006-01-02"
 copyright = "Copyright &copy; 2025 by Haruaki Tamada. Made with [Hugo](https://gohugo.io/). Deployed to [GitHub Pages](https://pages.github.com/)."
 

@@ -42,7 +42,7 @@ complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this 
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s d -l dest -d 'Specify the directory for putting the resultant JSON files of the lifted programs (default: \'./pcodes\' directory)' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand lift" -s r -l ir -d 'Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.' -r -f -a "ghidra-pcode\t'Ghidra\'s P-Code, as refined by the decompiler — what `HighFunction` yields, rather than raw lifted P-Code'
-ida-microcode\t'The Hex-Rays microcode, the representation IDA Pro\'s decompiler works in. There is only one of it, unlike Binary Ninja\'s three'
+ida-microcode\t'The Hex-Rays microcode -- which runs IDA Pro\'s decompiler, so on an installation with a cloud decompiler each function is sent to Hex-Rays\' servers'
 binary-ninja-llil\t'Binary Ninja\'s Low Level IL: one expression per machine instruction, registers and flags still explicit'
 binary-ninja-mlil\t'Binary Ninja\'s Medium Level IL: stack and registers resolved into variables, calls carrying their parameters'
 binary-ninja-hlil\t'Binary Ninja\'s High Level IL: control flow recovered, the level its decompiler output is rendered from'"

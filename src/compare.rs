@@ -541,6 +541,9 @@ impl Comparator {
             (AnyProgram::BinaryNinjaHlil(a), AnyProgram::BinaryNinjaHlil(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
+            (AnyProgram::IdaMicrocode(a), AnyProgram::IdaMicrocode(b)) => {
+                self.score_programs(a, b, aggregator)?
+            }
             _ => return Err(Error::IrMismatch(p1.ir(), p2.ir())),
         };
         Ok(Comparison::new(p1, p2, matrix, similarities, duration))

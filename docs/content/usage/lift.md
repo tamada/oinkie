@@ -1,6 +1,6 @@
 ---
 title: "1. Lifting Binaries (`lift` command)"
-description: "How to lift binary executable files to the Oinkie IR with Ghidra or Binary Ninja."
+description: "How to lift binary executable files to the Oinkie IR with Ghidra, Binary Ninja or IDA Pro."
 date: 2026-06-22
 draft: false
 weight: 50
@@ -30,7 +30,7 @@ oinkie lift [OPTIONS] [FILES]...
 * `-r, --ir <IR>`  
   The intermediate representation to produce. `[default: ghidra-pcode]` `[possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]`  
   This also picks the tool, because a representation is only produced by one of them — `ghidra-pcode` means Ghidra, and the three `binary-ninja-*` levels all mean Binary Ninja. Naming the representation rather than the tool is what makes `-r binary-ninja-mlil` a complete request; naming the tool would not be, since Binary Ninja lifts to three.  
-  `ghidra-pcode` and the three `binary-ninja-*` levels are implemented. `ida-microcode` is named so that the refusal says which representation you asked for.
+  All of them are implemented. `ida-microcode` runs the Hex-Rays decompiler, which on an installation whose only decompiler is the cloud one sends each function to Hex-Rays' servers; `lift` warns before it starts.
 * `-H, --home <HOME>`  
   Path to the installation directory of the tool behind `--ir`. If not specified, that tool's own environment variable (`GHIDRA_HOME` for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
 * `-i, --intermediate <DIRECTORY>`  

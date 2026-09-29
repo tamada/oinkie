@@ -99,6 +99,7 @@ impl Extractor {
             AnyProgram::BinaryNinjaLlil(p) => self.extract_each(p),
             AnyProgram::BinaryNinjaMlil(p) => self.extract_each(p),
             AnyProgram::BinaryNinjaHlil(p) => self.extract_each(p),
+            AnyProgram::IdaMicrocode(p) => self.extract_each(p),
         }
     }
 }

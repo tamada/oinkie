@@ -7,7 +7,7 @@
 
 [![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.5.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 
-Detects software theft by comparing birthmarks extracted from binaries. Ghidra P-Code and Binary Ninja's three ILs today; IDA Pro planned.
+Detects software theft by comparing birthmarks extracted from binaries, lifted by Ghidra, Binary Ninja or IDA Pro.
 
 ![Logo of oinkie](.github/assets/oinkie.png)
 
@@ -53,14 +53,16 @@ Note that `oinkie` does not care about the binary formats; it only looks at the 
 ### 2️⃣​ Lifts the binary files to the intermediate representation (IR)
 
 Next, we should lift the binary files to the OIR format.
-`oinkie` lifts with [Ghidra](https://www.ghidradocs.com), to its P-Code, and
-with [Binary Ninja](https://binary.ninja), to any of its three intermediate
-languages. Each is a separate representation and birthmarks are not compared
-across them. [IDA Pro](https://hex-rays.com/ida-pro) is planned.
+`oinkie` lifts with [Ghidra](https://www.ghidradocs.com), to its P-Code; with
+[Binary Ninja](https://binary.ninja), to any of its three intermediate
+languages; and with [IDA Pro](https://hex-rays.com/ida-pro), to the Hex-Rays
+microcode. Each is a separate representation and birthmarks are not compared
+across them.
 
 See also ([`assets/lifters/README.md`](assets/lifters/README.md)), and each
 backend's own notes: ([Ghidra](assets/lifters/ghidra/README.md)),
-([Binary Ninja](assets/lifters/binaryninja/README.md)).
+([Binary Ninja](assets/lifters/binaryninja/README.md)),
+([IDA Pro](assets/lifters/ida/README.md)).
 
 ### 3️⃣ Extracts the birthmarks from the lifted IR files
 

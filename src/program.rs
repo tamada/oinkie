@@ -77,6 +77,7 @@ pub enum AnyProgram {
     BinaryNinjaLlil(Program<crate::binaryninja::Op<crate::binaryninja::Llil>>),
     BinaryNinjaMlil(Program<crate::binaryninja::Op<crate::binaryninja::Mlil>>),
     BinaryNinjaHlil(Program<crate::binaryninja::Op<crate::binaryninja::Hlil>>),
+    IdaMicrocode(Program<crate::ida::Op>),
 }
 
 /// Just enough of a lifted file to learn which representation it is in.
@@ -102,6 +103,7 @@ macro_rules! dispatch {
             Self::BinaryNinjaLlil($p) => $body,
             Self::BinaryNinjaMlil($p) => $body,
             Self::BinaryNinjaHlil($p) => $body,
+            Self::IdaMicrocode($p) => $body,
         }
     };
 }
@@ -135,7 +137,9 @@ impl AnyProgram {
             Ir::BinaryNinjaHlil => serde_json::from_slice(&bytes)
                 .map(Self::BinaryNinjaHlil)
                 .map_err(json_err),
-            ir => Err(Error::UnsupportedIr(path.to_path_buf(), ir)),
+            Ir::IdaMicrocode => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocode)
+                .map_err(json_err),
         }
     }
 
@@ -376,25 +380,34 @@ mod tests {
         assert_eq!(program.ir(), Ir::GhidraPcode);
     }
 
-    /// Read as P-Code, a foreign file fails on whichever of its opcodes came
-    /// first, reported as an unknown variant among seventy-five alternatives.
-    /// Naming the representation instead says the one thing the user can act
-    /// on.
+    /// An `ir` this build does not know is refused by the deserializer rather
+    /// than read as something else.
+    ///
+    /// This used to be a different test. While one representation was declared
+    /// without a reader, loading it reported `UnsupportedIr`, and that error
+    /// existed to name it. Every representation has a reader now, so nothing
+    /// constructs it and it is gone; what remains is a name that is not a
+    /// representation at all, which is what a file from a future version looks
+    /// like.
     #[test]
-    fn test_any_program_refuses_a_representation_it_cannot_read() {
+    fn test_any_program_refuses_a_representation_it_does_not_know() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("foreign.json");
         std::fs::write(
             &path,
-            r#"{"program":"foreign","path":"bin/foreign","ir":"ida-microcode",
+            r#"{"program":"foreign","path":"bin/foreign","ir":"llvm-ir",
                 "symbols":{},"functions":[{"name":"main","ops":[
-                  {"op":"m_call","inputs":["r0"]}]}]}"#,
+                  {"op":"call","inputs":["r0"]}]}]}"#,
         )
         .unwrap();
-        match AnyProgram::load(&path) {
-            Err(Error::UnsupportedIr(_, ir)) => assert_eq!(ir, Ir::IdaMicrocode),
-            other => panic!("expected UnsupportedIr, got {other:?}", other = other.err()),
-        }
+        let err = match AnyProgram::load(&path) {
+            Err(e) => e.to_string(),
+            Ok(_) => panic!("a representation with no reader was loaded"),
+        };
+        assert!(
+            err.contains("llvm-ir"),
+            "does not name what it could not read: {err}"
+        );
     }
 
     /// The closed opcode enum is the one Ghidra assumption that fails loudly,
