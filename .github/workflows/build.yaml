@@ -60,6 +60,22 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: ./.github/scripts/verify_mcp.sh --image oinkie:ci
 
+      # No network and no build: it reads the Markdown and looks at the
+      # filesystem, so it costs seconds rather than adding to the six minutes
+      # this workflow already takes.
+      - name: Check the internal links
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          python3 .github/scripts/test_check_links.py
+          python3 .github/scripts/check_links.py
+
+      # publish.yaml copies this directory into every release archive, and
+      # nothing else looks at it, so a move would be found while cutting a
+      # release rather than here.
+      - name: Check the completions are where the release expects them
+        if: matrix.os == 'ubuntu-latest'
+        run: test -d assets/completions
+
       - name: Compile the lifting scripts
         run: |
           ./assets/lifters/ghidra/compile-check.sh \

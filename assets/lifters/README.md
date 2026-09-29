@@ -31,3 +31,7 @@ What stands in for it:
 
 A fixture carries a repository-relative `path`, edited after lifting, because
 a fresh lift records the absolute one it canonicalised.
+
+The links in these files are checked on every push by
+`.github/scripts/check_links.py`, which resolves a README's links against the
+filesystem and the site's against its URLs.
