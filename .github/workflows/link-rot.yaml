@@ -1,0 +1,47 @@
+# External links rot on their own schedule, and checking them on a push would
+# fail a build because someone else's site was down for ten minutes. So they are
+# checked weekly, and a failure opens an issue rather than turning `main` red.
+#
+# Internal links are not checked here. They are checked on every push by
+# .github/scripts/check_links.py, which needs no network and cannot be flaky.
+name: link rot
+
+on:
+  schedule:
+    # Mondays, early. Nothing depends on the hour.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  external-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check external links
+        id: lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # Markdown only, and only what is outside this repository: the rest
+          # is already checked on every push.
+          args: >-
+            --no-progress
+            --exclude-path docs/public
+            --scheme https
+            --scheme http
+            --max-retries 3
+            './**/*.md'
+          fail: false
+
+      - name: Open an issue for what rotted
+        if: steps.lychee.outputs.exit_code != 0
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: External links have rotted
+          content-filepath: ./lychee/out.md
+          labels: documentation
