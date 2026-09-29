@@ -11,7 +11,7 @@ jobs:
         os:
           - ubuntu-latest
           - macOS-latest
-          # - windows-latest
+          - windows-latest
     steps:
       - name: setup rust
         run: |
@@ -21,12 +21,17 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Setup java
+        if: matrix.os != 'windows-latest'
         uses: actions/setup-java@v4
         with:
           distribution: "zulu"
           java-version: "25.0.2"
 
+      # Windows is built without Ghidra. The lifter needs it, but the library,
+      # the CLI and the MCP server do not, and what this job is asking of
+      # Windows is whether they compile and pass.
       - name: Setup ghidra
+        if: matrix.os != 'windows-latest'
         uses: antoniovazquezblanco/setup-ghidra@v2
         with:
           version: "12.1"
@@ -94,6 +99,7 @@ jobs:
         run: test -d assets/completions
 
       - name: Compile the lifting scripts
+        if: matrix.os != 'windows-latest'
         run: |
           ./assets/lifters/ghidra/compile-check.sh \
             assets/lifters/ghidra/scripts/HighPCodeLifter.java \
@@ -106,6 +112,7 @@ jobs:
           python3 -m py_compile assets/lifters/ida/scripts/MicrocodeLifter.py
 
       - name: build
+        shell: bash
         run: |
           cargo fmt --all -- --check
           # Both configurations get compiled. The release binary carries the
@@ -120,6 +127,18 @@ jobs:
           # breaking: `cli` is a default feature, so the first person to find
           # out would be a stranger.
           cargo build --no-default-features --lib
+
+      # Unix runners have Ghidra, so everything runs. Windows does not, so the
+      # tests that start it are skipped by name -- the rest is what Windows is
+      # being asked about.
+      - name: test
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cargo test --features mcp -- --skip test_lift
+          else
+            cargo test --features mcp
+          fi
 
       - name: Convert coverage format to lcov
         if: matrix.os == 'ubuntu-latest'
