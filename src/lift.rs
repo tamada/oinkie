@@ -70,29 +70,22 @@ pub enum Ir {
     /// yields, rather than raw lifted P-Code.
     #[default]
     GhidraPcode,
-    /// The Hex-Rays microcode as it stands once generated, before any
-    /// optimisation.
+    /// The Hex-Rays microcode, the representation IDA Pro's decompiler works
+    /// in, at `MMAT_LVARS` -- the last of its maturities and the one the
+    /// pseudocode is rendered from.
+    ///
+    /// The earlier maturities are not offered. They are the decompiler's
+    /// pipeline rather than representations it publishes: the same enum holds
+    /// `MMAT_ZERO`, "microcode does not exist", and `MMAT_GLBOPT2` is
+    /// described by Hex-Rays only as "most global optimization passes are
+    /// done". Nothing says their shape is stable across releases, and a name
+    /// here is permanent -- a file carrying it has to stay readable. Adding
+    /// one later costs nothing; removing one breaks every file that named it.
     ///
     /// Producing microcode at all means running IDA Pro's decompiler, and on
     /// an installation whose only decompiler is the cloud one that means the
     /// function is sent to Hex-Rays' servers. `lift` says so before it starts.
-    IdaMicrocodeGenerated,
-    /// The Hex-Rays microcode after preoptimisation.
-    IdaMicrocodePreoptimized,
-    /// The Hex-Rays microcode after local optimisation.
-    IdaMicrocodeLocopt,
-    /// The Hex-Rays microcode once calls have been resolved into call
-    /// instructions with arguments.
-    IdaMicrocodeCalls,
-    /// The Hex-Rays microcode after the first global optimisation pass.
-    IdaMicrocodeGlbopt1,
-    /// The Hex-Rays microcode after the second global optimisation pass.
-    IdaMicrocodeGlbopt2,
-    /// The Hex-Rays microcode after the third global optimisation pass.
-    IdaMicrocodeGlbopt3,
-    /// The Hex-Rays microcode once local variables have been allocated, which
-    /// is the last maturity and the one the pseudocode is rendered from.
-    IdaMicrocodeLvars,
+    IdaMicrocode,
     /// Binary Ninja's Low Level IL: one expression per machine instruction,
     /// registers and flags still explicit.
     BinaryNinjaLlil,
@@ -114,14 +107,7 @@ impl Ir {
     pub fn tool(&self) -> &'static str {
         match self {
             Ir::GhidraPcode => "Ghidra",
-            Ir::IdaMicrocodeGenerated
-            | Ir::IdaMicrocodePreoptimized
-            | Ir::IdaMicrocodeLocopt
-            | Ir::IdaMicrocodeCalls
-            | Ir::IdaMicrocodeGlbopt1
-            | Ir::IdaMicrocodeGlbopt2
-            | Ir::IdaMicrocodeGlbopt3
-            | Ir::IdaMicrocodeLvars => "IDA Pro",
+            Ir::IdaMicrocode => "IDA Pro",
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => "Binary Ninja",
         }
     }
@@ -142,14 +128,7 @@ impl Ir {
                     "/opt/ghidra/libexec",
                 ],
             },
-            Ir::IdaMicrocodeGenerated
-            | Ir::IdaMicrocodePreoptimized
-            | Ir::IdaMicrocodeLocopt
-            | Ir::IdaMicrocodeCalls
-            | Ir::IdaMicrocodeGlbopt1
-            | Ir::IdaMicrocodeGlbopt2
-            | Ir::IdaMicrocodeGlbopt3
-            | Ir::IdaMicrocodeLvars => HomeSpec {
+            Ir::IdaMicrocode => HomeSpec {
                 tool: self.tool(),
                 env: "IDA_HOME",
                 // The directory holding `idat`, which is the headless entry
@@ -203,14 +182,7 @@ impl Ir {
     fn as_str(&self) -> &'static str {
         match self {
             Ir::GhidraPcode => "ghidra-pcode",
-            Ir::IdaMicrocodeGenerated => "ida-microcode-generated",
-            Ir::IdaMicrocodePreoptimized => "ida-microcode-preoptimized",
-            Ir::IdaMicrocodeLocopt => "ida-microcode-locopt",
-            Ir::IdaMicrocodeCalls => "ida-microcode-calls",
-            Ir::IdaMicrocodeGlbopt1 => "ida-microcode-glbopt1",
-            Ir::IdaMicrocodeGlbopt2 => "ida-microcode-glbopt2",
-            Ir::IdaMicrocodeGlbopt3 => "ida-microcode-glbopt3",
-            Ir::IdaMicrocodeLvars => "ida-microcode-lvars",
+            Ir::IdaMicrocode => "ida-microcode",
             Ir::BinaryNinjaLlil => "binary-ninja-llil",
             Ir::BinaryNinjaMlil => "binary-ninja-mlil",
             Ir::BinaryNinjaHlil => "binary-ninja-hlil",
@@ -224,14 +196,7 @@ impl std::str::FromStr for Ir {
     fn from_str(s: &str) -> Result<Self> {
         match s {
             "ghidra-pcode" => Ok(Ir::GhidraPcode),
-            "ida-microcode-generated" => Ok(Ir::IdaMicrocodeGenerated),
-            "ida-microcode-preoptimized" => Ok(Ir::IdaMicrocodePreoptimized),
-            "ida-microcode-locopt" => Ok(Ir::IdaMicrocodeLocopt),
-            "ida-microcode-calls" => Ok(Ir::IdaMicrocodeCalls),
-            "ida-microcode-glbopt1" => Ok(Ir::IdaMicrocodeGlbopt1),
-            "ida-microcode-glbopt2" => Ok(Ir::IdaMicrocodeGlbopt2),
-            "ida-microcode-glbopt3" => Ok(Ir::IdaMicrocodeGlbopt3),
-            "ida-microcode-lvars" => Ok(Ir::IdaMicrocodeLvars),
+            "ida-microcode" => Ok(Ir::IdaMicrocode),
             "binary-ninja-llil" => Ok(Ir::BinaryNinjaLlil),
             "binary-ninja-mlil" => Ok(Ir::BinaryNinjaMlil),
             "binary-ninja-hlil" => Ok(Ir::BinaryNinjaHlil),
@@ -356,21 +321,10 @@ impl LifterBuilder {
                     ),
                 )))
             }
-            Ir::IdaMicrocodeGenerated
-            | Ir::IdaMicrocodePreoptimized
-            | Ir::IdaMicrocodeLocopt
-            | Ir::IdaMicrocodeCalls
-            | Ir::IdaMicrocodeGlbopt1
-            | Ir::IdaMicrocodeGlbopt2
-            | Ir::IdaMicrocodeGlbopt3
-            | Ir::IdaMicrocodeLvars => {
-                let Some(maturity) = crate::ida::maturity(self.ir) else {
-                    return Err(not_implemented(self.ir));
-                };
+            Ir::IdaMicrocode => {
                 let home = self.ir.find_home(self.home.as_deref())?;
                 Ok(Box::new(Verifying(crate::ida::lifter::IdaLifter::new(
                     home,
-                    maturity,
                     self.script,
                     self.intermediate_dir,
                 ))))

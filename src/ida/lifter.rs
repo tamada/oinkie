@@ -15,24 +15,14 @@ static WARNED: Once = Once::new();
 /// Lifts with IDA Pro's headless `idat`, at one maturity of the microcode.
 pub struct IdaLifter {
     home: PathBuf,
-    /// The word the lifting script takes, resolved before this was
-    /// constructed so that nothing here accounts for a representation that is
-    /// not IDA's.
-    maturity: &'static str,
     script: Option<PathBuf>,
     intermediate_dir: Option<PathBuf>,
 }
 
 impl IdaLifter {
-    pub fn new(
-        home: PathBuf,
-        maturity: &'static str,
-        script: Option<PathBuf>,
-        intermediate_dir: Option<PathBuf>,
-    ) -> Self {
+    pub fn new(home: PathBuf, script: Option<PathBuf>, intermediate_dir: Option<PathBuf>) -> Self {
         Self {
             home,
-            maturity,
             script,
             intermediate_dir,
         }
@@ -55,7 +45,6 @@ impl Lifter for IdaLifter {
             WARNED.call_once(|| log::warn!("{message}"));
         }
 
-        let maturity = self.maturity;
         Headless {
             tool: "IDA Pro",
             program: &idat,
@@ -63,7 +52,7 @@ impl Lifter for IdaLifter {
             default_script: ("MicrocodeLifter.py", DEFAULT_IDA_SCRIPT),
             work_dir: self.intermediate_dir.as_deref(),
         }
-        .lift(input, output, |i| command_line(maturity, i))
+        .lift(input, output, command_line)
     }
 }
 
@@ -78,7 +67,7 @@ impl Lifter for IdaLifter {
 ///   leave a file in the repository.
 /// - `-S` takes the script *and its arguments* as one argument, split by IDA
 ///   rather than by a shell.
-fn command_line(maturity: &'static str, i: &Invocation) -> Vec<OsString> {
+fn command_line(i: &Invocation) -> Vec<OsString> {
     let script = i.script_dir.join(&i.script_name);
     vec![
         "-A".into(),
@@ -91,8 +80,6 @@ fn command_line(maturity: &'static str, i: &Invocation) -> Vec<OsString> {
         {
             let mut s = OsString::from("-S");
             s.push(&script);
-            s.push(" ");
-            s.push(maturity);
             s.push(" ");
             s.push(format!("{}.json", i.name));
             s
@@ -129,14 +116,14 @@ mod tests {
             script_dir: PathBuf::from("/scripts"),
             script_name: OsString::from("MicrocodeLifter.py"),
         };
-        let args = command_line("glbopt2", &i);
+        let args = command_line(&i);
         assert_eq!(
             args,
             vec![
                 OsString::from("-A"),
                 OsString::from("-c"),
                 OsString::from("-o/work/sample"),
-                OsString::from("-S/scripts/MicrocodeLifter.py glbopt2 sample.json"),
+                OsString::from("-S/scripts/MicrocodeLifter.py sample.json"),
                 OsString::from("/bin/sample"),
             ]
         );
@@ -146,7 +133,7 @@ mod tests {
     /// whatever failure spawning a missing program produces.
     #[test]
     fn test_a_missing_idat_is_named() {
-        let lifter = IdaLifter::new(PathBuf::from("/oinkie-no-such-ida"), "lvars", None, None);
+        let lifter = IdaLifter::new(PathBuf::from("/oinkie-no-such-ida"), None, None);
         let err = match lifter.lift(Path::new("in"), Path::new("out")) {
             Err(e) => e.to_string(),
             Ok(()) => panic!("a lift succeeded without IDA"),

@@ -21,7 +21,7 @@ outputs:
 
 **oinkie** is a software birthmark toolkit designed for detecting software theft. It extracts unique characteristics (birthmarks) of software from binary formats and compares them to identify suspected plagiarism.
 
-**oinkie** lifts with Ghidra, to its P-Code; with Binary Ninja, to any of its three intermediate languages; and with IDA Pro, to the Hex-Rays microcode at any of its eight maturities. Each is a separate representation, and birthmarks are not compared across them.
+**oinkie** lifts with Ghidra, to its P-Code; with Binary Ninja, to any of its three intermediate languages; and with IDA Pro, to the Hex-Rays microcode. Each is a separate representation, and birthmarks are not compared across them.
 
 ---
 

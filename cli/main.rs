@@ -659,8 +659,7 @@ mod tests {
     fn test_each_backend_names_its_own_environment_variable() {
         for (ir, env) in [
             (Ir::GhidraPcode, "GHIDRA_HOME"),
-            (Ir::IdaMicrocodeGenerated, "IDA_HOME"),
-            (Ir::IdaMicrocodeLvars, "IDA_HOME"),
+            (Ir::IdaMicrocode, "IDA_HOME"),
             (Ir::BinaryNinjaLlil, "BINARY_NINJA_HOME"),
             (Ir::BinaryNinjaMlil, "BINARY_NINJA_HOME"),
             (Ir::BinaryNinjaHlil, "BINARY_NINJA_HOME"),
@@ -681,7 +680,7 @@ mod tests {
     #[test]
     fn test_a_representation_that_is_not_binary_ninjas_has_no_level() {
         assert_eq!(oinkie::prelude::Ir::GhidraPcode.tool(), "Ghidra");
-        assert_eq!(Ir::IdaMicrocodeLvars.tool(), "IDA Pro");
+        assert_eq!(Ir::IdaMicrocode.tool(), "IDA Pro");
         assert_eq!(Ir::BinaryNinjaMlil.tool(), "Binary Ninja");
     }
 

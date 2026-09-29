@@ -3,7 +3,7 @@
 `oinkie lift` drives `idat` headless and reads back the Hex-Rays microcode.
 
 ```sh
-oinkie lift -r ida-microcode-lvars path/to/binary
+oinkie lift -r ida-microcode path/to/binary
 ```
 
 ## ☁️ Read this first: the decompiler may be in the cloud
@@ -17,7 +17,7 @@ the machine.
 `oinkie lift` warns before it starts — before, because a warning that arrives
 once the function has left is a log entry. It does not prompt and does not
 refuse: `lift` is a batch command called from scripts, a prompt would hang a
-non-interactive run, and asking for `-r ida-microcode-*` is the consent, since
+non-interactive run, and asking for `-r ida-microcode` is the consent, since
 IDA has no other representation to ask for.
 
 The warning is conditional, and this is how it decides. A decompiler plugin is
@@ -46,30 +46,34 @@ application bundle. The error names the variable and where it looked.
 runs `py-activate-idalib.py`, which rewrites the Python environment oinkie is
 running in. `idat` needs nothing installed.
 
-## 🧬 Eight maturities
+## 🧬 One representation, not eight
 
-The decompiler rewrites the microcode through a pipeline, and each stage has
-its own vocabulary. All eight are offered; which one answers your question is
-yours to decide.
+The decompiler rewrites the microcode through a pipeline, and `gen_microcode`
+takes the stage to stop at. oinkie reads the last of them, `MMAT_LVARS`: local
+variables allocated, and what the pseudocode is rendered from.
 
-| `--ir` | stage |
-| --- | --- |
-| `ida-microcode-generated` | as lifted, before optimisation |
-| `ida-microcode-preoptimized` | after preoptimisation |
-| `ida-microcode-locopt` | after local optimisation |
-| `ida-microcode-calls` | calls resolved into calls with arguments |
-| `ida-microcode-glbopt1` … `glbopt3` | the three global optimisation passes |
-| `ida-microcode-lvars` | local variables allocated; what the pseudocode is rendered from |
+The earlier stages are not offered, and the reason is worth stating because
+Binary Ninja's three levels look like a parallel and are not. LLIL, MLIL and
+HLIL are representations Binary Ninja publishes, and picking one is a choice
+its users are expected to make. The maturities are where a plugin may intervene
+in the decompiler's own pipeline. The enum says so: `MMAT_ZERO` is in it,
+described as "microcode does not exist", `MMAT_CALLS` is documented by pointing
+at an event hook, and `MMAT_GLBOPT2` only as "most global optimization passes
+are done".
 
-`MMAT_ZERO` is not among them: it is the state before any microcode exists, so
-there is nothing to write.
+Nothing states that the intermediate shapes are stable across releases, and a
+representation named here is permanent — a file carrying the name has to stay
+readable. Measured on one `hello world`, four of the eight produced the same
+operations anyway: Hex-Rays says the microcode is fixed at `MMAT_GLBOPT3`, so
+`MMAT_LVARS` differs from it only in what the variables are called.
 
-They are not copies of one another, and the difference is not only in size. On
-one `hello world`, `_main` holds 8 instructions at `preoptimized` and 2 at
-`glbopt1` — and at `calls` the call has been folded into the operand of the
-instruction that consumes its result, so it appears as a sub-instruction rather
-than in the block's own list. The script walks into operands for exactly that
-reason; without it that maturity reports no call at all.
+Adding a maturity later costs nothing. Removing one breaks every file that
+named it.
+
+One thing the pipeline does that the reader has to account for: the optimiser
+folds a call into whatever consumes its result, so a call can sit inside
+another instruction's operand rather than in a block's own list. The script
+walks into operands for that reason.
 
 ## 🔑 The symbol table
 
@@ -87,7 +91,7 @@ match. It was written backwards first and did exactly that.
 `--script` takes an IDAPython file in place of the built-in one, run as
 
 ```
-idat -A -c -o<database> -S"<your script> <maturity> <output name>" <binary>
+idat -A -c -o<database> -S"<your script> <output name>" <binary>
 ```
 
 with the working directory set to where the output belongs. Three obligations:
@@ -101,8 +105,8 @@ with the working directory set to where the output belongs. Three obligations:
 
 IDA cannot be installed on a CI runner, so nothing in CI lifts — see [the note
 on all the lifters](../README.md). The script is parsed on every push, and
-fixtures under `testdata/lifted/mcode_*/` drive `tests/ida_test.rs`.
+fixtures under `testdata/lifted/mcode/` drive `tests/ida_test.rs`.
 
-The test that matters most asserts that every maturity **resolves** the call in
-the fixture, not merely that one is present. Both bugs found while writing this
-were of that shape.
+The test that matters most asserts that the call in the fixture is **resolved**,
+not merely that one is present. Both bugs found while writing this were of that
+shape.

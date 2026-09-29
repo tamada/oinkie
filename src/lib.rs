@@ -302,8 +302,8 @@ mod tests {
                     .to_string(),
             ),
             (
-                Error::IrMismatch(Ir::GhidraPcode, Ir::IdaMicrocodeLvars),
-                "cannot compare ghidra-pcode against ida-microcode-lvars: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond".to_string(),
+                Error::IrMismatch(Ir::GhidraPcode, Ir::IdaMicrocode),
+                "cannot compare ghidra-pcode against ida-microcode: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond".to_string(),
             ),
             (
                 Error::UnresolvedCalls(PathBuf::from("bin/sample"), Ir::GhidraPcode, 3),

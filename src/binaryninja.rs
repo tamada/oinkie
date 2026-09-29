@@ -45,15 +45,7 @@ pub(crate) fn level(ir: crate::lift::Ir) -> Option<&'static str> {
         Ir::BinaryNinjaLlil => Some("llil"),
         Ir::BinaryNinjaMlil => Some("mlil"),
         Ir::BinaryNinjaHlil => Some("hlil"),
-        Ir::GhidraPcode
-        | Ir::IdaMicrocodeGenerated
-        | Ir::IdaMicrocodePreoptimized
-        | Ir::IdaMicrocodeLocopt
-        | Ir::IdaMicrocodeCalls
-        | Ir::IdaMicrocodeGlbopt1
-        | Ir::IdaMicrocodeGlbopt2
-        | Ir::IdaMicrocodeGlbopt3
-        | Ir::IdaMicrocodeLvars => None,
+        Ir::GhidraPcode | Ir::IdaMicrocode => None,
     }
 }
 
@@ -209,7 +201,7 @@ mod tests {
         assert_eq!(level(Ir::BinaryNinjaMlil), Some("mlil"));
         assert_eq!(level(Ir::BinaryNinjaHlil), Some("hlil"));
         assert_eq!(level(Ir::GhidraPcode), None);
-        assert_eq!(level(Ir::IdaMicrocodeLvars), None);
+        assert_eq!(level(Ir::IdaMicrocode), None);
     }
 
     /// An operation that is not a call names no symbol, however its operands

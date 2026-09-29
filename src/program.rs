@@ -77,14 +77,7 @@ pub enum AnyProgram {
     BinaryNinjaLlil(Program<crate::binaryninja::Op<crate::binaryninja::Llil>>),
     BinaryNinjaMlil(Program<crate::binaryninja::Op<crate::binaryninja::Mlil>>),
     BinaryNinjaHlil(Program<crate::binaryninja::Op<crate::binaryninja::Hlil>>),
-    IdaMicrocodeGenerated(Program<crate::ida::Op<crate::ida::Generated>>),
-    IdaMicrocodePreoptimized(Program<crate::ida::Op<crate::ida::Preoptimized>>),
-    IdaMicrocodeLocopt(Program<crate::ida::Op<crate::ida::Locopt>>),
-    IdaMicrocodeCalls(Program<crate::ida::Op<crate::ida::Calls>>),
-    IdaMicrocodeGlbopt1(Program<crate::ida::Op<crate::ida::Glbopt1>>),
-    IdaMicrocodeGlbopt2(Program<crate::ida::Op<crate::ida::Glbopt2>>),
-    IdaMicrocodeGlbopt3(Program<crate::ida::Op<crate::ida::Glbopt3>>),
-    IdaMicrocodeLvars(Program<crate::ida::Op<crate::ida::Lvars>>),
+    IdaMicrocode(Program<crate::ida::Op>),
 }
 
 /// Just enough of a lifted file to learn which representation it is in.
@@ -110,14 +103,7 @@ macro_rules! dispatch {
             Self::BinaryNinjaLlil($p) => $body,
             Self::BinaryNinjaMlil($p) => $body,
             Self::BinaryNinjaHlil($p) => $body,
-            Self::IdaMicrocodeGenerated($p) => $body,
-            Self::IdaMicrocodePreoptimized($p) => $body,
-            Self::IdaMicrocodeLocopt($p) => $body,
-            Self::IdaMicrocodeCalls($p) => $body,
-            Self::IdaMicrocodeGlbopt1($p) => $body,
-            Self::IdaMicrocodeGlbopt2($p) => $body,
-            Self::IdaMicrocodeGlbopt3($p) => $body,
-            Self::IdaMicrocodeLvars($p) => $body,
+            Self::IdaMicrocode($p) => $body,
         }
     };
 }
@@ -151,29 +137,8 @@ impl AnyProgram {
             Ir::BinaryNinjaHlil => serde_json::from_slice(&bytes)
                 .map(Self::BinaryNinjaHlil)
                 .map_err(json_err),
-            Ir::IdaMicrocodeGenerated => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeGenerated)
-                .map_err(json_err),
-            Ir::IdaMicrocodePreoptimized => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodePreoptimized)
-                .map_err(json_err),
-            Ir::IdaMicrocodeLocopt => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeLocopt)
-                .map_err(json_err),
-            Ir::IdaMicrocodeCalls => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeCalls)
-                .map_err(json_err),
-            Ir::IdaMicrocodeGlbopt1 => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeGlbopt1)
-                .map_err(json_err),
-            Ir::IdaMicrocodeGlbopt2 => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeGlbopt2)
-                .map_err(json_err),
-            Ir::IdaMicrocodeGlbopt3 => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeGlbopt3)
-                .map_err(json_err),
-            Ir::IdaMicrocodeLvars => serde_json::from_slice(&bytes)
-                .map(Self::IdaMicrocodeLvars)
+            Ir::IdaMicrocode => serde_json::from_slice(&bytes)
+                .map(Self::IdaMicrocode)
                 .map_err(json_err),
         }
     }

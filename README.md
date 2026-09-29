@@ -56,8 +56,8 @@ Next, we should lift the binary files to the OIR format.
 `oinkie` lifts with [Ghidra](https://www.ghidradocs.com), to its P-Code; with
 [Binary Ninja](https://binary.ninja), to any of its three intermediate
 languages; and with [IDA Pro](https://hex-rays.com/ida-pro), to the Hex-Rays
-microcode at any of its eight maturities. Each is a separate representation and
-birthmarks are not compared across them.
+microcode. Each is a separate representation and birthmarks are not compared
+across them.
 
 See also ([`assets/lifters/README.md`](assets/lifters/README.md)), and each
 backend's own notes: ([Ghidra](assets/lifters/ghidra/README.md)),

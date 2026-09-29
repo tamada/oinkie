@@ -2,11 +2,14 @@
 
 Run by `oinkie lift` as
 
-    idat -A -c -S"MicrocodeLifter.py <maturity> <output-name>" <binary>
+    idat -A -c -S"MicrocodeLifter.py <output-name>" <binary>
 
-with the working directory set to where the JSON should land. `<maturity>` is
-one of the names below and decides both which stage of the microcode is read
-and which `ir` value the file carries.
+with the working directory set to where the JSON should land.
+
+The microcode is read at `MMAT_LVARS`, the last of the decompiler's maturities.
+The earlier ones are pipeline stages rather than representations IDA publishes
+-- the same enum holds `MMAT_ZERO`, "microcode does not exist" -- and nothing
+says their shape is stable across releases, so oinkie does not name them.
 
 Producing microcode runs the decompiler. On an installation whose only
 decompiler is the cloud one, that sends each function to Hex-Rays' servers;
@@ -37,19 +40,6 @@ import ida_pro
 import idautils
 import idc
 
-# The maturities, and the constant each names. MMAT_ZERO is absent: it is the
-# state before any microcode exists, so there is nothing there to write.
-MATURITIES = {
-    "generated": "MMAT_GENERATED",
-    "preoptimized": "MMAT_PREOPTIMIZED",
-    "locopt": "MMAT_LOCOPT",
-    "calls": "MMAT_CALLS",
-    "glbopt1": "MMAT_GLBOPT1",
-    "glbopt2": "MMAT_GLBOPT2",
-    "glbopt3": "MMAT_GLBOPT3",
-    "lvars": "MMAT_LVARS",
-}
-
 # Opcode number to name, read from the module rather than written out. The
 # microcode's vocabulary belongs to IDA and grows with releases; a list copied
 # into this file would be a list to keep in step with one nobody controls.
@@ -75,12 +65,10 @@ def operand(mop):
 def walk(insn):
     """An instruction and every sub-instruction inside its operands.
 
-    A microcode operand can be an instruction of its own. The optimiser folds a
-    call into whatever consumes its result, so at MMAT_CALLS `_main`'s only call
-    sits inside an `m_xds` operand rather than in the block's list. Walking only
-    the list left that maturity with no call at all -- and `extract` refusing
-    every fc-* birthmark of it, which is the refusal working but for the wrong
-    reason.
+    A microcode operand can be an instruction of its own: the optimiser folds a
+    call into whatever consumes its result, so a call can sit inside another
+    instruction's operand rather than in the block's list. Walking only the list
+    misses it, which at MMAT_CALLS left a function with no call at all.
 
     Sub-instructions come first, the way an operand is evaluated before the
     operation that reads it.
@@ -170,28 +158,21 @@ def symbol_table(keys):
 
 
 def main(argv):
-    if len(argv) != 3:
-        sys.stderr.write("usage: MicrocodeLifter.py <maturity> <output-name>\n")
+    if len(argv) != 2:
+        sys.stderr.write("usage: MicrocodeLifter.py <output-name>\n")
         return 2
-    maturity_name, output = argv[1], argv[2]
-    if maturity_name not in MATURITIES:
-        sys.stderr.write(
-            "unknown maturity %r, expected one of %s\n"
-            % (maturity_name, ", ".join(sorted(MATURITIES)))
-        )
-        return 2
+    output = argv[1]
 
     ida_auto.auto_wait()
     if not ida_hexrays.init_hexrays_plugin():
         sys.stderr.write("oinkie: the Hex-Rays decompiler is not available\n")
         return 3
-    maturity = getattr(ida_hexrays, MATURITIES[maturity_name])
 
-    functions, keys = lift(maturity)
+    functions, keys = lift(ida_hexrays.MMAT_LVARS)
     document = {
         "program": idc.get_root_filename(),
         "path": idc.get_input_file_path(),
-        "ir": "ida-microcode-%s" % maturity_name,
+        "ir": "ida-microcode",
         "symbols": symbol_table(keys),
         "functions": functions,
     }

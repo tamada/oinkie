@@ -2,7 +2,7 @@
 //!
 //! IDA Pro is licensed and cannot be installed on a CI runner, so nothing here
 //! lifts — see `assets/lifters/README.md`. The fixtures under
-//! `testdata/lifted/mcode_*` were produced by `oinkie lift` on a machine that
+//! `testdata/lifted/mcode/` were produced by `oinkie lift` on a machine that
 //! has it, and reading them back is what keeps the reader honest where the
 //! lifter cannot run.
 //!
@@ -13,103 +13,73 @@
 use oinkie::prelude::*;
 use std::path::{Path, PathBuf};
 
-const MATURITIES: [(&str, Ir); 8] = [
-    ("generated", Ir::IdaMicrocodeGenerated),
-    ("preoptimized", Ir::IdaMicrocodePreoptimized),
-    ("locopt", Ir::IdaMicrocodeLocopt),
-    ("calls", Ir::IdaMicrocodeCalls),
-    ("glbopt1", Ir::IdaMicrocodeGlbopt1),
-    ("glbopt2", Ir::IdaMicrocodeGlbopt2),
-    ("glbopt3", Ir::IdaMicrocodeGlbopt3),
-    ("lvars", Ir::IdaMicrocodeLvars),
-];
-
-fn fixture(maturity: &str, name: &str) -> PathBuf {
-    Path::new("testdata/lifted")
-        .join(format!("mcode_{maturity}"))
-        .join(name)
+fn fixture(name: &str) -> PathBuf {
+    Path::new("testdata/lifted/mcode").join(name)
 }
 
 #[test]
-fn test_each_maturity_reads_back_as_the_representation_it_names() {
-    for (maturity, ir) in MATURITIES {
-        let p = AnyProgram::load(&fixture(maturity, "hello_clang.json"))
-            .unwrap_or_else(|e| panic!("{maturity}: {e}"));
-        assert_eq!(p.ir(), ir, "{maturity} loaded as the wrong representation");
-        assert_eq!(p.name(), "hello_clang");
-    }
+fn test_the_fixture_reads_back_as_the_representation_it_names() {
+    let p = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
+    assert_eq!(p.ir(), Ir::IdaMicrocode);
+    assert_eq!(p.name(), "hello_clang");
 }
 
-/// The failure this exists for is silent, and it happened: the microcode
-/// renders a global as `$name`, the symbol table was first keyed by the
-/// resolved name instead, and every fc-* birthmark came out empty. Nothing
-/// caught it — `m_call` is still a call, so the check that refuses a program
-/// in which nothing is a call passes — and two empty birthmarks score as a
-/// perfect match.
+/// The failure this exists for is silent, and it happened twice.
+///
+/// The microcode renders a global as `$name`, and the symbol table was first
+/// keyed by the resolved name instead, so it was empty. Separately, the
+/// optimiser folds a call into whatever consumes its result, so a call can sit
+/// inside another instruction's operand; walking only the block's list missed
+/// it.
+///
+/// Neither failed loudly. `m_call` is still a call wherever it is, so the check
+/// that refuses a program in which nothing is a call passed in the first case,
+/// and every `fc-*` birthmark simply came out empty — two of which score as a
+/// perfect match. So this asserts that the call is *resolved*, not that one is
+/// present.
 #[test]
-fn test_every_maturity_resolves_the_call_that_is_there() {
-    for (maturity, _) in MATURITIES {
-        let p = AnyProgram::load(&fixture(maturity, "hello_clang.json")).unwrap();
-        let b = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
-            .extract_any(&p)
-            .unwrap_or_else(|e| panic!("{maturity}: {e}"));
-        let calls: Vec<String> = b
-            .iter()
-            .flat_map(|e| e.ops().map(|s| s.to_string()))
-            .collect();
-        assert!(
-            calls.iter().any(|c| c == "_printf"),
-            "{maturity} resolved no call to _printf: {calls:?}"
-        );
-    }
+fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
+    let p = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
+    let b = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
+        .extract_any(&p)
+        .unwrap();
+    let calls: Vec<String> = b
+        .iter()
+        .flat_map(|e| e.ops().map(|s| s.to_string()))
+        .collect();
+    assert!(
+        calls.iter().any(|c| c == "_printf"),
+        "no call resolved to _printf: {calls:?}"
+    );
 }
 
-/// Two maturities of one program are two representations, and mixing them
-/// would measure the decompiler's pipeline rather than the programs.
+/// The microcode is not P-Code, and mixing them would measure the decompilers
+/// rather than the programs.
 #[test]
-fn test_two_maturities_of_the_same_program_refuse_to_be_compared() {
-    let generated = AnyProgram::load(&fixture("generated", "hello_clang.json")).unwrap();
-    let lvars = AnyProgram::load(&fixture("lvars", "hello_clang.json")).unwrap();
+fn test_the_microcode_refuses_to_be_compared_with_p_code() {
+    let mcode = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
+    let pcode = AnyProgram::load(Path::new("testdata/lifted/pcodes/hello_clang.json")).unwrap();
     let err = match Comparator::from(&Algorithm::Jaccard).compare_any(
-        &generated,
-        &lvars,
+        &mcode,
+        &pcode,
         &Aggregator::default(),
     ) {
         Err(e) => e.to_string(),
-        Ok(_) => panic!("two maturities were compared"),
+        Ok(_) => panic!("microcode and P-Code were compared"),
     };
     assert!(
-        err.contains("ida-microcode-generated") && err.contains("ida-microcode-lvars"),
+        err.contains("ida-microcode") && err.contains("ghidra-pcode"),
         "the refusal does not name both representations: {err}"
     );
 }
 
 #[test]
-fn test_a_maturity_compares_with_itself() {
-    for (maturity, _) in MATURITIES {
-        let a = AnyProgram::load(&fixture(maturity, "hello_clang.json")).unwrap();
-        let b = AnyProgram::load(&fixture(maturity, "hello_gcc.json")).unwrap();
-        let c = Comparator::from(&Algorithm::Jaccard)
-            .compare_any(&a, &b, &Aggregator::default())
-            .unwrap_or_else(|e| panic!("{maturity}: {e}"));
-        let s = c.similarity();
-        assert!(
-            (0.0..=1.0).contains(&s),
-            "{maturity} scored outside [0, 1]: {s}"
-        );
-    }
-}
-
-/// The pipeline rewrites the microcode, so the maturities are not copies of
-/// one another. Asserting that at least one pair differs says the maturity
-/// argument reaches IDA at all — every fixture being identical is what a
-/// `--maturity` that was quietly ignored would look like.
-#[test]
-fn test_the_maturities_are_not_all_the_same_program() {
-    let first = std::fs::read_to_string(fixture("generated", "hello_clang.json")).unwrap();
-    let last = std::fs::read_to_string(fixture("lvars", "hello_clang.json")).unwrap();
-    assert_ne!(
-        first, last,
-        "generated and lvars are byte-identical, so the maturity was ignored"
-    );
+fn test_two_programs_in_the_microcode_compare() {
+    let a = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
+    let b = AnyProgram::load(&fixture("hello_gcc.json")).unwrap();
+    let c = Comparator::from(&Algorithm::Jaccard)
+        .compare_any(&a, &b, &Aggregator::default())
+        .unwrap();
+    let s = c.similarity();
+    assert!((0.0..=1.0).contains(&s), "scored outside [0, 1]: {s}");
 }
