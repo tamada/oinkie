@@ -49,8 +49,8 @@ desktop app does not start in your project:
 
 Use **`mcp`**. Every image ends in `ENTRYPOINT ["oinkie"]`, so any of them can
 serve — this one is `light` with `mcp --root /work` as its default command, so
-the configuration below does not have to say it. The binary is the same 145 MB
-either way.
+the configuration below does not have to say it. It is the same binary and the
+same layers, so the image is the same 145 MB as `light`.
 
 Not `ghidra`: the tools here never lift, so its decompiler and JDK are a
 gigabyte of dead weight on this path.

@@ -13,16 +13,27 @@
 # Usage:
 #   .github/scripts/verify_mcp.sh <path to oinkie>
 #   .github/scripts/verify_mcp.sh --image <tag>
+#   .github/scripts/verify_mcp.sh --image <tag> --no-args
 #
 # The image form asks the same question of a container, which is how the
 # documentation tells people to run this -- and `docker run -i` without a TTY
 # is itself part of what is being checked.
+#
+# --no-args passes no command at all, so the image's own CMD has to be the
+# right one. That is the whole of what `mcp-image` adds over `light-image`, and
+# the only other place it is read is a client's startup.
 
 set -euo pipefail
 
 if [ "${1:-}" = "--image" ]; then
-    readonly SUBJECT="image ${2:?usage: $0 --image <tag>}"
-    run() { docker run -i --rm "$2" mcp; }
+    readonly IMAGE="${2:?usage: $0 --image <tag> [--no-args]}"
+    if [ "${3:-}" = "--no-args" ]; then
+        readonly SUBJECT="image $IMAGE with no arguments"
+        run() { docker run -i --rm "$IMAGE"; }
+    else
+        readonly SUBJECT="image $IMAGE"
+        run() { docker run -i --rm "$IMAGE" mcp; }
+    fi
 else
     readonly SUBJECT="${1:?usage: $0 <path to oinkie> | --image <tag>}"
     run() { "$1" mcp; }
