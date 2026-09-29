@@ -601,6 +601,11 @@ impl Kgram {
     pub fn new(seq: Vec<String>) -> Self {
         Self(seq)
     }
+
+    /// The operations, in the order the k-gram holds them.
+    pub fn ops(&self) -> &[String] {
+        &self.0
+    }
 }
 
 impl Data {

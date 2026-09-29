@@ -37,6 +37,7 @@ complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "lift" -d 'Lift binary
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "extract" -d 'Extract birthmarks from a lifted binary file (JSON format)'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "compare" -d 'Compare birthmarks and output the similarity score'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "reaggregate" -d 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "stats" -d 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function\'s birthmark is'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "run" -d 'Extract birthmarks and compare them in one command'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
 complete -c oinkie -n "__fish_oinkie_using_subcommand info" -s h -l help -d 'Print help'
@@ -106,6 +107,14 @@ complete -c oinkie -n "__fish_oinkie_using_subcommand compare" -s h -l help -d '
 complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s d -l dest-file -d 'Specify the result CSV file of the comparing results to reaggregate. The file contains the birthmark-wise similarity score list.' -r -F
 complete -c oinkie -n "__fish_oinkie_using_subcommand reaggregate" -s h -l help -d 'Print help'
+complete -c oinkie -n "__fish_oinkie_using_subcommand stats" -s f -l format -d 'Output format' -r -f -a "json\t'Every table at once: the summary, the per-file rows and the skipped files'
+csv\t'One table: the summary, or the per-file rows with --per-file, or the most frequent elements with --top'
+markdown\t'Tables to read, or to paste into a paper'"
+complete -c oinkie -n "__fish_oinkie_using_subcommand stats" -s o -l output -d 'Write the statistics to FILE rather than to standard output' -r -F
+complete -c oinkie -n "__fish_oinkie_using_subcommand stats" -s t -l top -d 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.' -r
+complete -c oinkie -n "__fish_oinkie_using_subcommand stats" -s r -l recursive -d 'Descend into the subdirectories of the given directories'
+complete -c oinkie -n "__fish_oinkie_using_subcommand stats" -l per-file -d 'Report each birthmark file as well as each group. With -f csv this replaces the summary table.'
+complete -c oinkie -n "__fish_oinkie_using_subcommand stats" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s a -l analysis -d 'Analysis to run, as \'{birthmark}-{algorithm}\' -- for example \'op-set-jaccard\' or \'op-3gram-freq-cosine\'. Run \'oinkie info\' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.' -r -f -a "fc-seq-levenshtein\t''
 fc-seq-lcs\t''
 fc-freq-cosine\t''
@@ -196,10 +205,11 @@ complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s d -l dest -d 'Dest
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s A -l aggregator -d 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn).' -r
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s S -l skip -d 'Skip if the similarity file already exists for the pair of birthmarks'
 complete -c oinkie -n "__fish_oinkie_using_subcommand run" -s h -l help -d 'Print help (see more with \'--help\')'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "info" -d 'Display information about the application'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "lift" -d 'Lift binary files to JSON files of an intermediate representation, using a specified lifter'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "extract" -d 'Extract birthmarks from a lifted binary file (JSON format)'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "compare" -d 'Compare birthmarks and output the similarity score'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "reaggregate" -d 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "run" -d 'Extract birthmarks and compare them in one command'
-complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate run help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "info" -d 'Display information about the application'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "lift" -d 'Lift binary files to JSON files of an intermediate representation, using a specified lifter'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "extract" -d 'Extract birthmarks from a lifted binary file (JSON format)'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "compare" -d 'Compare birthmarks and output the similarity score'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "reaggregate" -d 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "stats" -d 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function\'s birthmark is'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "run" -d 'Extract birthmarks and compare them in one command'
+complete -c oinkie -n "__fish_oinkie_using_subcommand help; and not __fish_seen_subcommand_from info lift extract compare reaggregate stats run help" -f -a "help" -d 'Print this message or the help of the given subcommand(s)'

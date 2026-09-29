@@ -37,6 +37,9 @@ _oinkie() {
             oinkie,run)
                 cmd="oinkie__subcmd__run"
                 ;;
+            oinkie,stats)
+                cmd="oinkie__subcmd__stats"
+                ;;
             oinkie__subcmd__help,compare)
                 cmd="oinkie__subcmd__help__subcmd__compare"
                 ;;
@@ -58,6 +61,9 @@ _oinkie() {
             oinkie__subcmd__help,run)
                 cmd="oinkie__subcmd__help__subcmd__run"
                 ;;
+            oinkie__subcmd__help,stats)
+                cmd="oinkie__subcmd__help__subcmd__stats"
+                ;;
             *)
                 ;;
         esac
@@ -65,7 +71,7 @@ _oinkie() {
 
     case "${cmd}" in
         oinkie)
-            opts="-l -h -V --level --help --version info lift extract compare reaggregate run help"
+            opts="-l -h -V --level --help --version info lift extract compare reaggregate stats run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -163,7 +169,7 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__help)
-            opts="info lift extract compare reaggregate run help"
+            opts="info lift extract compare reaggregate stats run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -261,6 +267,20 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__help__subcmd__run)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__help__subcmd__stats)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -412,6 +432,44 @@ _oinkie() {
                     return 0
                     ;;
                 -A)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        oinkie__subcmd__stats)
+            opts="-f -o -r -t -h --format --output --recursive --per-file --top --help <PATHS>..."
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --format)
+                    COMPREPLY=($(compgen -W "json csv markdown" -- "${cur}"))
+                    return 0
+                    ;;
+                -f)
+                    COMPREPLY=($(compgen -W "json csv markdown" -- "${cur}"))
+                    return 0
+                    ;;
+                --output)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --top)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -t)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

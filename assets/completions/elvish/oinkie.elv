@@ -29,6 +29,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand extract 'Extract birthmarks from a lifted binary file (JSON format)'
             cand compare 'Compare birthmarks and output the similarity score'
             cand reaggregate 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+            cand stats 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is'
             cand run 'Extract birthmarks and compare them in one command'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
@@ -85,6 +86,19 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand -h 'Print help'
             cand --help 'Print help'
         }
+        &'oinkie;stats'= {
+            cand -f 'Output format'
+            cand --format 'Output format'
+            cand -o 'Write the statistics to FILE rather than to standard output'
+            cand --output 'Write the statistics to FILE rather than to standard output'
+            cand -t 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.'
+            cand --top 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.'
+            cand -r 'Descend into the subdirectories of the given directories'
+            cand --recursive 'Descend into the subdirectories of the given directories'
+            cand --per-file 'Report each birthmark file as well as each group. With -f csv this replaces the summary table.'
+            cand -h 'Print help (see more with ''--help'')'
+            cand --help 'Print help (see more with ''--help'')'
+        }
         &'oinkie;run'= {
             cand -a 'Analysis to run, as ''{birthmark}-{algorithm}'' -- for example ''op-set-jaccard'' or ''op-3gram-freq-cosine''. Run ''oinkie info'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.'
             cand --analysis 'Analysis to run, as ''{birthmark}-{algorithm}'' -- for example ''op-set-jaccard'' or ''op-3gram-freq-cosine''. Run ''oinkie info'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.'
@@ -105,6 +119,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand extract 'Extract birthmarks from a lifted binary file (JSON format)'
             cand compare 'Compare birthmarks and output the similarity score'
             cand reaggregate 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+            cand stats 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is'
             cand run 'Extract birthmarks and compare them in one command'
             cand help 'Print this message or the help of the given subcommand(s)'
         }
@@ -117,6 +132,8 @@ set edit:completion:arg-completer[oinkie] = {|@words|
         &'oinkie;help;compare'= {
         }
         &'oinkie;help;reaggregate'= {
+        }
+        &'oinkie;help;stats'= {
         }
         &'oinkie;help;run'= {
         }

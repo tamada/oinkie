@@ -78,6 +78,12 @@ pub enum OinkieCommand {
     Reaggregate(ReaggregateOpts),
 
     #[command(
+        name = "stats",
+        about = "Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is"
+    )]
+    Stats(StatsOpts),
+
+    #[command(
         name = "run",
         about = "Extract birthmarks and compare them in one command"
     )]
@@ -342,6 +348,98 @@ impl ReaggregateOpts {
 
     pub fn dest_file(&self) -> &PathBuf {
         &self.dest_file
+    }
+}
+
+/// The formats `stats` writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum StatsFormat {
+    /// Every table at once: the summary, the per-file rows and the skipped files.
+    Json,
+    /// One table: the summary, or the per-file rows with --per-file, or the
+    /// most frequent elements with --top.
+    Csv,
+    /// Tables to read, or to paste into a paper.
+    Markdown,
+}
+
+#[derive(Debug, clap::Parser)]
+pub struct StatsOpts {
+    #[clap(
+        short,
+        long,
+        value_enum,
+        default_value_t = StatsFormat::Markdown,
+        value_name = "FORMAT",
+        ignore_case = true,
+        help = "Output format"
+    )]
+    format: StatsFormat,
+
+    #[clap(
+        short,
+        long,
+        value_name = "FILE",
+        help = "Write the statistics to FILE rather than to standard output"
+    )]
+    output: Option<PathBuf>,
+
+    #[clap(
+        short,
+        long,
+        default_value_t = false,
+        help = "Descend into the subdirectories of the given directories"
+    )]
+    recursive: bool,
+
+    #[clap(
+        long,
+        default_value_t = false,
+        help = "Report each birthmark file as well as each group. With -f csv this replaces the summary table."
+    )]
+    per_file: bool,
+
+    #[clap(
+        short,
+        long,
+        value_name = "N",
+        help = "Report the N most frequent elements of each group. With -f csv this replaces the summary table."
+    )]
+    top: Option<usize>,
+
+    #[clap(
+        index = 1,
+        required = true,
+        value_name = "PATHS",
+        help = "Birthmark files, or directories holding them. A directory contributes the *.json directly inside it;
+a file that does not read as a birthmark is skipped with a warning and counted."
+    )]
+    inputs: Vec<PathBuf>,
+}
+
+impl StatsOpts {
+    pub fn format(&self) -> StatsFormat {
+        self.format
+    }
+
+    pub fn dest(&self) -> Option<&Path> {
+        self.output.as_deref()
+    }
+
+    pub fn is_recursive(&self) -> bool {
+        self.recursive
+    }
+
+    pub fn is_per_file(&self) -> bool {
+        self.per_file
+    }
+
+    pub fn top(&self) -> Option<usize> {
+        self.top
+    }
+
+    pub fn inputs(&self) -> &[PathBuf] {
+        &self.inputs
     }
 }
 

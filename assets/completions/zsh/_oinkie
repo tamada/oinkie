@@ -187,6 +187,27 @@ _arguments "${_arguments_options[@]}" : \
 ':score_directory -- Path to the directory containing the element-wise similarity scores:_files' \
 && ret=0
 ;;
+(stats)
+_arguments "${_arguments_options[@]}" : \
+'-f+[Output format]:FORMAT:((json\:"Every table at once\: the summary, the per-file rows and the skipped files"
+csv\:"One table\: the summary, or the per-file rows with --per-file, or the most frequent elements with --top"
+markdown\:"Tables to read, or to paste into a paper"))' \
+'--format=[Output format]:FORMAT:((json\:"Every table at once\: the summary, the per-file rows and the skipped files"
+csv\:"One table\: the summary, or the per-file rows with --per-file, or the most frequent elements with --top"
+markdown\:"Tables to read, or to paste into a paper"))' \
+'-o+[Write the statistics to FILE rather than to standard output]:FILE:_files' \
+'--output=[Write the statistics to FILE rather than to standard output]:FILE:_files' \
+'-t+[Report the N most frequent elements of each group. With -f csv this replaces the summary table.]:N:_default' \
+'--top=[Report the N most frequent elements of each group. With -f csv this replaces the summary table.]:N:_default' \
+'-r[Descend into the subdirectories of the given directories]' \
+'--recursive[Descend into the subdirectories of the given directories]' \
+'--per-file[Report each birthmark file as well as each group. With -f csv this replaces the summary table.]' \
+'-h[Print help (see more with '\''--help'\'')]' \
+'--help[Print help (see more with '\''--help'\'')]' \
+'*::inputs -- Birthmark files, or directories holding them. A directory contributes the *.json directly inside it;
+a file that does not read as a birthmark is skipped with a warning and counted.:_files' \
+&& ret=0
+;;
 (run)
 _arguments "${_arguments_options[@]}" : \
 '-a+[Analysis to run, as '\''{birthmark}-{algorithm}'\'' -- for example '\''op-set-jaccard'\'' or '\''op-3gram-freq-cosine'\''. Run '\''oinkie info'\'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.]:ANALYSIS:(fc-seq-levenshtein fc-seq-lcs fc-freq-cosine fc-freq-euclidean fc-freq-weightedjaccard fc-set-dice fc-set-jaccard fc-set-simpson op-seq-levenshtein op-seq-lcs op-set-dice op-set-jaccard op-set-simpson op-freq-cosine op-freq-euclidean op-freq-weightedjaccard op-1gram-seq-levenshtein op-1gram-seq-lcs op-2gram-seq-levenshtein op-2gram-seq-lcs op-3gram-seq-levenshtein op-3gram-seq-lcs op-4gram-seq-levenshtein op-4gram-seq-lcs op-5gram-seq-levenshtein op-5gram-seq-lcs op-6gram-seq-levenshtein op-6gram-seq-lcs op-7gram-seq-levenshtein op-7gram-seq-lcs op-8gram-seq-levenshtein op-8gram-seq-lcs op-1gram-freq-cosine op-1gram-freq-euclidean op-1gram-freq-weightedjaccard op-2gram-freq-cosine op-2gram-freq-euclidean op-2gram-freq-weightedjaccard op-3gram-freq-cosine op-3gram-freq-euclidean op-3gram-freq-weightedjaccard op-4gram-freq-cosine op-4gram-freq-euclidean op-4gram-freq-weightedjaccard op-5gram-freq-cosine op-5gram-freq-euclidean op-5gram-freq-weightedjaccard op-6gram-freq-cosine op-6gram-freq-euclidean op-6gram-freq-weightedjaccard op-7gram-freq-cosine op-7gram-freq-euclidean op-7gram-freq-weightedjaccard op-8gram-freq-cosine op-8gram-freq-euclidean op-8gram-freq-weightedjaccard op-1gram-set-dice op-1gram-set-jaccard op-1gram-set-simpson op-2gram-set-dice op-2gram-set-jaccard op-2gram-set-simpson op-3gram-set-dice op-3gram-set-jaccard op-3gram-set-simpson op-4gram-set-dice op-4gram-set-jaccard op-4gram-set-simpson op-5gram-set-dice op-5gram-set-jaccard op-5gram-set-simpson op-6gram-set-dice op-6gram-set-jaccard op-6gram-set-simpson op-7gram-set-dice op-7gram-set-jaccard op-7gram-set-simpson op-8gram-set-dice op-8gram-set-jaccard op-8gram-set-simpson)' \
@@ -246,6 +267,10 @@ _arguments "${_arguments_options[@]}" : \
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
+(stats)
+_arguments "${_arguments_options[@]}" : \
+&& ret=0
+;;
 (run)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
@@ -271,6 +296,7 @@ _oinkie_commands() {
 'extract:Extract birthmarks from a lifted binary file (JSON format)' \
 'compare:Compare birthmarks and output the similarity score' \
 'reaggregate:Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score' \
+'stats:Summarise a set of birthmarks\: how many of each type, how many functions each holds, and how long each function'\''s birthmark is' \
 'run:Extract birthmarks and compare them in one command' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -294,6 +320,7 @@ _oinkie__subcmd__help_commands() {
 'extract:Extract birthmarks from a lifted binary file (JSON format)' \
 'compare:Compare birthmarks and output the similarity score' \
 'reaggregate:Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score' \
+'stats:Summarise a set of birthmarks\: how many of each type, how many functions each holds, and how long each function'\''s birthmark is' \
 'run:Extract birthmarks and compare them in one command' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
@@ -334,6 +361,11 @@ _oinkie__subcmd__help__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'oinkie help run commands' commands "$@"
 }
+(( $+functions[_oinkie__subcmd__help__subcmd__stats_commands] )) ||
+_oinkie__subcmd__help__subcmd__stats_commands() {
+    local commands; commands=()
+    _describe -t commands 'oinkie help stats commands' commands "$@"
+}
 (( $+functions[_oinkie__subcmd__info_commands] )) ||
 _oinkie__subcmd__info_commands() {
     local commands; commands=()
@@ -353,6 +385,11 @@ _oinkie__subcmd__reaggregate_commands() {
 _oinkie__subcmd__run_commands() {
     local commands; commands=()
     _describe -t commands 'oinkie run commands' commands "$@"
+}
+(( $+functions[_oinkie__subcmd__stats_commands] )) ||
+_oinkie__subcmd__stats_commands() {
+    local commands; commands=()
+    _describe -t commands 'oinkie stats commands' commands "$@"
 }
 
 if [ "$funcstack[1]" = "_oinkie" ]; then

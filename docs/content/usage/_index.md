@@ -26,6 +26,7 @@ Commands:
   extract      Extract birthmarks from a lifted binary file (JSON format)
   compare      Compare birthmarks and output the similarity score
   reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+  stats        Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
   run          Extract birthmarks and compare them in one command
   mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
   help         Print this message or the help of the given subcommand(s)
@@ -45,6 +46,9 @@ The toolkit's operations are divided into distinct stages. You can execute them 
 
 * **[Displaying Application Info](info)**  
   Query general details, supported birthmark models, and similarity algorithms.
+
+* **[Summarising Birthmarks](stats)**  
+  Count the birthmarks of each type, the functions each holds, and how long each function's birthmark is.
 
 * **[Serving to an Agent](mcp)**  
   Expose the steps below over the Model Context Protocol, so an agent can run them.

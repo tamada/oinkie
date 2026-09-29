@@ -32,6 +32,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
+            [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -94,6 +95,20 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
+        'oinkie;stats' {
+            [CompletionResult]::new('-f', '-f', [CompletionResultType]::ParameterName, 'Output format')
+            [CompletionResult]::new('--format', '--format', [CompletionResultType]::ParameterName, 'Output format')
+            [CompletionResult]::new('-o', '-o', [CompletionResultType]::ParameterName, 'Write the statistics to FILE rather than to standard output')
+            [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Write the statistics to FILE rather than to standard output')
+            [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.')
+            [CompletionResult]::new('--top', '--top', [CompletionResultType]::ParameterName, 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.')
+            [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Descend into the subdirectories of the given directories')
+            [CompletionResult]::new('--recursive', '--recursive', [CompletionResultType]::ParameterName, 'Descend into the subdirectories of the given directories')
+            [CompletionResult]::new('--per-file', '--per-file', [CompletionResultType]::ParameterName, 'Report each birthmark file as well as each group. With -f csv this replaces the summary table.')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            break
+        }
         'oinkie;run' {
             [CompletionResult]::new('-a', '-a', [CompletionResultType]::ParameterName, 'Analysis to run, as ''{birthmark}-{algorithm}'' -- for example ''op-set-jaccard'' or ''op-3gram-freq-cosine''. Run ''oinkie info'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.')
             [CompletionResult]::new('--analysis', '--analysis', [CompletionResultType]::ParameterName, 'Analysis to run, as ''{birthmark}-{algorithm}'' -- for example ''op-set-jaccard'' or ''op-3gram-freq-cosine''. Run ''oinkie info'' for the birthmarks and the algorithms they pair with. Any k parses in a k-gram name, not only the ones listed.')
@@ -115,6 +130,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
+            [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
             break
@@ -132,6 +148,9 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             break
         }
         'oinkie;help;reaggregate' {
+            break
+        }
+        'oinkie;help;stats' {
             break
         }
         'oinkie;help;run' {
