@@ -94,6 +94,34 @@ fn test_exclude_does_not_drop_a_compiled_in_file() {
     }
 }
 
+/// The library does not reach for what only the CLI needs.
+///
+/// `cli` is a default feature, so a build here never notices if `src/` starts
+/// using one of them -- `cargo add oinkie --no-default-features` would be the
+/// only thing that failed, and only for someone else. Grepping is enough to
+/// say so, and costs nothing.
+///
+/// The parallelism is the surprising one: `cli/main.rs` owns its thread pool,
+/// and nothing under `src/` mentions rayon at all.
+#[test]
+fn test_the_library_does_not_use_the_cli_only_dependencies() {
+    for crate_name in ["env_logger", "indicatif", "rayon"] {
+        let module = crate_name.replace('-', "_");
+        for file in walk(Path::new("src")) {
+            let text = std::fs::read_to_string(&file).unwrap();
+            for (n, line) in text.lines().enumerate() {
+                assert!(
+                    !line.contains(&format!("{module}::")),
+                    "{}:{}: the library uses {crate_name}, which is behind the `cli` feature -- \
+                     either move it out of that feature or stop using it here",
+                    file.display(),
+                    n + 1
+                );
+            }
+        }
+    }
+}
+
 fn walk(dir: &Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(dir).unwrap().flatten() {
