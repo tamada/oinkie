@@ -72,6 +72,10 @@ where
 /// mean inventing a type for opcodes nobody has seen yet. Adding a lifter adds
 /// a variant, and the compiler then points at every place that has to account
 /// for it — which is the property the enum exists for.
+/// `Debug` is derived for the benefit of callers rather than of this crate.
+/// Without it `Result<AnyProgram>::unwrap_err` does not compile, which is what
+/// anyone writing a test against this API reaches for first.
+#[derive(Debug)]
 pub enum AnyProgram {
     GhidraPcode(Program<crate::ghidra::Op>),
     BinaryNinjaLlil(Program<crate::binaryninja::Op<crate::binaryninja::Llil>>),

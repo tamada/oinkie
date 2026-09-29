@@ -169,8 +169,35 @@ jobs:
   # Takes the draft off. Publishing with the App token (APP_CLIENT_ID /
   # APP_PRIVATE_KEY, carried by `secrets: inherit`) is what makes the
   # `release: published` event fire, so notify-publish actually runs.
+  # Last, and after the binaries and the images, because `cargo publish` is the
+  # one step here that cannot be undone: a version can be yanked but never
+  # re-uploaded. Anything that was going to fail should have failed already.
+  #
+  # Skipped entirely until CARGO_REGISTRY_TOKEN exists, so that adding this
+  # workflow does not publish anything by itself. The first upload is a
+  # decision, not a side effect of merging.
+  crates-io:
+    runs-on: ubuntu-latest
+    needs: [publish, container]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "CARGO_REGISTRY_TOKEN is not set; nothing published."
+            echo "Add it as a repository secret when the crate should go out."
+            exit 0
+          fi
+          # --locked, because the release binaries were built from this
+          # Cargo.lock and a crate resolved differently is a different build.
+          cargo publish --locked
+
   finish:
-    needs: [start, container, release-notes]
+    needs: [start, container, release-notes, crates-io]
     uses: tamada/.github/.github/workflows/release-finish.yaml@v1
     with:
       tag: ${{ needs.start.outputs.tag }}

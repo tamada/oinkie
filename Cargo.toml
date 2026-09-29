@@ -3,6 +3,27 @@ name = "oinkie"
 version = "0.5.0"
 description = "Detects software theft by comparing birthmarks extracted from binaries"
 edition = "2024"
+# crates.io refuses an upload without a licence. The file has been here since
+# the first commit; the manifest had never said so.
+license = "MIT"
+repository = "https://github.com/tamada/oinkie"
+homepage = "https://tamada.github.io/oinkie"
+readme = "README.md"
+keywords = [ "birthmark", "plagiarism", "reverse-engineering", "ghidra", "binary" ]
+# From crates.io's fixed list; anything else is rejected at upload.
+categories = [ "command-line-utilities", "development-tools" ]
+# What a published crate has no use for. Written as exclusions rather than as
+# an `include` whitelist so that a file added beside the lifting scripts is
+# published by default: `src/ghidra/lifter.rs` compiles one in with
+# `include_str!`, and a whitelist that forgot the next one would build here and
+# fail for whoever ran `cargo add`.
+exclude = [
+    "/.github",
+    "/docs",
+    "/testdata",
+    "/Containerfile",
+    "/HANDOVER.md",
+]
 
 [features]
 gencomp = [ "dep:clap_complete" ]
