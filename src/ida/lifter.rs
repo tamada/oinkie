@@ -122,15 +122,23 @@ mod tests {
             script_dir: PathBuf::from("/scripts"),
             script_name: OsString::from("MicrocodeLifter.py"),
         };
-        let args = command_line(&i);
+        // The expected paths are built the way the code builds them rather
+        // than written out as Unix strings: `Path::join` uses the platform's
+        // separator, so a literal "-o/work/sample" asserts the separator
+        // rather than the flag.
+        let mut database = OsString::from("-o");
+        database.push(i.work_dir.join(&i.name));
+        let mut script = OsString::from("-S");
+        script.push(i.script_dir.join(&i.script_name));
+        script.push(" sample.json");
         assert_eq!(
-            args,
+            command_line(&i),
             vec![
                 OsString::from("-A"),
                 OsString::from("-c"),
-                OsString::from("-o/work/sample"),
-                OsString::from("-S/scripts/MicrocodeLifter.py sample.json"),
-                OsString::from("/bin/sample"),
+                database,
+                script,
+                i.input.clone().into_os_string(),
             ]
         );
     }

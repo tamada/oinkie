@@ -8,7 +8,7 @@
 //! has to resolve inside one of them. A refusal names the roots, because the
 //! useful half of "no" is what the caller may use instead.
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use rmcp::ErrorData;
 
@@ -16,6 +16,24 @@ use rmcp::ErrorData;
 /// startup so that the comparison below is between two real paths.
 #[derive(Debug, Clone)]
 pub struct Roots(Vec<PathBuf>);
+
+/// Whether the text names a `..` component, under either platform's rules.
+///
+/// Written over the string rather than over `Path::components`, which was the
+/// first version and is inert where it matters most. `canonicalize` on Windows
+/// returns verbatim paths -- the `\\?\C:\...` form -- and inside one of those
+/// `/` is not a separator, so `pcodes/../../outside/secret` joined to a root
+/// arrives as a single component with no `ParentDir` in it. The guard did not
+/// fire; the root check caught the path afterwards, so nothing escaped, but
+/// the first of two defences was doing nothing on that platform.
+///
+/// Both separators are treated as separators here, on every platform. A
+/// caller writing `..\..\etc` on Unix means the same thing by it, and a
+/// refusal is the right answer to a path oinkie cannot make sense of either
+/// way.
+fn has_parent_component(path: &str) -> bool {
+    path.split(['/', '\\']).any(|segment| segment == "..")
+}
 
 impl Roots {
     /// Resolves the requested roots, defaulting to the working directory.
@@ -70,7 +88,7 @@ impl Roots {
     /// arithmetic right is not.
     pub fn resolve(&self, path: &str) -> Result<PathBuf, ErrorData> {
         let given = Path::new(path);
-        if given.components().any(|c| c == Component::ParentDir) {
+        if has_parent_component(path) {
             return Err(ErrorData::invalid_params(
                 format!(
                     "{path}: a path may not contain '..'. Write the location directly. Allowed: {}",
@@ -126,6 +144,23 @@ impl Roots {
                 },
             }
         };
+
+        // The deepest thing that exists has to be a directory if anything is
+        // to be appended to it, and the operating systems do not agree about
+        // saying so. Unix reports ENOTDIR for a path that runs through a file,
+        // which the loop above turns into "cannot resolve"; Windows reports
+        // NotFound, so the loop walks up past the file and treats it as the
+        // base. Asked here, both answer the same way -- and the answer is the
+        // one the loop's own comment already describes.
+        if !tail.is_empty() && !canonical.is_dir() {
+            return Err(ErrorData::invalid_params(
+                format!(
+                    "{path}: cannot resolve {}: it is not a directory",
+                    canonical.display()
+                ),
+                None,
+            ));
+        }
 
         let mut resolved = canonical;
         for part in tail.into_iter().rev() {
@@ -235,11 +270,48 @@ mod tests {
             "../outside/secret",
             "pcodes/../a.json",
         ] {
-            let e = f
-                .roots
-                .resolve(f.root.join(attempt).to_str().unwrap())
-                .unwrap_err();
+            // Joined as text, not with `Path::join`. On Windows a verbatim
+            // path -- the `\\?\C:\...` form `canonicalize` returns -- cannot
+            // hold `..`, so `push` normalises it away and the test would hand
+            // `resolve` a path with nothing left to refuse. What a caller
+            // sends is a string, and this is that string.
+            let attempted = format!("{}/{attempt}", f.root.display());
+            let e = f.roots.resolve(&attempted).unwrap_err();
             assert!(e.message.contains(".."), "{attempt}: {}", e.message);
+        }
+    }
+
+    /// Both separators count, on every platform.
+    ///
+    /// The refusal used to be `Path::components`, which is inert inside a
+    /// Windows verbatim path -- the `\\?\C:\...` form `canonicalize` returns --
+    /// because `/` is not a separator there. `pcodes/../../outside/secret`
+    /// joined to such a root arrives as one component, so the guard saw no
+    /// `..`. The root check caught it afterwards and nothing escaped, but the
+    /// first of two defences was doing nothing on that platform.
+    #[test]
+    fn test_a_parent_component_is_seen_through_either_separator() {
+        for named in [
+            "..",
+            "a/../b",
+            "a\\..\\b",
+            "../a",
+            "..\\a",
+            "a/..",
+            "a\\..",
+            "\\\\?\\C:\\root\\pcodes/../../outside/secret",
+        ] {
+            assert!(has_parent_component(named), "{named} was not seen");
+        }
+        for innocent in [
+            "a/b",
+            "a\\b",
+            "..a/b",
+            "a/..b",
+            "a/b..",
+            "/root/pcodes/x.json",
+        ] {
+            assert!(!has_parent_component(innocent), "{innocent} was refused");
         }
     }
 
