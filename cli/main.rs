@@ -395,6 +395,7 @@ fn validate_extract_opts(opts: cli::ExtractOpts) -> Result<cli::ExtractOpts> {
 }
 
 mod reaggregator;
+mod stats;
 
 #[cfg(feature = "mcp")]
 mod mcp;
@@ -407,6 +408,7 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Compare(opts) => perform_compare(opts),
         Extract(opts) => validate_extract_opts(opts).and_then(perform_extract),
         Reaggregate(opts) => reaggregator::perform(opts),
+        Stats(opts) => stats::perform(opts),
         Lift(opts) => perform_lift(opts),
         Info => perform_info(),
         #[cfg(feature = "mcp")]

@@ -15,6 +15,7 @@ Commands:
   extract      Extract birthmarks from a lifted binary file (JSON format)
   compare      Compare birthmarks and output the similarity score
   reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+  stats        Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
   run          Extract birthmarks and compare them in one command
   mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
   help         Print this message or the help of the given subcommand(s)
@@ -164,6 +165,47 @@ Options:
   -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to reaggregate.
                                 The file contains the birthmark-wise similarity score list. [default: reaggregate.csv]
   -h, --help                    Print help
+```
+
+### `stats` command
+
+Summarise a set of birthmarks. A birthmark file holds one entry per **function**, and each function's birthmark is made of **elements**; the command reports functions per file and elements per function (the birthmark length) for each group of birthmarks sharing an intermediate representation and a type.
+
+```sh
+Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
+
+Usage: oinkie stats [OPTIONS] <PATHS>...
+
+Arguments:
+  <PATHS>...
+          Birthmark files, or directories holding them. A directory contributes the *.json directly inside it;
+          a file that does not read as a birthmark is skipped with a warning and counted.
+
+Options:
+  -f, --format <FORMAT>
+          Output format
+
+          Possible values:
+          - json:     Every table at once: the summary, the per-file rows and the skipped files
+          - csv:      One table: the summary, or the per-file rows with --per-file, or the most frequent elements with --top
+          - markdown: Tables to read, or to paste into a paper
+          
+          [default: markdown]
+
+  -o, --output <FILE>
+          Write the statistics to FILE rather than to standard output
+
+  -r, --recursive
+          Descend into the subdirectories of the given directories
+
+      --per-file
+          Report each birthmark file as well as each group. With -f csv this replaces the summary table.
+
+  -t, --top <N>
+          Report the N most frequent elements of each group. With -f csv this replaces the summary table.
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
 
 ### `run` command
