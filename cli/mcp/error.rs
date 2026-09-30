@@ -26,11 +26,6 @@ fn is_the_callers_fault(e: &Error) -> bool {
         // A file the caller named, which they can name differently.
         Error::Io(_, _) | Error::Json(_, _) => true,
 
-        // No fc-* birthmark of this program can hold anything -- either nothing
-        // in it is a call, or its calls name nothing the symbol table holds.
-        // The caller can ask for a different birthmark, so it is theirs.
-        Error::NoCallOperations(_, _) | Error::UnresolvedCalls(_, _, _) => true,
-
         // Something went wrong inside, or in a file oinkie itself produced.
         Error::Csv(_)
         | Error::InvalidPcode(_)

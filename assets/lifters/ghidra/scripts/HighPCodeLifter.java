@@ -23,7 +23,7 @@ public class HighPCodeLifter extends GhidraScript {
     public void run() throws Exception {
         DecompInterface decompInterface = new DecompInterface();
         decompInterface.openProgram(currentProgram);
-        var path = java.nio.file.Path.of(currentProgram.getExecutablePath());
+        var path = programPath(currentProgram.getExecutablePath());
 
         List<String> jsonOutput = new ArrayList<>();
         jsonOutput.add("{");
@@ -63,6 +63,30 @@ public class HighPCodeLifter extends GhidraScript {
         outputToFile(currentProgram.getName(), jsonOutput);
 
         decompInterface.dispose();
+    }
+
+    /**
+     * Where the program was lifted from, as a path this platform accepts.
+     *
+     * `getExecutablePath` answers in Ghidra's own spelling, which is URI-like:
+     * on Windows it is `/D:/a/oinkie/testdata/bin/hello_clang`, with a slash
+     * before the drive letter. `Path.of` rejects that --
+     * `InvalidPathException: Illegal char <:> at index 3` -- and the exception
+     * leaves `run` before anything is written, so every lift on Windows failed
+     * as a missing output file (#136).
+     *
+     * A Unix path cannot take this branch: it has no drive letter for a slash
+     * to precede. Recognised by shape rather than by asking which operating
+     * system this is, because the shape is what the string has.
+     */
+    private static Path programPath(String executablePath) {
+        if (executablePath.length() > 2
+                && executablePath.charAt(0) == '/'
+                && executablePath.charAt(2) == ':'
+                && Character.isLetter(executablePath.charAt(1))) {
+            return Path.of(executablePath.substring(1));
+        }
+        return Path.of(executablePath);
     }
 
     /**

@@ -7,11 +7,16 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
     strategy:
+      # One runner failing should not cancel the others. Three platforms are
+      # three answers, and hiding two of them because the first came back first
+      # is how a Windows job was cancelled twice while the question being asked
+      # was whether Windows works.
+      fail-fast: false
       matrix:
         os:
           - ubuntu-latest
           - macOS-latest
-          # - windows-latest
+          - windows-latest
     steps:
       - name: setup rust
         run: |
@@ -26,11 +31,31 @@ jobs:
           distribution: "zulu"
           java-version: "25.0.2"
 
+      # On every runner now, Windows included. It was left out while the
+      # lifter could not reach Ghidra there -- it named `support/analyzeHeadless`,
+      # the bash script, so a Windows installation reported itself missing
+      # (#136) -- and installing it would have bought four failures rather than
+      # four tests. That is fixed, and the release ships Windows natives, so
+      # this is the platform that needs the least to lift.
       - name: Setup ghidra
         uses: antoniovazquezblanco/setup-ghidra@v2
         with:
           version: "12.1"
           auth_token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Why this is needed, and why it builds rather than checking first, is
+      # in the script -- an earlier version checked, found another platform's
+      # prebuilt binary, and skipped the build that macOS needed. It is a
+      # script rather than a `run:` block because copilot-setup-steps.yml
+      # needs the same thing, and the same forty lines in two workflows is the
+      # shape where one of them gets fixed.
+      #
+      # `if` follows the Ghidra installation rather than the OS, so it needs no
+      # edit if Windows gains one (#136).
+      - name: Make sure Ghidra can decompile
+        if: env.GHIDRA_INSTALL_DIR != ''
+        shell: bash
+        run: ./.github/scripts/ensure_ghidra_decompiler.sh
 
       # Ghidra compiles the lifting script at lift time, so an error in it is
       # not a build failure -- it is a lift that produces nothing, reported as
@@ -94,6 +119,7 @@ jobs:
         run: test -d assets/completions
 
       - name: Compile the lifting scripts
+        if: matrix.os != 'windows-latest'
         run: |
           ./assets/lifters/ghidra/compile-check.sh \
             assets/lifters/ghidra/scripts/HighPCodeLifter.java \
@@ -106,6 +132,7 @@ jobs:
           python3 -m py_compile assets/lifters/ida/scripts/MicrocodeLifter.py
 
       - name: build
+        shell: bash
         run: |
           cargo fmt --all -- --check
           # Both configurations get compiled. The release binary carries the
@@ -120,6 +147,23 @@ jobs:
           # breaking: `cli` is a default feature, so the first person to find
           # out would be a stranger.
           cargo build --no-default-features --lib
+
+      # Every runner has Ghidra, and the tests that start it need to be told
+      # where: the action exports GHIDRA_INSTALL_DIR, and oinkie reads
+      # GHIDRA_HOME. The coverage step below already did this, which is why
+      # nothing noticed for as long as it was the only place tests ran.
+      #
+      # One command, and no selecting of targets per runner. Windows used to
+      # get a list of the test binaries that hold no Ghidra test, because
+      # skipping by name is wrong here -- `--skip test_lift` misses
+      # `test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift`,
+      # which starts a Ghidra like the rest. With Ghidra installed there, the
+      # whole suite runs on all three and the list is gone.
+      - name: test
+        shell: bash
+        env:
+          GHIDRA_HOME: ${{ env.GHIDRA_INSTALL_DIR }}
+        run: cargo test --features mcp
 
       - name: Convert coverage format to lcov
         if: matrix.os == 'ubuntu-latest'
