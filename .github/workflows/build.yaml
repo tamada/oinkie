@@ -41,6 +41,49 @@ jobs:
         with:
           version: "12.1"
           auth_token: ${{ secrets.GITHUB_TOKEN }}
+      # An official Ghidra release carries prebuilt native binaries for Windows
+      # x86-64, Windows ARM64 and Linux x86-64 -- and for nothing else. macOS,
+      # on either architecture, is in the list GettingStarted.md calls "supported
+      # with user-built native binaries", so the distribution is complete as
+      # published and incomplete for this runner. The action has no say in it:
+      # its whole configuration surface is which archive to fetch and how to
+      # check it.
+      #
+      # Without the decompiler binary, `DecompInterface.decompileFunction`
+      # fails for every function and HighPCodeLifter.java skips each one, so a
+      # lift produces a parseable file with no functions in it -- and
+      # analyzeHeadless still exits 0 (#54). That is what failed the macOS job
+      # while ubuntu passed on the same bytes (#126), and what #135 is about.
+      #
+      # The JDK is already here from setup-java, the distribution supplies its
+      # own Gradle wrapper, and Xcode Command Line Tools are on the runner
+      # image, so this needs nothing added.
+      - name: Build Ghidra's native components
+        if: matrix.os == 'macOS-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${{ env.GHIDRA_INSTALL_DIR }}/support/gradle"
+          ./gradlew buildNatives
+
+          # A build that exits 0 without producing the binary would leave the
+          # lift silently empty again, which is the whole failure this step
+          # exists to end. Ghidra prefers build/os/<platform>/ over the
+          # prebuilt os/<platform>/, so look in both rather than assuming
+          # which one won.
+          cd "${{ env.GHIDRA_INSTALL_DIR }}"
+          # `|| true`, because the point of this check is the message below:
+          # under `set -e` a failing find would kill the step before it.
+          found=$(find Ghidra/Features/Decompiler -type f -name decompile \
+                    -path '*os/*' -print 2>/dev/null | sort || true)
+          if [ -z "$found" ]; then
+            echo "buildNatives exited 0 but no decompiler binary exists:" >&2
+            find Ghidra/Features/Decompiler -type d -name 'os' \
+              -exec sh -c 'echo "  $1:"; ls -R "$1"' _ {} \; >&2 || true
+            exit 1
+          fi
+          echo "decompiler native binaries:"
+          echo "$found" | sed 's/^/  /'
 
       # Ghidra compiles the lifting script at lift time, so an error in it is
       # not a build failure -- it is a lift that produces nothing, reported as
