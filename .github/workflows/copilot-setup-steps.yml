@@ -28,6 +28,14 @@ jobs:
           version: "12.1"
           auth_token: ${{ secrets.GITHUB_TOKEN }}
 
+      # The same script build.yaml uses. An official release does not ship a
+      # decompiler binary for every platform it supports, and without one
+      # every lift here would report success and find no functions (#126,
+      # #135). The script builds one only when the distribution has none, so
+      # on this runner -- Linux x86-64, which the release does cover -- it
+      # verifies and returns rather than compiling anything.
+      - name: Make sure Ghidra can decompile
+        run: ./.github/scripts/ensure_ghidra_decompiler.sh
+
       - name: Setup Check
-        run: |
-          echo "Copilot setup steps completed."
+        run: echo "Copilot setup steps completed."
