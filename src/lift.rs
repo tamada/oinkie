@@ -25,15 +25,15 @@ pub trait Lifter {
 /// files that look lifted, and a failure at `extract` naming a line and column
 /// in a file the reader did not know existed.
 ///
-/// Two things are checked, and the second is the one that hid. A file that
-/// cannot be read announces itself at `extract`; a file that reads and holds
-/// no functions announces nothing at all, and yields an empty birthmark for
-/// every family. Two empty birthmarks score 1.0, so unrelated programs are
-/// reported as identical -- and that has happened twice, on two platforms,
-/// from a Ghidra with no decompiler binary (#126, #135).
-///
-/// The representation is carried so the message can name it, and so the
-/// Ghidra case can name the cause it has always had.
+/// Two things are looked at, and only one of them is a refusal. A file that
+/// cannot be read is not a lift. A file that reads and holds no functions
+/// might be: a binary can genuinely have none, and oinkie cannot tell that
+/// apart from a tool that found none, since telling them apart would mean
+/// analysing the binary itself rather than trusting the tool that was asked
+/// to. So it says what it sees and goes on, which is the same call `extract`
+/// makes about an empty `fc-*` family and for the same reason -- the warning
+/// is what leaves the reader able to decide, and stopping would take that
+/// chance away along with the rest of the run.
 struct Verifying<L> {
     inner: L,
     ir: Ir,
@@ -48,13 +48,39 @@ impl<L: Lifter> Lifter for Verifying<L> {
         let program = crate::program::AnyProgram::load(output)
             .map_err(|e| crate::Error::UnreadableOutput(input.to_path_buf(), Box::new(e)))?;
         if program.is_empty() {
-            return Err(crate::Error::NoFunctionsLifted(
-                input.to_path_buf(),
-                self.ir,
-            ));
+            log::warn!("{}", no_functions_message(input, self.ir));
         }
         Ok(())
     }
+}
+
+/// What to say about a lift that came back with no functions in it.
+///
+/// Both readings are named, the way the `fc-*` warnings are, because oinkie
+/// cannot choose between them: every birthmark from such a file is empty, two
+/// empty birthmarks score as a perfect match, and whether that is the truth
+/// about the binary or a broken tool is not something the file says.
+///
+/// Ghidra gets the cause it has always had. An official release ships no
+/// decompiler binary for macOS, `DecompInterface` then fails for every
+/// function, and `analyzeHeadless` exits 0 regardless -- which is how this
+/// arrived twice, on two platforms, during one release (#126, #135). The other
+/// representations get the fact without the advice: nothing has been measured
+/// about why they would come back empty, and a guess would send the reader to
+/// a Ghidra directory they do not have.
+fn no_functions_message(input: &Path, ir: Ir) -> String {
+    let binary = input.display();
+    let hint = if ir == Ir::GhidraPcode {
+        ". Ghidra produces exactly this when its decompiler native binary is \
+         missing: run support/gradle/gradlew buildNatives in the Ghidra installation"
+    } else {
+        ""
+    };
+    format!(
+        "{binary}: the {ir} lifted from it has no functions in it, so every birthmark of it \
+         will be empty -- and two empty birthmarks score as a perfect match. Either the binary \
+         really has no functions, or the tool found none{hint}"
+    )
 }
 
 /// The intermediate representation a lifted program is written in, and the
@@ -746,35 +772,38 @@ mod verifying_tests {
         assert!(e.to_string().contains("llvm-ir"), "{e}");
     }
 
-    /// The case #135 exists for, and the quieter of the two this wrapper
-    /// guards. The file parses, oinkie reads it without complaint, and it
-    /// holds nothing -- so every birthmark taken from it is empty, two empty
-    /// birthmarks score 1.0, and unrelated programs are reported as
-    /// identical. Nothing downstream can tell this from a lift that worked.
+    /// A file with no functions is a successful lift, and says so out loud.
+    ///
+    /// The refusal this used to be was wrong: a binary can genuinely have no
+    /// functions, and nothing in the file distinguishes that from a tool that
+    /// found none. Stopping would have decided the question on the reader's
+    /// behalf, and taken the rest of a batch with it.
     #[test]
-    fn test_an_output_with_no_functions_fails_the_lift() {
-        let (r, _dir) = lift_with(Writes(A_PROGRAM_WITH_NO_FUNCTIONS), "bin/sample");
-        let e = r.expect_err("a file with no functions is not a successful lift");
-        let rendered = e.to_string();
-        // The binary, with the colon after it: a bare "sample" would also
-        // match the output's own name and so assert nothing.
-        assert!(rendered.contains("bin/sample:"), "{rendered}");
-        assert!(rendered.contains("no functions"), "{rendered}");
-        // and not the other refusal, which is about a file that cannot be read
-        assert!(!rendered.contains("cannot be read back"), "{rendered}");
-    }
-
-    /// Its own error rather than an unreadable output. The two send the reader
-    /// to different places: one to the writer, one to the tool that found
-    /// nothing to write about.
-    #[test]
-    fn test_no_functions_is_its_own_refusal() {
+    fn test_an_output_with_no_functions_is_still_a_successful_lift() {
         let (r, _dir) = lift_with(Writes(A_PROGRAM_WITH_NO_FUNCTIONS), "bin/sample");
         assert!(
-            matches!(r, Err(Error::NoFunctionsLifted(_, Ir::GhidraPcode))),
-            "{:?}",
+            r.is_ok(),
+            "a program with no functions is not a failure: {:?}",
             r.map_err(|e| e.to_string())
         );
+    }
+
+    /// What the warning says, asserted on the message rather than through the
+    /// log, since capturing a global logger from one test would make every
+    /// other test in this binary depend on the order it ran in.
+    ///
+    /// Both readings are named, because oinkie cannot choose between them.
+    #[test]
+    fn test_the_no_functions_warning_names_both_readings() {
+        let m = no_functions_message(Path::new("bin/sample"), Ir::GhidraPcode);
+        assert!(m.contains("bin/sample:"), "{m}");
+        assert!(m.contains("no functions"), "{m}");
+        // the reading oinkie cannot rule out
+        assert!(m.contains("really has no functions"), "{m}");
+        // the reading that makes it worth saying at all
+        assert!(m.contains("the tool found none"), "{m}");
+        // and why an empty one matters downstream
+        assert!(m.contains("perfect match"), "{m}");
     }
 
     /// Ghidra gets the cause named, because it has been the same cause both
@@ -787,22 +816,15 @@ mod verifying_tests {
     /// reader to a Ghidra directory they do not have.
     #[test]
     fn test_only_ghidra_is_told_about_the_decompiler() {
-        let (ghidra, _a) = lift_as(
-            Writes(A_PROGRAM_WITH_NO_FUNCTIONS),
-            "bin/sample",
-            Ir::GhidraPcode,
-        );
-        let g = ghidra.unwrap_err().to_string();
-        assert!(g.contains("buildNatives"), "{g}");
+        let ghidra = no_functions_message(Path::new("bin/sample"), Ir::GhidraPcode);
+        assert!(ghidra.contains("buildNatives"), "{ghidra}");
 
-        let hlil = A_PROGRAM_WITH_NO_FUNCTIONS.replace("ghidra-pcode", "binary-ninja-hlil");
-        let (bn, _b) = lift_written(&hlil, Ir::BinaryNinjaHlil);
-        let b = bn
-            .expect_err("a file with no functions is not a successful lift")
-            .to_string();
-        assert!(b.contains("binary-ninja-hlil"), "{b}");
-        assert!(b.contains("no functions"), "{b}");
-        assert!(!b.contains("buildNatives"), "{b}");
+        for ir in [Ir::BinaryNinjaHlil, Ir::IdaMicrocode] {
+            let other = no_functions_message(Path::new("bin/sample"), ir);
+            assert!(other.contains("no functions"), "{other}");
+            assert!(other.contains(&ir.to_string()), "{other}");
+            assert!(!other.contains("buildNatives"), "{other}");
+        }
     }
 
     /// A lifter that fails is reported as itself. Wrapping its error in

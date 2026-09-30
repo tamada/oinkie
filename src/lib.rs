@@ -63,36 +63,6 @@ pub enum Error {
         cause = .1
     )]
     UnreadableOutput(PathBuf, #[source] Box<Error>),
-    /// A lifter reported success but wrote a file with no functions in it.
-    ///
-    /// A sibling of [`Error::UnreadableOutput`] rather than a case of it: that
-    /// file cannot be read, this one reads perfectly and says nothing. Every
-    /// birthmark taken from it is empty, two empty birthmarks score 1.0, and
-    /// unrelated programs come back identical -- so the quiet outcome is worse
-    /// than the loud one.
-    ///
-    /// Refused rather than warned about, which is the opposite of the call
-    /// made for an empty `fc-*` family. That one is a measurement: a program
-    /// that calls nothing genuinely calls nothing, and the family simply does
-    /// not distinguish it. This is not. A binary worth comparing has
-    /// functions, and every time oinkie has produced a file without any, the
-    /// tool was misconfigured rather than the binary unusual.
-    ///
-    /// Ghidra is named when it is Ghidra, because the cause has been the same
-    /// on both platforms it has happened on: an official release ships no
-    /// decompiler binary for macOS, and without one `DecompInterface` fails
-    /// for every function while `analyzeHeadless` still exits 0 (#54, #126).
-    #[error(
-        "{binary}: the lifter reported success, but the {ir} it wrote has no functions in it{hint}",
-        binary = .0.display(),
-        ir = .1,
-        hint = if matches!(.1, crate::lift::Ir::GhidraPcode) {
-            ". Ghidra produces exactly this when its decompiler native binary is missing: run support/gradle/gradlew buildNatives in the Ghidra installation"
-        } else {
-            ""
-        }
-    )]
-    NoFunctionsLifted(PathBuf, crate::lift::Ir),
     /// A lifted file naming a representation this build cannot read.
     #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
@@ -230,7 +200,6 @@ mod tests {
             Error::IncompatibleAnalysis(_, _) => "IncompatibleAnalysis",
             Error::IrMismatch(_, _) => "IrMismatch",
             Error::UnreadableOutput(_, _) => "UnreadableOutput",
-            Error::NoFunctionsLifted(_, _) => "NoFunctionsLifted",
             Error::InvalidPcode(_) => "InvalidPcode",
             Error::Io(_, _) => "Io",
             Error::Json(_, _) => "Json",
@@ -324,13 +293,6 @@ mod tests {
                 format!(
                     "bin/sample: the lifter reported success, but what it wrote cannot be read back: pcodes/sample.json: JSON error: {json_msg}"
                 ),
-            ),
-            (
-                // The Ghidra case, so the rendered hint is pinned here too.
-                // That the other representations do not get it is asserted in
-                // `lift::verifying_tests`, where both can be produced.
-                Error::NoFunctionsLifted(PathBuf::from("bin/sample"), Ir::GhidraPcode),
-                "bin/sample: the lifter reported success, but the ghidra-pcode it wrote has no functions in it. Ghidra produces exactly this when its decompiler native binary is missing: run support/gradle/gradlew buildNatives in the Ghidra installation".to_string(),
             ),
             (
                 Error::InvalidPcode(9999),

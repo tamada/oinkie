@@ -27,19 +27,11 @@ fn is_the_callers_fault(e: &Error) -> bool {
         Error::Io(_, _) | Error::Json(_, _) => true,
 
         // Something went wrong inside, or in a file oinkie itself produced.
-        //
-        // The two lift refusals sit here rather than with the caller's files:
-        // no argument fixes a tool that wrote nothing readable or nothing at
-        // all, and neither can reach this function today, since the server
-        // exposes no lift tool. They are named anyway, because this match is
-        // exhaustive so that a variant added later is a decision rather than a
-        // default.
         Error::Csv(_)
         | Error::InvalidPcode(_)
         | Error::LapJV(_)
         | Error::ShapeError(_)
-        | Error::UnreadableOutput(_, _)
-        | Error::NoFunctionsLifted(_, _) => false,
+        | Error::UnreadableOutput(_, _) => false,
 
         // `Parse` is a catch-all carrying a string, and the strings it carries
         // come from both sides: "Invalid aggregator" is the caller's, while
