@@ -124,27 +124,44 @@ impl Ir {
     /// Keyed on the representation because that is what the caller names, and
     /// answered per tool, so the three Binary Ninja levels share one
     /// installation rather than each describing it again.
+    ///
+    /// Every candidate is a Unix path, so on Windows the list is empty rather
+    /// than wrong. `candidates` documents empty as the value for "a backend
+    /// nobody has installed and checked", and nobody has checked where any of
+    /// these three land on Windows -- Ghidra in particular is a zip extracted
+    /// wherever the user likes, with the version in the directory name, so
+    /// there is no fixed path to offer even in principle. `find_in` leaves the
+    /// list out of its message when it is empty, so a Windows user is told to
+    /// set `GHIDRA_HOME` and not to install it in `/opt`.
     pub fn home_spec(&self) -> HomeSpec {
         match self {
             Ir::GhidraPcode => HomeSpec {
                 tool: self.tool(),
                 env: "GHIDRA_HOME",
-                candidates: &[
-                    "/opt/homebrew/opt/ghidra/libexec",
-                    "/usr/local/opt/ghidra/libexec",
-                    "/opt/ghidra/libexec",
-                ],
+                candidates: if cfg!(windows) {
+                    &[]
+                } else {
+                    &[
+                        "/opt/homebrew/opt/ghidra/libexec",
+                        "/usr/local/opt/ghidra/libexec",
+                        "/opt/ghidra/libexec",
+                    ]
+                },
             },
             Ir::IdaMicrocode => HomeSpec {
                 tool: self.tool(),
                 env: "IDA_HOME",
                 // The directory holding `idat`, which is the headless entry
                 // point. On macOS that is inside the application bundle.
-                candidates: &[
-                    "/Applications/IDA Professional 9.4.app/Contents/MacOS",
-                    "/Applications/IDA Classroom 9.4.app/Contents/MacOS",
-                    "/opt/ida",
-                ],
+                candidates: if cfg!(windows) {
+                    &[]
+                } else {
+                    &[
+                        "/Applications/IDA Professional 9.4.app/Contents/MacOS",
+                        "/Applications/IDA Classroom 9.4.app/Contents/MacOS",
+                        "/opt/ida",
+                    ]
+                },
             },
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => HomeSpec {
                 tool: self.tool(),
@@ -152,10 +169,14 @@ impl Ir {
                 // The directory holding `bnpython3`, which is the headless
                 // entry point, rather than the bundle or the API directory
                 // beside it.
-                candidates: &[
-                    "/Applications/Binary Ninja.app/Contents/MacOS",
-                    "/opt/binaryninja",
-                ],
+                candidates: if cfg!(windows) {
+                    &[]
+                } else {
+                    &[
+                        "/Applications/Binary Ninja.app/Contents/MacOS",
+                        "/opt/binaryninja",
+                    ]
+                },
             },
         }
     }
@@ -452,9 +473,25 @@ mod tests {
         assert_eq!(home, PathBuf::from("/env/ghidra/home"));
     }
 
+    /// A spec with somewhere to look, built here rather than taken from an
+    /// [`Ir`].
+    ///
+    /// `Ir::GhidraPcode`'s own list is empty on Windows, where oinkie knows of
+    /// no install location, so the two tests below read it off the end of an
+    /// empty slice and panicked there while passing everywhere else. What they
+    /// are about is the search, not which paths this platform happens to
+    /// offer, and a constructed spec exercises it on all of them.
+    fn a_spec_with_candidates() -> HomeSpec {
+        HomeSpec {
+            tool: "Ghidra",
+            env: "GHIDRA_HOME",
+            candidates: &["/first/ghidra", "/second/ghidra", "/third/ghidra"],
+        }
+    }
+
     #[test]
     fn test_the_usual_locations_are_searched_when_the_variable_is_unset() {
-        let spec = Ir::GhidraPcode.home_spec();
+        let spec = a_spec_with_candidates();
         let last = Path::new(spec.candidates.last().unwrap());
         let home = spec.find_in(|_| None, |p| p == last).unwrap();
         assert_eq!(home, last);
@@ -465,7 +502,7 @@ mod tests {
     /// answer to it.
     #[test]
     fn test_the_first_of_several_installations_wins() {
-        let spec = Ir::GhidraPcode.home_spec();
+        let spec = a_spec_with_candidates();
         let home = spec.find_in(|_| None, |_| true).unwrap();
         assert_eq!(home, PathBuf::from(spec.candidates[0]));
     }
@@ -483,6 +520,9 @@ mod tests {
             err.contains("GHIDRA_HOME"),
             "does not name the variable: {err}"
         );
+        // Empty on Windows, where there is nowhere usual to look, so this
+        // half of the message -- and of this test's name -- is the platform's
+        // answer rather than an assertion that always has something to make.
         for c in spec.candidates {
             assert!(err.contains(c), "does not say it looked in {c}: {err}");
         }
@@ -491,11 +531,14 @@ mod tests {
     /// A backend with no candidates must stop after the variable rather than
     /// invite the user to install it in one of nowhere.
     ///
-    /// The spec is built here rather than taken from an [`Ir`], because every
-    /// representation now names somewhere to look. [`HomeSpec`] is public with
-    /// public fields, so the empty case is still reachable -- and it is what a
-    /// backend added before anyone has checked where it installs looks like,
-    /// which is how both IDA Pro and Binary Ninja began.
+    /// The spec is built here rather than taken from an [`Ir`], because on the
+    /// platforms where a representation names somewhere to look it names
+    /// several, and on Windows -- where none of them does -- this would be
+    /// asserting the same thing as every other test in this module.
+    /// [`HomeSpec`] is public with public fields, so the empty case is
+    /// reachable anywhere, and it is what a backend added before anyone has
+    /// checked where it installs looks like, which is how both IDA Pro and
+    /// Binary Ninja began.
     #[test]
     fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
         let spec = HomeSpec {
@@ -519,12 +562,33 @@ mod tests {
 
     /// Every representation names somewhere to look, which is the other half
     /// of the test above: it is what makes that spec a constructed one.
+    ///
+    /// Not on Windows, where the honest answer is that oinkie knows of no
+    /// install location for any of the three; the test below is that side of
+    /// it, so the `cfg` is a different assertion rather than an absent one.
+    #[cfg(not(windows))]
     #[test]
     fn test_every_representation_names_somewhere_to_look() {
         for ir in Ir::value_variants() {
             assert!(
                 !ir.home_spec().candidates.is_empty(),
                 "{ir} offers no install locations"
+            );
+        }
+    }
+
+    /// And on Windows every list is empty, deliberately. A candidate that
+    /// happens to exist is found silently and fails somewhere less obvious,
+    /// which is worse than being asked for `--home`; a candidate spelled for
+    /// another operating system cannot even be found, and only makes the
+    /// message advise something impossible.
+    #[cfg(windows)]
+    #[test]
+    fn test_no_representation_guesses_where_windows_keeps_things() {
+        for ir in Ir::value_variants() {
+            assert!(
+                ir.home_spec().candidates.is_empty(),
+                "{ir} offers an install location this platform does not have"
             );
         }
     }

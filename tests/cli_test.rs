@@ -67,6 +67,14 @@ fn test_lift_command() {
 /// holding a quote or a backslash comes back escaped from the second. Either
 /// way the test would report the environment variable as broken on a machine
 /// where the only unusual thing is where it puts its temporary files.
+///
+/// The two halves are asserted separately rather than as the joined path,
+/// because both the separator and the entry point's name belong to the
+/// platform: `join` writes a backslash on Windows, `{:?}` then escapes it, and
+/// the entry point there is `analyzeHeadless.bat` (#136). What the test is
+/// about is that the value arrived -- the home in the message -- and that
+/// Ghidra is what was looked for, and neither of those is a question about
+/// path syntax.
 #[test]
 fn test_the_lifter_home_is_read_from_the_environment() {
     let temp_dir = tempdir().unwrap();
@@ -81,9 +89,10 @@ fn test_the_lifter_home_is_read_from_the_environment() {
         .arg("testdata/bin/hello_clang")
         .assert()
         .failure()
-        .stderr(predicate::str::contains(
-            "/oinkie-no-such-ghidra/support/analyzeHeadless",
-        ));
+        .stderr(
+            predicate::str::contains("oinkie-no-such-ghidra")
+                .and(predicate::str::contains("analyzeHeadless")),
+        );
 }
 
 /// clap's own message begins "error: ", and `main` used to print it behind
