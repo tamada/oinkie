@@ -731,3 +731,173 @@ fn test_stats_writes_to_the_named_file_and_not_to_stdout() {
         "the file does not hold the report: {written}"
     );
 }
+
+/// JSON is the third format, and the one an agent or a script reads, so its
+/// shape is a promise rather than a rendering. It was as unexercised as the
+/// other two: `to_json` was never called by anything.
+///
+/// `occurrences` is asserted null here and counted in the test below, because
+/// that field is the one thing in the report that depends on the birthmark's
+/// shape rather than on its size: a sequence has no counts to total.
+#[test]
+fn test_stats_reports_the_groups_as_json() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("json")
+        .arg(&dir)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let json: serde_json::Value = serde_json::from_slice(&out).expect("the report is not JSON");
+
+    let groups = json["groups"].as_array().expect("no groups array");
+    assert_eq!(
+        groups.len(),
+        1,
+        "two files of one type are one group: {json}"
+    );
+    assert_eq!(groups[0]["ir"], "ghidra-pcode");
+    assert_eq!(groups[0]["birthmark_type"], "op-seq");
+    assert_eq!(groups[0]["files"], 2);
+    assert_eq!(groups[0]["elements"]["min"], 4);
+    assert!(
+        groups[0]["occurrences"].is_null(),
+        "a sequence has no occurrence total: {json}"
+    );
+    assert!(json["skipped"].as_array().unwrap().is_empty());
+}
+
+/// A `freq` birthmark counts its elements, so the report has a total of those
+/// counts where a sequence has none. That branch is chosen by the birthmark's
+/// shape, and every test above uses `op-seq`, so nothing reached it.
+#[test]
+fn test_stats_totals_the_counts_of_a_freq_birthmark() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("extract")
+        .arg("-d")
+        .arg(&dir)
+        .arg("-b")
+        .arg("op-freq")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
+        .assert()
+        .success();
+
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("json")
+        .arg(&dir)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+    let group = &json["groups"][0];
+
+    assert_eq!(group["birthmark_type"], "op-freq");
+    let vocabulary = group["vocabulary"].as_u64().expect("no vocabulary");
+    let occurrences = group["occurrences"]
+        .as_u64()
+        .unwrap_or_else(|| panic!("a freq birthmark has an occurrence total: {json}"));
+    assert!(
+        occurrences >= vocabulary,
+        "fewer occurrences than distinct elements: {occurrences} < {vocabulary}"
+    );
+}
+
+/// A directory contributes the files directly inside it, and `-r` the ones
+/// below as well. Asserted as the difference between the two runs over one
+/// tree, because either alone would pass on a scan that ignored the flag.
+#[test]
+fn test_stats_descends_only_when_asked() {
+    let temp_dir = tempdir().unwrap();
+    let flat = temp_dir.path().join("birthmarks");
+    birthmarks_in(&flat);
+
+    let nested = temp_dir.path().join("nested");
+    let deeper = nested.join("deeper");
+    fs::create_dir_all(&deeper).unwrap();
+    for entry in fs::read_dir(&flat).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap();
+        let to = if name.to_string_lossy().starts_with("hello_gcc") {
+            deeper.join(name)
+        } else {
+            nested.join(name)
+        };
+        fs::copy(&path, &to).unwrap();
+    }
+
+    let files_seen = |recursive: bool| {
+        let mut cmd = Command::cargo_bin("oinkie").unwrap();
+        cmd.arg("stats").arg("-f").arg("json");
+        if recursive {
+            cmd.arg("-r");
+        }
+        let out = cmd
+            .arg(&nested)
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+        json["groups"][0]["files"].as_u64().unwrap()
+    };
+
+    assert_eq!(files_seen(false), 1, "the subdirectory was read without -r");
+    assert_eq!(files_seen(true), 2, "-r did not reach the subdirectory");
+}
+
+/// A file that does not read as a birthmark is skipped rather than fatal, and
+/// counted rather than silent -- so a summary never covers fewer files than it
+/// was given without saying so. The reason names the file, which is what makes
+/// the report actionable instead of merely honest.
+#[test]
+fn test_stats_counts_what_it_could_not_read() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+    fs::write(dir.join("junk.json"), r#"{"not":"a birthmark"}"#).unwrap();
+
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("json")
+        .arg(&dir)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let json: serde_json::Value = serde_json::from_slice(&out).unwrap();
+
+    let skipped = json["skipped"].as_array().expect("no skipped array");
+    assert_eq!(
+        skipped.len(),
+        1,
+        "the unreadable file was not counted: {json}"
+    );
+    assert!(
+        skipped[0]["path"].as_str().unwrap().ends_with("junk.json"),
+        "the skip does not name the file: {json}"
+    );
+    assert_eq!(
+        json["groups"][0]["files"], 2,
+        "the readable files were affected: {json}"
+    );
+}
