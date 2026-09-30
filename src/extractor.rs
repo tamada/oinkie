@@ -64,7 +64,15 @@ fn get_hash(path: &Path) -> Result<String> {
         hasher.update(&tail);
     }
     let hash = hasher.finalize();
-    Ok(format!("{:x}", hash)[..HASH_PREFIX_LEN].to_string())
+    // Written out rather than `format!("{:x}")`: sha2 0.11 returns an
+    // `Output` that does not implement `LowerHex`. Only the prefix is kept, so
+    // only that many bytes are rendered.
+    Ok(hash
+        .iter()
+        .take(HASH_PREFIX_LEN.div_ceil(2))
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>()[..HASH_PREFIX_LEN]
+        .to_string())
 }
 
 pub struct Extractor {
@@ -494,6 +502,30 @@ mod tests {
         std::fs::write(&path1, &data1).unwrap();
         std::fs::write(&path2, &data2).unwrap();
         assert_ne!(get_hash(&path1).unwrap(), get_hash(&path2).unwrap());
+    }
+
+    /// The exact hash of a known input.
+    ///
+    /// The other hash tests say it is deterministic, that different bytes give
+    /// different answers, that it is sixteen hexadecimal characters. All of
+    /// those pass if the bytes come out reversed, or upper-cased, or from a
+    /// different slice of the digest -- and any of those renames every
+    /// birthmark ever written, which silently defeats `--skip` and orphans a
+    /// directory of results.
+    ///
+    /// sha2 0.11 is what made that a live question: its `Output` does not
+    /// implement `LowerHex`, so the hex is written out here rather than by the
+    /// formatter. This is the assertion that says the rewrite kept the answer.
+    ///
+    /// The expected value was computed outside this crate, by hashing the same
+    /// bytes with Python's hashlib, so it is not this implementation agreeing
+    /// with itself.
+    #[test]
+    fn test_get_hash_of_a_known_input_is_exactly_this() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("fixture.txt");
+        std::fs::write(&path, b"oinkie hash fixture\n").unwrap();
+        assert_eq!(get_hash(&path).unwrap(), "1a22831efd6c8d6e");
     }
 
     #[test]
