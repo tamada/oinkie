@@ -237,9 +237,17 @@ impl Headless<'_> {
 /// The last few lines of a tool's output.
 ///
 /// A headless decompiler writes hundreds of progress lines; the reason it
-/// stopped is at the end, and the rest would bury it.
+/// stopped is near the end, and the rest would bury it.
+///
+/// Near, not at. Twenty lines was too few, and in a way worth recording: when
+/// a lifting script throws, the reason is the *first* line of the stack trace
+/// and the frames follow it, and Ghidra then goes on printing progress after
+/// the trace. On the Windows runner that left exactly the frames and none of
+/// the exception -- fourteen `at ghidra.app...` lines, under a message saying
+/// the tool's own output was the only account of why. Eighty holds a trace,
+/// its `Caused by` chain, and what follows it, and is still bounded.
 fn tail(text: &str) -> String {
-    const LINES: usize = 20;
+    const LINES: usize = 80;
     let text = text.trim_end();
     let mut kept: Vec<&str> = text.lines().rev().take(LINES).collect();
     kept.reverse();
@@ -437,16 +445,33 @@ mod tests {
             .join("\n");
         assert_eq!(tail(&short), "1\n2\n3");
 
-        let long = (1..=30)
+        let long = (1..=200)
             .map(|i| i.to_string())
             .collect::<Vec<_>>()
             .join("\n");
         let tailed = tail(&long);
-        assert!(tailed.starts_with("(last 20 lines)"), "{tailed}");
-        assert!(tailed.ends_with("\n30"), "{tailed}");
+        assert!(tailed.starts_with("(last 80 lines)"), "{tailed}");
+        assert!(tailed.ends_with("\n200"), "{tailed}");
         assert!(
-            !tailed.contains("\n10\n"),
-            "kept more than the last 20: {tailed}"
+            !tailed.contains("\n120\n"),
+            "kept more than the last 80: {tailed}"
+        );
+    }
+
+    /// The point of the size: a Java stack trace and what Ghidra prints after
+    /// it have to fit, or the message keeps the frames and drops the
+    /// exception, which is the only line that says what went wrong.
+    #[test]
+    fn test_tail_keeps_the_exception_above_a_stack_trace() {
+        let mut lines: Vec<String> = (1..=300).map(|i| format!("INFO  progress {i}")).collect();
+        lines.push("java.io.IOException: the line that matters".to_string());
+        lines.extend((1..=20).map(|i| format!("\tat ghidra.app.frame{i}(X.java:{i})")));
+        lines.extend((1..=5).map(|i| format!("INFO  REPORT: after the trace {i}")));
+
+        let tailed = tail(&lines.join("\n"));
+        assert!(
+            tailed.contains("java.io.IOException: the line that matters"),
+            "the exception was cut off: {tailed}"
         );
     }
 
