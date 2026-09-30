@@ -132,6 +132,64 @@ jobs:
           # breaking: `cli` is a default feature, so the first person to find
           # out would be a stranger.
           cargo build --no-default-features --lib
+      # TEMPORARY, for #126. Remove once that is decided.
+      #
+      # The macOS runner lifts testdata/bin/udl to zero functions and ubuntu
+      # finds the function in it, from the same committed bytes and the same
+      # pinned Ghidra. Nothing in a normal run says why: `Headless` surfaces
+      # Ghidra's stdout only when the process fails or the output file is
+      # missing, and on that runner neither happened -- a file was written and
+      # it parsed. So this runs analyzeHeadless the way `lift` does and keeps
+      # what it said, on both Unix runners, to be compared rather than guessed
+      # at.
+      #
+      # Every command is allowed to fail: this step reports, and the `test`
+      # step below is what passes or does not.
+      - name: "Diagnose the udl lift (#126)"
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        env:
+          GHIDRA_HOME: ${{ env.GHIDRA_INSTALL_DIR }}
+        run: |
+          echo "::group::runner and fixture"
+          echo "os=${{ matrix.os }} arch=$(uname -m)"
+          grep -E '^application.(version|release.name)=' \
+            "$GHIDRA_HOME/Ghidra/application.properties" || true
+          file testdata/bin/udl || true
+          shasum -a 256 testdata/bin/udl || sha256sum testdata/bin/udl || true
+          echo "::endgroup::"
+
+          echo "::group::oinkie lift"
+          ./target/release/oinkie -l debug lift -d "$RUNNER_TEMP/lifted" \
+            testdata/bin/udl 2>&1 | tail -40 || true
+          python3 - "$RUNNER_TEMP/lifted/udl.json" <<'PY' || true
+          import json, sys, pathlib
+          p = pathlib.Path(sys.argv[1])
+          if not p.exists():
+              print("no output file at", p)
+              raise SystemExit(0)
+          d = json.loads(p.read_text())
+          print("ir:", d.get("ir"), " program:", d.get("program"))
+          print("functions:", len(d.get("functions", [])),
+                " symbols:", len(d.get("symbols", {})))
+          for f in d.get("functions", [])[:25]:
+              print("  fn", repr(f.get("name")), "ops:", len(f.get("ops", [])))
+          PY
+          echo "::endgroup::"
+
+          # The same invocation `lift` builds, with Ghidra's own account of it
+          # kept this time. src/ghidra/lifter.rs is the argv being mirrored.
+          echo "::group::analyzeHeadless, directly"
+          mkdir -p "$RUNNER_TEMP/proj" "$RUNNER_TEMP/scripts"
+          cp assets/lifters/ghidra/scripts/HighPCodeLifter.java "$RUNNER_TEMP/scripts/"
+          ( cd "$RUNNER_TEMP/proj" \
+            && "$GHIDRA_HOME/support/analyzeHeadless" "$RUNNER_TEMP/proj" udl \
+                 -import "$GITHUB_WORKSPACE/testdata/bin/udl" \
+                 -scriptPath "$RUNNER_TEMP/scripts" \
+                 -postScript HighPCodeLifter.java 2>&1 ) | tail -80 || true
+          echo "analyzeHeadless exit=${PIPESTATUS[0]}"
+          ls -l "$RUNNER_TEMP/proj" || true
+          echo "::endgroup::"
 
       # Unix runners have Ghidra, and the tests that start it need to be told
       # where: the action exports GHIDRA_INSTALL_DIR, and oinkie reads
