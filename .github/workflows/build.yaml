@@ -41,14 +41,15 @@ jobs:
         with:
           version: "12.1"
           auth_token: ${{ secrets.GITHUB_TOKEN }}
-      # Why this is needed, and why it asks about the binary rather than
-      # about the runner, is in the script. It is a script rather than a `run:`
-      # block because copilot-setup-steps.yml needs the same thing, and the
-      # same forty lines in two workflows is the shape where one of them gets
-      # fixed.
+      # Why this is needed, and why it builds rather than checking first, is
+      # in the script -- an earlier version checked, found another platform's
+      # prebuilt binary, and skipped the build that macOS needed. It is a
+      # script rather than a `run:` block because copilot-setup-steps.yml
+      # needs the same thing, and the same forty lines in two workflows is the
+      # shape where one of them gets fixed.
       #
       # `if` follows the Ghidra installation rather than the OS, so it needs no
-      # edit if Windows gains one.
+      # edit if Windows gains one (#136).
       - name: Make sure Ghidra can decompile
         if: env.GHIDRA_INSTALL_DIR != ''
         shell: bash

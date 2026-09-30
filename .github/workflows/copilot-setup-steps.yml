@@ -29,11 +29,12 @@ jobs:
           auth_token: ${{ secrets.GITHUB_TOKEN }}
 
       # The same script build.yaml uses. An official release does not ship a
-      # decompiler binary for every platform it supports, and without one
-      # every lift here would report success and find no functions (#126,
-      # #135). The script builds one only when the distribution has none, so
-      # on this runner -- Linux x86-64, which the release does cover -- it
-      # verifies and returns rather than compiling anything.
+      # decompiler binary for every platform it supports, and without one for
+      # the platform in hand every lift would report success and find no
+      # functions (#126, #135). The script builds one and then asserts it
+      # exists; it does not look for an existing one first, because a
+      # distribution carries other platforms' binaries and finding those
+      # proves nothing about this one.
       - name: Make sure Ghidra can decompile
         run: ./.github/scripts/ensure_ghidra_decompiler.sh
 
