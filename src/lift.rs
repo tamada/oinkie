@@ -124,27 +124,44 @@ impl Ir {
     /// Keyed on the representation because that is what the caller names, and
     /// answered per tool, so the three Binary Ninja levels share one
     /// installation rather than each describing it again.
+    ///
+    /// Every candidate is a Unix path, so on Windows the list is empty rather
+    /// than wrong. `candidates` documents empty as the value for "a backend
+    /// nobody has installed and checked", and nobody has checked where any of
+    /// these three land on Windows -- Ghidra in particular is a zip extracted
+    /// wherever the user likes, with the version in the directory name, so
+    /// there is no fixed path to offer even in principle. `find_in` leaves the
+    /// list out of its message when it is empty, so a Windows user is told to
+    /// set `GHIDRA_HOME` and not to install it in `/opt`.
     pub fn home_spec(&self) -> HomeSpec {
         match self {
             Ir::GhidraPcode => HomeSpec {
                 tool: self.tool(),
                 env: "GHIDRA_HOME",
-                candidates: &[
-                    "/opt/homebrew/opt/ghidra/libexec",
-                    "/usr/local/opt/ghidra/libexec",
-                    "/opt/ghidra/libexec",
-                ],
+                candidates: if cfg!(windows) {
+                    &[]
+                } else {
+                    &[
+                        "/opt/homebrew/opt/ghidra/libexec",
+                        "/usr/local/opt/ghidra/libexec",
+                        "/opt/ghidra/libexec",
+                    ]
+                },
             },
             Ir::IdaMicrocode => HomeSpec {
                 tool: self.tool(),
                 env: "IDA_HOME",
                 // The directory holding `idat`, which is the headless entry
                 // point. On macOS that is inside the application bundle.
-                candidates: &[
-                    "/Applications/IDA Professional 9.4.app/Contents/MacOS",
-                    "/Applications/IDA Classroom 9.4.app/Contents/MacOS",
-                    "/opt/ida",
-                ],
+                candidates: if cfg!(windows) {
+                    &[]
+                } else {
+                    &[
+                        "/Applications/IDA Professional 9.4.app/Contents/MacOS",
+                        "/Applications/IDA Classroom 9.4.app/Contents/MacOS",
+                        "/opt/ida",
+                    ]
+                },
             },
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => HomeSpec {
                 tool: self.tool(),
@@ -152,10 +169,14 @@ impl Ir {
                 // The directory holding `bnpython3`, which is the headless
                 // entry point, rather than the bundle or the API directory
                 // beside it.
-                candidates: &[
-                    "/Applications/Binary Ninja.app/Contents/MacOS",
-                    "/opt/binaryninja",
-                ],
+                candidates: if cfg!(windows) {
+                    &[]
+                } else {
+                    &[
+                        "/Applications/Binary Ninja.app/Contents/MacOS",
+                        "/opt/binaryninja",
+                    ]
+                },
             },
         }
     }
@@ -519,12 +540,33 @@ mod tests {
 
     /// Every representation names somewhere to look, which is the other half
     /// of the test above: it is what makes that spec a constructed one.
+    ///
+    /// Not on Windows, where the honest answer is that oinkie knows of no
+    /// install location for any of the three; the test below is that side of
+    /// it, so the `cfg` is a different assertion rather than an absent one.
+    #[cfg(not(windows))]
     #[test]
     fn test_every_representation_names_somewhere_to_look() {
         for ir in Ir::value_variants() {
             assert!(
                 !ir.home_spec().candidates.is_empty(),
                 "{ir} offers no install locations"
+            );
+        }
+    }
+
+    /// And on Windows every list is empty, deliberately. A candidate that
+    /// happens to exist is found silently and fails somewhere less obvious,
+    /// which is worse than being asked for `--home`; a candidate spelled for
+    /// another operating system cannot even be found, and only makes the
+    /// message advise something impossible.
+    #[cfg(windows)]
+    #[test]
+    fn test_no_representation_guesses_where_windows_keeps_things() {
+        for ir in Ir::value_variants() {
+            assert!(
+                ir.home_spec().candidates.is_empty(),
+                "{ir} offers an install location this platform does not have"
             );
         }
     }
