@@ -106,14 +106,17 @@ impl Extractor {
 
 fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Result<Birthmark> {
     let now = std::time::Instant::now();
-    // An fc-* birthmark of a program that calls nothing is empty, and two empty
-    // birthmarks score 1.0 against each other, so unrelated programs come back
-    // identical. Both ways of reaching that are refused here.
+    // An empty fc-* birthmark is a measurement, not a failure: a program that
+    // calls nothing is a program that calls nothing, and the family simply does
+    // not distinguish it. Said rather than refused, because the two empty
+    // birthmarks it produces will score 1.0 against each other and the reader
+    // should know which of those two things they are looking at.
     if matches!(
         bt,
         BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq
-    ) {
-        refuse_an_empty_family(p)?;
+    ) && let Some(reason) = empty_family(p)
+    {
+        log::warn!("{}", reason.message(p.path(), p.ir()));
     }
     let elements = p
         .iter()
@@ -191,29 +194,54 @@ where
     })
 }
 
-/// Refuses a program from which no `fc-*` birthmark could hold anything.
+/// Why every `fc-*` birthmark of a program would be empty, or `None` when one
+/// of them would not be.
 ///
-/// `extract_function_calls` is three filters -- is it a call, does it name a
-/// key, does the table hold that key -- and a program can empty the result at
-/// either of the last two. Only the first was guarded, which is how two
-/// lifters shipped with an `fc-*` family that was silently empty (#115): the
-/// microcode renders a global as `$name` and the table was keyed by the
-/// resolved name, and Binary Ninja's HLIL resolves the callee before oinkie
-/// sees it, so a table keyed by address matched nothing.
+/// Returned rather than logged so that the decision can be tested without a
+/// logger, and so that the caller owns how loudly it is said.
 ///
-/// The two refusals are separate because they send the reader somewhere else.
-/// Nothing being a call is `is_call`; nothing resolving is the symbol table or
-/// `symbol_key`.
+/// The two cases are kept apart because they send the reader somewhere else.
+/// Nothing being a call is `is_call`; calls that resolve to nothing is the
+/// symbol table or `symbol_key`. Both were reached by a real lifter during
+/// v0.6.0 -- the Hex-Rays microcode writes a global as `$name` and the table
+/// was keyed by the resolved name, and the optimiser folds a call into another
+/// instruction's operand, which a reader walking only the block's list misses.
+#[derive(Debug, PartialEq, Eq)]
+enum EmptyFamily {
+    /// No operation in the program is a call.
+    NoCalls,
+    /// There are calls, and none of them names anything the symbol table holds.
+    NoneResolve(usize),
+}
+
+impl EmptyFamily {
+    fn message(&self, path: &std::path::Path, ir: crate::lift::Ir) -> String {
+        let path = path.display();
+        match self {
+            Self::NoCalls => format!(
+                "{path}: no operation is a call, so every fc-* birthmark of it is empty -- and \
+                 two empty birthmarks score as a perfect match. Either the program really calls \
+                 nothing, or oinkie's reader for {ir} does not recognise that representation's \
+                 call operations"
+            ),
+            Self::NoneResolve(calls) => format!(
+                "{path}: calls were found ({calls} in total), but none of them names anything in \
+                 the symbol table, so every fc-* birthmark of it is empty -- and two empty \
+                 birthmarks score as a perfect match. Either every call is indirect, or oinkie's \
+                 reader for {ir} keys the symbol table differently from the way that \
+                 representation renders a callee"
+            ),
+        }
+    }
+}
+
+/// Decides which, if either, applies.
 ///
-/// Refusing rather than returning an empty birthmark is the same judgement the
-/// first of these already made: an empty one carries no evidence either way
-/// and yet scores 1.0 against another empty one, so a message is strictly more
-/// informative than the number.
-fn refuse_an_empty_family<T: crate::Op>(p: &Program<T>) -> Result<()> {
-    // One pass, returning at the first call that resolves. The count is only
-    // read when none did, and reaching that answer means the whole program was
-    // walked anyway -- so counting here costs a successful extraction nothing,
-    // where counting first cost it a full traversal for a number it threw away.
+/// One pass, returning at the first call that resolves. The count is only read
+/// when none did, and reaching that answer means the whole program was walked
+/// anyway -- so counting here costs an extraction that has calls nothing, where
+/// counting first cost it a full traversal for a number it threw away.
+fn empty_family<T: crate::Op>(p: &Program<T>) -> Option<EmptyFamily> {
     let mut calls = 0usize;
     for function in p.iter() {
         for op in function.iter() {
@@ -222,14 +250,14 @@ fn refuse_an_empty_family<T: crate::Op>(p: &Program<T>) -> Result<()> {
             }
             calls += 1;
             if op.symbol_key().and_then(|key| p.symbol(&key)).is_some() {
-                return Ok(());
+                return None;
             }
         }
     }
-    Err(if calls == 0 {
-        Error::NoCallOperations(p.path().to_path_buf(), p.ir())
+    Some(if calls == 0 {
+        EmptyFamily::NoCalls
     } else {
-        Error::UnresolvedCalls(p.path().to_path_buf(), p.ir(), calls)
+        EmptyFamily::NoneResolve(calls)
     })
 }
 
@@ -278,39 +306,86 @@ mod tests {
         crate::program::AnyProgram::load(&path).unwrap()
     }
 
-    /// The failure this refuses is silent: every call passes `is_call`, so the
-    /// older guard let it through, and each fc-* birthmark came back empty --
-    /// two of which score as a perfect match, reporting unrelated programs as
-    /// identical.
+    /// An empty family is returned rather than refused. A program that calls
+    /// nothing is a program that calls nothing, and `fc-*` simply does not
+    /// distinguish it -- which is a property of the measure, not a failure.
     #[test]
-    fn test_calls_that_resolve_to_nothing_are_refused() {
+    fn test_calls_that_resolve_to_nothing_give_an_empty_birthmark() {
         let p = a_program_whose_calls_resolve_to_nothing();
         for bt in ["fc-set", "fc-seq", "fc-freq"] {
-            let e = match Extractor::new(BirthmarkType::try_from(bt).unwrap()).extract_any(&p) {
-                Err(e) => e,
-                Ok(b) => panic!(
-                    "{bt}: an empty birthmark was returned: {} elements",
-                    b.len()
-                ),
-            };
-            let rendered = e.to_string();
-            assert!(
-                matches!(e, Error::UnresolvedCalls(_, _, 2)),
-                "{bt}: wrong refusal: {rendered}"
-            );
-            assert!(
-                rendered.contains("symbol table"),
-                "{bt}: does not say where to look: {rendered}"
-            );
+            let b = Extractor::new(BirthmarkType::try_from(bt).unwrap())
+                .extract_any(&p)
+                .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
+            assert_eq!(b.len(), 1, "{bt}: one function was expected");
+            let calls: Vec<String> = b.iter().flat_map(|e| e.ops().map(String::from)).collect();
+            assert!(calls.is_empty(), "{bt}: expected nothing, got {calls:?}");
         }
     }
 
-    /// The two refusals are not interchangeable. This one has calls; the other
-    /// has none, and a reader sent to the symbol table when `is_call` is what
-    /// matched nothing would look in the wrong place.
+    /// One program that cannot answer does not stop the others.
+    ///
+    /// It used to: the refusal was an `Err`, and a corpus with a single
+    /// call-less binary in it lost every birthmark after that one.
     #[test]
-    fn test_the_two_empty_family_refusals_are_distinct() {
+    fn test_a_program_that_calls_nothing_does_not_stop_the_rest() {
+        let dir = tempdir().unwrap();
+        let mut programs = Vec::new();
+        for (name, ops) in [
+            ("calls", r#"{"op":"CALL","inputs":["(ram, 0x1000, 8)"]}"#),
+            (
+                "pure",
+                r#"{"op":"COPY","out":"(register, 0x0, 8)","inputs":["(const, 0x1, 8)"]}"#,
+            ),
+            (
+                "calls_too",
+                r#"{"op":"CALL","inputs":["(ram, 0x1000, 8)"]}"#,
+            ),
+        ] {
+            let path = dir.path().join(format!("{name}.json"));
+            std::fs::write(
+                &path,
+                format!(
+                    r#"{{"program":"{name}","path":"bin/{name}","ir":"ghidra-pcode",
+                        "symbols":{{"0x1000":"_printf"}},
+                        "functions":[{{"name":"main","ops":[{ops}]}}]}}"#
+                ),
+            )
+            .unwrap();
+            programs.push(crate::program::AnyProgram::load(&path).unwrap());
+        }
+        let extractor = Extractor::new(BirthmarkType::try_from("fc-set").unwrap());
+        let sizes: Vec<usize> = programs
+            .iter()
+            .map(|p| {
+                extractor
+                    .extract_any(p)
+                    .unwrap_or_else(|e| panic!("{e}"))
+                    .iter()
+                    .flat_map(|e| e.ops())
+                    .count()
+            })
+            .collect();
+        assert_eq!(
+            sizes,
+            vec![1, 0, 1],
+            "the middle one should be empty, not fatal"
+        );
+    }
+
+    /// Which of the two emptied the family, and that neither fires when one
+    /// call resolves.
+    ///
+    /// This is the part worth keeping from the old refusal: the two send the
+    /// reader somewhere else, and both were reached by a real lifter during
+    /// v0.6.0.
+    #[test]
+    fn test_the_two_ways_of_emptying_a_family_are_told_apart() {
         let unresolved = a_program_whose_calls_resolve_to_nothing();
+        assert!(matches!(
+            any_empty_family(&unresolved),
+            Some(EmptyFamily::NoneResolve(2))
+        ));
+
         let dir = tempdir().unwrap();
         let path = dir.path().join("callless.json");
         std::fs::write(
@@ -322,49 +397,49 @@ mod tests {
         )
         .unwrap();
         let callless = crate::program::AnyProgram::load(&path).unwrap();
+        assert_eq!(any_empty_family(&callless), Some(EmptyFamily::NoCalls));
 
-        let bt = BirthmarkType::try_from("fc-set").unwrap();
-        let a = Extractor::new(bt.clone())
-            .extract_any(&unresolved)
-            .unwrap_err();
-        let b = Extractor::new(bt).extract_any(&callless).unwrap_err();
-        assert!(matches!(a, Error::UnresolvedCalls(_, _, _)), "{a}");
-        assert!(matches!(b, Error::NoCallOperations(_, _)), "{b}");
-    }
-
-    /// The message reads the same for one call as for many.
-    ///
-    /// It said "1 operations are calls" for the single-call case, which is the
-    /// common one: a program with one indirect call and nothing else.
-    #[test]
-    fn test_the_refusal_reads_correctly_for_a_single_call() {
-        let dir = tempdir().unwrap();
-        let path = dir.path().join("one.json");
-        std::fs::write(
-            &path,
-            r#"{"program":"one","path":"bin/one","ir":"ghidra-pcode",
-                "symbols":{},
-                "functions":[{"name":"main","ops":[
-                  {"op":"CALLIND","inputs":["(register, 0x20, 8)"]}]}]}"#,
-        )
+        let fine = crate::program::AnyProgram::load(std::path::Path::new(
+            "testdata/lifted/pcodes/hello_clang.json",
+        ))
         .unwrap();
-        let p = crate::program::AnyProgram::load(&path).unwrap();
-        let e = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
-            .extract_any(&p)
-            .unwrap_err()
-            .to_string();
-        assert!(matches!(
-            Extractor::new(BirthmarkType::try_from("fc-set").unwrap()).extract_any(&p),
-            Err(Error::UnresolvedCalls(_, _, 1))
-        ));
-        assert!(
-            !e.contains("1 operations"),
-            "reads as a plural for one call: {e}"
-        );
-        assert!(e.contains("(1 in total)"), "does not say how many: {e}");
+        assert_eq!(any_empty_family(&fine), None);
     }
 
-    /// The op-* families say nothing about calls, so neither refusal applies
+    /// The messages say which case they are, and name the file and the
+    /// representation -- the two things that tell a lifter bug from a program
+    /// that really calls nothing.
+    #[test]
+    fn test_each_message_names_the_file_the_representation_and_the_cause() {
+        let path = std::path::Path::new("bin/sample");
+        let ir = crate::lift::Ir::GhidraPcode;
+
+        let none = EmptyFamily::NoCalls.message(path, ir);
+        assert!(
+            none.contains("bin/sample") && none.contains("ghidra-pcode"),
+            "{none}"
+        );
+        assert!(none.contains("no operation is a call"), "{none}");
+
+        let some = EmptyFamily::NoneResolve(1).message(path, ir);
+        assert!(some.contains("symbol table"), "{some}");
+        assert!(
+            !some.contains("1 operations"),
+            "reads as a plural for one: {some}"
+        );
+        assert!(some.contains("(1 in total)"), "{some}");
+    }
+
+    /// `empty_family` is generic over the operation type, and the tests hold an
+    /// `AnyProgram`. This is the one place that has to know which it is.
+    fn any_empty_family(p: &crate::program::AnyProgram) -> Option<EmptyFamily> {
+        match p {
+            crate::program::AnyProgram::GhidraPcode(p) => empty_family(p),
+            _ => unreachable!("the fixtures here are all P-Code"),
+        }
+    }
+
+    /// The op-* families say nothing about calls, so neither warning applies
     /// to them. A program of unresolvable calls still has operations.
     #[test]
     fn test_the_op_families_are_not_refused_for_unresolvable_calls() {
@@ -483,14 +558,15 @@ mod tests {
         }
     }
 
-    /// The danger in an fc-* birthmark is not that it is empty but that two
-    /// empty ones score as a perfect match, which in a theft-detection tool
-    /// reads as a positive. A program in which nothing at all is a call is
-    /// far more likely to mean the lifter does not recognise its own call
-    /// opcode than to mean the program makes no calls, so refuse rather than
-    /// hand back something that can only mislead.
+    /// A leaf function calls nothing, so its fc-* birthmark is empty. That is
+    /// the measurement, and it is handed back.
+    ///
+    /// It used to be refused. Two empty birthmarks score as a perfect match,
+    /// and in a theft-detection tool that reads as a positive -- but the answer
+    /// to that is to say so, not to decide on the caller's behalf that the
+    /// question cannot be asked. `empty_family` is what says so.
     #[test]
-    fn test_fc_extraction_refuses_a_program_without_calls() {
+    fn test_fc_extraction_of_a_program_without_calls_is_empty_not_refused() {
         let json = r#"{
             "program": "callless",
             "path": "bin/callless",
@@ -510,11 +586,12 @@ mod tests {
             BirthmarkType::FcSet,
             BirthmarkType::FcFreq,
         ] {
-            let result = Extractor::new(bt.clone()).extract_each(&program);
+            let b = Extractor::new(bt.clone())
+                .extract_each(&program)
+                .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
             assert!(
-                matches!(result, Err(Error::NoCallOperations(_, _))),
-                "{bt}: expected a refusal, got {:?}",
-                result.map(|b| b.elements.len())
+                b.iter().flat_map(|e| e.ops()).next().is_none(),
+                "{bt}: a leaf function calls nothing, so this should be empty"
             );
         }
     }
