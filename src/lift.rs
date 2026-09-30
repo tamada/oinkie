@@ -473,9 +473,25 @@ mod tests {
         assert_eq!(home, PathBuf::from("/env/ghidra/home"));
     }
 
+    /// A spec with somewhere to look, built here rather than taken from an
+    /// [`Ir`].
+    ///
+    /// `Ir::GhidraPcode`'s own list is empty on Windows, where oinkie knows of
+    /// no install location, so the two tests below read it off the end of an
+    /// empty slice and panicked there while passing everywhere else. What they
+    /// are about is the search, not which paths this platform happens to
+    /// offer, and a constructed spec exercises it on all of them.
+    fn a_spec_with_candidates() -> HomeSpec {
+        HomeSpec {
+            tool: "Ghidra",
+            env: "GHIDRA_HOME",
+            candidates: &["/first/ghidra", "/second/ghidra", "/third/ghidra"],
+        }
+    }
+
     #[test]
     fn test_the_usual_locations_are_searched_when_the_variable_is_unset() {
-        let spec = Ir::GhidraPcode.home_spec();
+        let spec = a_spec_with_candidates();
         let last = Path::new(spec.candidates.last().unwrap());
         let home = spec.find_in(|_| None, |p| p == last).unwrap();
         assert_eq!(home, last);
@@ -486,7 +502,7 @@ mod tests {
     /// answer to it.
     #[test]
     fn test_the_first_of_several_installations_wins() {
-        let spec = Ir::GhidraPcode.home_spec();
+        let spec = a_spec_with_candidates();
         let home = spec.find_in(|_| None, |_| true).unwrap();
         assert_eq!(home, PathBuf::from(spec.candidates[0]));
     }
@@ -504,6 +520,9 @@ mod tests {
             err.contains("GHIDRA_HOME"),
             "does not name the variable: {err}"
         );
+        // Empty on Windows, where there is nowhere usual to look, so this
+        // half of the message -- and of this test's name -- is the platform's
+        // answer rather than an assertion that always has something to make.
         for c in spec.candidates {
             assert!(err.contains(c), "does not say it looked in {c}: {err}");
         }
@@ -512,11 +531,14 @@ mod tests {
     /// A backend with no candidates must stop after the variable rather than
     /// invite the user to install it in one of nowhere.
     ///
-    /// The spec is built here rather than taken from an [`Ir`], because every
-    /// representation now names somewhere to look. [`HomeSpec`] is public with
-    /// public fields, so the empty case is still reachable -- and it is what a
-    /// backend added before anyone has checked where it installs looks like,
-    /// which is how both IDA Pro and Binary Ninja began.
+    /// The spec is built here rather than taken from an [`Ir`], because on the
+    /// platforms where a representation names somewhere to look it names
+    /// several, and on Windows -- where none of them does -- this would be
+    /// asserting the same thing as every other test in this module.
+    /// [`HomeSpec`] is public with public fields, so the empty case is
+    /// reachable anywhere, and it is what a backend added before anyone has
+    /// checked where it installs looks like, which is how both IDA Pro and
+    /// Binary Ninja began.
     #[test]
     fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
         let spec = HomeSpec {
