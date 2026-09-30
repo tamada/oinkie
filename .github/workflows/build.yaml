@@ -41,73 +41,66 @@ jobs:
         with:
           version: "12.1"
           auth_token: ${{ secrets.GITHUB_TOKEN }}
-      # An official Ghidra release carries prebuilt native binaries for Windows
-      # x86-64, Windows ARM64 and Linux x86-64 -- and for nothing else. macOS,
-      # on either architecture, is in the list GettingStarted.md calls "supported
-      # with user-built native binaries", so the distribution is complete as
-      # published and incomplete for this runner. The action has no say in it:
-      # its whole configuration surface is which archive to fetch and how to
-      # check it.
+      # Ghidra needs native binaries to decompile, and an official release
+      # does not carry them for every platform it supports: it ships Windows
+      # x86-64, Windows ARM64 and Linux x86-64, while GettingStarted.md puts
+      # macOS, on either architecture, in the list "supported with user-built
+      # native binaries". So ubuntu has had a complete Ghidra all along and
+      # macOS has never had one.
       #
-      # Without the decompiler binary, `DecompInterface.decompileFunction`
-      # fails for every function and HighPCodeLifter.java skips each one, so a
-      # lift produces a parseable file with no functions in it -- and
-      # analyzeHeadless still exits 0 (#54). That is what failed the macOS job
-      # while ubuntu passed on the same bytes (#126), and what #135 is about.
+      # Without the decompiler, `DecompInterface.decompileFunction` fails for
+      # every function, HighPCodeLifter.java skips each one, and the lift
+      # writes a parseable file with an empty functions array -- while
+      # analyzeHeadless exits 0 and reports success (#54). That is what failed
+      # the macOS job on the same bytes ubuntu passed on (#126), and `lift`
+      # cannot yet tell anyone (#135).
       #
-      # The JDK is already here from setup-java, the distribution supplies its
-      # own Gradle wrapper, and Xcode Command Line Tools are on the runner
-      # image, so this needs nothing added.
-      - name: Build Ghidra's native components
-        if: matrix.os == 'macOS-latest'
+      # Which platforms get a prebuilt binary is the distribution's decision
+      # and can change, so this asks whether the binary is there rather than
+      # which runner it is on -- and builds it only when it is missing, which
+      # keeps ubuntu testing the same prebuilt binary its users download. The
+      # assertion at the end runs either way: a release that quietly stopped
+      # shipping Linux natives would fail here instead of lifting nothing.
+      #
+      # `if` follows the Ghidra installation rather than the OS, so it needs no
+      # edit if Windows gains one -- where the prebuilt binary already exists.
+      #
+      # Building needs nothing added: the JDK comes from setup-java, the
+      # distribution supplies its own Gradle wrapper, and the runner images
+      # carry the C/C++ toolchains.
+      - name: Make sure Ghidra can decompile
+        if: env.GHIDRA_INSTALL_DIR != ''
         shell: bash
         run: |
           set -euo pipefail
-          cd "${{ env.GHIDRA_INSTALL_DIR }}/support/gradle"
-          ./gradlew buildNatives
-
-          # A build that exits 0 without producing the binary would leave the
-          # lift silently empty again, which is the whole failure this step
-          # exists to end. Ghidra prefers build/os/<platform>/ over the
-          # prebuilt os/<platform>/, so look in both rather than assuming
-          # which one won.
           cd "${{ env.GHIDRA_INSTALL_DIR }}"
-          # `|| true`, because the point of this check is the message below:
-          # under `set -e` a failing find would kill the step before it.
-          found=$(find Ghidra/Features/Decompiler -type f -name decompile \
-                    -path '*os/*' -print 2>/dev/null | sort || true)
+
+          # Ghidra prefers build/os/<platform>/ over the prebuilt
+          # os/<platform>/, so look in both rather than assuming which won.
+          # `|| true`, because under `set -e` a failing find would exit before
+          # any of the reporting below.
+          natives() {
+            find Ghidra/Features/Decompiler -type f -name 'decompile*' \
+              -path '*os/*' -print 2>/dev/null | sort || true
+          }
+
+          if [ -z "$(natives)" ]; then
+            echo "no decompiler binary in this distribution; building it"
+            ( cd support/gradle && ./gradlew buildNatives )
+          else
+            echo "the distribution already carries one"
+          fi
+
+          found=$(natives)
           if [ -z "$found" ]; then
-            echo "buildNatives exited 0 but no decompiler binary exists:" >&2
-            find Ghidra/Features/Decompiler -type d -name 'os' \
+            echo "::error::Ghidra has no decompiler binary and building one did not produce it."
+            find Ghidra/Features/Decompiler -type d -name os \
               -exec sh -c 'echo "  $1:"; ls -R "$1"' _ {} \; >&2 || true
             exit 1
           fi
           echo "decompiler native binaries:"
           echo "$found" | sed 's/^/  /'
 
-      # Ghidra compiles the lifting script at lift time, so an error in it is
-      # not a build failure -- it is a lift that produces nothing, reported as
-      # a missing output because analyzeHeadless exits 0 either way. The jars
-      # and the JDK are already here for the steps above, so checking it costs
-      # about two seconds.
-      # Two of the three runtime stages, on one architecture.
-      #
-      # All three share one builder stage, so building any of them exercises
-      # the build context -- the COPY paths, the `include_str!` reaches, the
-      # cargo build -- for all of them. What `ghidra-image` adds beyond that is
-      # a 400 MB download whose URL and checksum change only when someone edits
-      # them; the release builds it, and that is soon enough.
-      #
-      # `mcp-image` is built here even though it adds no layer to `light-image`,
-      # because what it does add is a stage name and a default command, and
-      # neither is exercised by building anything else. A typo in either would
-      # otherwise surface when a client started the image.
-      #
-      # Building rather than checking that the COPY sources exist: a path check
-      # catches a moved directory and nothing else -- not a COPY naming the
-      # wrong thing, not an `include_str!` reaching outside the context, not a
-      # runtime stage missing a dependency, not a binary that will not run once
-      # it is in there. Cold, with no cache, this takes 26s locally.
       - name: Build the light container image
         if: matrix.os == 'ubuntu-latest'
         run: docker build --target light-image -f Containerfile -t oinkie:ci .
