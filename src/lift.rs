@@ -24,17 +24,36 @@ pub trait Lifter {
 /// oinkie never sees. Without this, all three end the same way: a directory of
 /// files that look lifted, and a failure at `extract` naming a line and column
 /// in a file the reader did not know existed.
-struct Verifying<L>(L);
+///
+/// Two things are checked, and the second is the one that hid. A file that
+/// cannot be read announces itself at `extract`; a file that reads and holds
+/// no functions announces nothing at all, and yields an empty birthmark for
+/// every family. Two empty birthmarks score 1.0, so unrelated programs are
+/// reported as identical -- and that has happened twice, on two platforms,
+/// from a Ghidra with no decompiler binary (#126, #135).
+///
+/// The representation is carried so the message can name it, and so the
+/// Ghidra case can name the cause it has always had.
+struct Verifying<L> {
+    inner: L,
+    ir: Ir,
+}
 
 impl<L: Lifter> Lifter for Verifying<L> {
     fn lift(&self, input: &Path, output: &Path) -> Result<()> {
-        self.0.lift(input, output)?;
-        // Loaded and dropped: this is the check. Reading it is the only way to
-        // know the file is one oinkie can use, and the read is what `extract`
-        // would have done later anyway.
-        crate::program::AnyProgram::load(output)
-            .map(|_| ())
-            .map_err(|e| crate::Error::UnreadableOutput(input.to_path_buf(), Box::new(e)))
+        self.inner.lift(input, output)?;
+        // Loaded rather than merely opened: reading it is the only way to know
+        // the file is one oinkie can use, and the read is what `extract` would
+        // have done later anyway.
+        let program = crate::program::AnyProgram::load(output)
+            .map_err(|e| crate::Error::UnreadableOutput(input.to_path_buf(), Box::new(e)))?;
+        if program.is_empty() {
+            return Err(crate::Error::NoFunctionsLifted(
+                input.to_path_buf(),
+                self.ir,
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -341,21 +360,25 @@ impl LifterBuilder {
         match self.ir {
             Ir::GhidraPcode => {
                 let home = self.ir.find_home(self.home.as_deref())?;
-                Ok(Box::new(Verifying(
-                    crate::ghidra::lifter::GhidraLifter::new(
+                Ok(Box::new(Verifying {
+                    inner: crate::ghidra::lifter::GhidraLifter::new(
                         home,
                         self.script,
                         self.intermediate_dir,
                     ),
-                )))
+                    ir: self.ir,
+                }))
             }
             Ir::IdaMicrocode => {
                 let home = self.ir.find_home(self.home.as_deref())?;
-                Ok(Box::new(Verifying(crate::ida::lifter::IdaLifter::new(
-                    home,
-                    self.script,
-                    self.intermediate_dir,
-                ))))
+                Ok(Box::new(Verifying {
+                    inner: crate::ida::lifter::IdaLifter::new(
+                        home,
+                        self.script,
+                        self.intermediate_dir,
+                    ),
+                    ir: self.ir,
+                }))
             }
             Ir::BinaryNinjaLlil | Ir::BinaryNinjaMlil | Ir::BinaryNinjaHlil => {
                 // `level` is exhaustive over `Ir`, so a `None` here would mean
@@ -367,14 +390,15 @@ impl LifterBuilder {
                     return Err(not_implemented(self.ir));
                 };
                 let home = self.ir.find_home(self.home.as_deref())?;
-                Ok(Box::new(Verifying(
-                    crate::binaryninja::lifter::BinaryNinjaLifter::new(
+                Ok(Box::new(Verifying {
+                    inner: crate::binaryninja::lifter::BinaryNinjaLifter::new(
                         home,
                         level,
                         self.script,
                         self.intermediate_dir,
                     ),
-                )))
+                    ir: self.ir,
+                }))
             }
         }
     }
@@ -619,7 +643,23 @@ mod verifying_tests {
         }
     }
 
+    /// It has a function, and that is not incidental. This constant used to
+    /// end `"functions": []` and stand for a successful lift, which is the
+    /// defect #135 was about: a file that reads and holds nothing was the
+    /// example of everything having worked.
     const A_READABLE_PROGRAM: &str = r#"{
+        "program": "sample",
+        "path": "bin/sample",
+        "ir": "ghidra-pcode",
+        "symbols": {},
+        "functions": [
+            {"name": "main", "ops": [{"op": "COPY", "inputs": ["r0"]}]}
+        ]
+    }"#;
+
+    /// The same file with the functions taken out: readable, well-formed, and
+    /// empty.
+    const A_PROGRAM_WITH_NO_FUNCTIONS: &str = r#"{
         "program": "sample",
         "path": "bin/sample",
         "ir": "ghidra-pcode",
@@ -628,9 +668,30 @@ mod verifying_tests {
     }"#;
 
     fn lift_with<L: Lifter>(lifter: L, input: &str) -> (Result<()>, tempfile::TempDir) {
+        lift_as(lifter, input, Ir::GhidraPcode)
+    }
+
+    /// A file already on disk, so a test can describe output a lifter would
+    /// not write -- a representation with no reader, or one this build spells
+    /// differently.
+    fn lift_written(json: &str, ir: Ir) -> (Result<()>, tempfile::TempDir) {
+        struct Nothing;
+        impl Lifter for Nothing {
+            fn lift(&self, _i: &Path, _o: &Path) -> Result<()> {
+                Ok(())
+            }
+        }
         let dir = tempfile::tempdir().unwrap();
         let output = dir.path().join("sample.json");
-        let r = Verifying(lifter).lift(Path::new(input), &output);
+        std::fs::write(&output, json).unwrap();
+        let r = Verifying { inner: Nothing, ir }.lift(Path::new("bin/sample"), &output);
+        (r, dir)
+    }
+
+    fn lift_as<L: Lifter>(lifter: L, input: &str, ir: Ir) -> (Result<()>, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let output = dir.path().join("sample.json");
+        let r = Verifying { inner: lifter, ir }.lift(Path::new(input), &output);
         (r, dir)
     }
 
@@ -680,19 +741,68 @@ mod verifying_tests {
     #[test]
     fn test_an_output_in_an_unknown_representation_fails_the_lift() {
         let json = A_READABLE_PROGRAM.replace("ghidra-pcode", "llvm-ir");
-        let dir = tempfile::tempdir().unwrap();
-        let output = dir.path().join("sample.json");
-        std::fs::write(&output, &json).unwrap();
-        struct Nothing;
-        impl Lifter for Nothing {
-            fn lift(&self, _i: &Path, _o: &Path) -> Result<()> {
-                Ok(())
-            }
-        }
-        let e = Verifying(Nothing)
-            .lift(Path::new("bin/sample"), &output)
-            .expect_err("a representation with no reader is not a successful lift");
+        let (r, _dir) = lift_written(&json, Ir::GhidraPcode);
+        let e = r.expect_err("a representation with no reader is not a successful lift");
         assert!(e.to_string().contains("llvm-ir"), "{e}");
+    }
+
+    /// The case #135 exists for, and the quieter of the two this wrapper
+    /// guards. The file parses, oinkie reads it without complaint, and it
+    /// holds nothing -- so every birthmark taken from it is empty, two empty
+    /// birthmarks score 1.0, and unrelated programs are reported as
+    /// identical. Nothing downstream can tell this from a lift that worked.
+    #[test]
+    fn test_an_output_with_no_functions_fails_the_lift() {
+        let (r, _dir) = lift_with(Writes(A_PROGRAM_WITH_NO_FUNCTIONS), "bin/sample");
+        let e = r.expect_err("a file with no functions is not a successful lift");
+        let rendered = e.to_string();
+        // The binary, with the colon after it: a bare "sample" would also
+        // match the output's own name and so assert nothing.
+        assert!(rendered.contains("bin/sample:"), "{rendered}");
+        assert!(rendered.contains("no functions"), "{rendered}");
+        // and not the other refusal, which is about a file that cannot be read
+        assert!(!rendered.contains("cannot be read back"), "{rendered}");
+    }
+
+    /// Its own error rather than an unreadable output. The two send the reader
+    /// to different places: one to the writer, one to the tool that found
+    /// nothing to write about.
+    #[test]
+    fn test_no_functions_is_its_own_refusal() {
+        let (r, _dir) = lift_with(Writes(A_PROGRAM_WITH_NO_FUNCTIONS), "bin/sample");
+        assert!(
+            matches!(r, Err(Error::NoFunctionsLifted(_, Ir::GhidraPcode))),
+            "{:?}",
+            r.map_err(|e| e.to_string())
+        );
+    }
+
+    /// Ghidra gets the cause named, because it has been the same cause both
+    /// times: a release that ships no decompiler binary for the platform, and
+    /// a `DecompInterface` that then fails for every function while
+    /// analyzeHeadless still exits 0 (#126).
+    ///
+    /// The others do not, because nothing has been measured about why they
+    /// would come back empty, and advice invented for them would send the
+    /// reader to a Ghidra directory they do not have.
+    #[test]
+    fn test_only_ghidra_is_told_about_the_decompiler() {
+        let (ghidra, _a) = lift_as(
+            Writes(A_PROGRAM_WITH_NO_FUNCTIONS),
+            "bin/sample",
+            Ir::GhidraPcode,
+        );
+        let g = ghidra.unwrap_err().to_string();
+        assert!(g.contains("buildNatives"), "{g}");
+
+        let hlil = A_PROGRAM_WITH_NO_FUNCTIONS.replace("ghidra-pcode", "binary-ninja-hlil");
+        let (bn, _b) = lift_written(&hlil, Ir::BinaryNinjaHlil);
+        let b = bn
+            .expect_err("a file with no functions is not a successful lift")
+            .to_string();
+        assert!(b.contains("binary-ninja-hlil"), "{b}");
+        assert!(b.contains("no functions"), "{b}");
+        assert!(!b.contains("buildNatives"), "{b}");
     }
 
     /// A lifter that fails is reported as itself. Wrapping its error in

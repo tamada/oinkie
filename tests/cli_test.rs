@@ -901,3 +901,38 @@ fn test_stats_counts_what_it_could_not_read() {
         "the readable files were affected: {json}"
     );
 }
+
+/// The quieter half of the same guard, end to end. `EmptyLifter` writes a file
+/// oinkie reads without complaint and that holds no functions, which is what a
+/// Ghidra missing its decompiler native binary produces (#126) -- and what
+/// nothing downstream can tell from a lift that worked, since every birthmark
+/// from it is empty and two empty birthmarks score 1.0.
+///
+/// End to end rather than only at `Verifying`, because what this issue is
+/// about is the silence: the refusal has to reach a person, with a non-zero
+/// exit and a message that names the binary.
+#[test]
+#[serial(ghidra)]
+fn test_a_lift_that_found_no_functions_is_not_a_successful_lift() {
+    let temp_dir = tempdir().unwrap();
+    let dest = temp_dir.path().join("lifted");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("lift")
+        .arg("--script")
+        .arg("testdata/scripts/EmptyLifter.java")
+        .arg("-d")
+        .arg(&dest)
+        .arg("testdata/bin/hello_clang")
+        .assert()
+        .failure()
+        // the binary the person asked about, with the colon that follows it
+        .stderr(predicate::str::contains("testdata/bin/hello_clang:"))
+        // what is wrong with what came back
+        .stderr(predicate::str::contains("no functions"))
+        // and the cause it has always had, since this is Ghidra
+        .stderr(predicate::str::contains("buildNatives"))
+        // not the other refusal: this file reads perfectly
+        .stderr(predicate::str::contains("cannot be read back").not());
+}
