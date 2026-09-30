@@ -123,7 +123,8 @@ jobs:
         run: |
           ./assets/lifters/ghidra/compile-check.sh \
             assets/lifters/ghidra/scripts/HighPCodeLifter.java \
-            testdata/scripts/BrokenLifter.java
+            testdata/scripts/BrokenLifter.java \
+            testdata/scripts/EmptyLifter.java
           # Binary Ninja is licensed and cannot be installed here, so nothing
           # on a runner can run this script. Parsing it is what is left, and
           # it catches the failure that would otherwise reach a user as
