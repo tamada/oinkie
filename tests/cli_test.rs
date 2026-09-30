@@ -538,3 +538,196 @@ fn test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift() {
         // and that the lifter claimed success, which is what points at the script
         .stderr(predicate::str::contains("reported success"));
 }
+
+/// Birthmarks for the `stats` tests below, extracted rather than committed:
+/// `testdata/` holds lifted programs and no birthmark, and the extraction is
+/// a second of work that keeps the fixtures one thing rather than two that
+/// can disagree.
+///
+/// The names carry a content hash -- `hello_clang_48fa2ffd841490f0.json` --
+/// so the assertions below use the `file_name` column, which is the stem.
+fn birthmarks_in(dir: &std::path::Path) {
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("extract")
+        .arg("-d")
+        .arg(dir)
+        .arg("-b")
+        .arg("op-seq")
+        .arg("testdata/lifted/pcodes/hello_clang.json")
+        .arg("testdata/lifted/pcodes/hello_gcc.json")
+        .assert()
+        .success();
+}
+
+/// `--per-file` with `-f csv` is a whole output function of its own, and
+/// nothing ran it: `cli/stats.rs` has unit tests for the arithmetic and none
+/// of the tests started the command, so the formatters and the driver that
+/// picks between them were never executed. A renamed column or a row built in
+/// the wrong order would have shipped.
+///
+/// The header is asserted in full rather than by one column, because what
+/// breaks silently here is a swap: every name still present, in the wrong
+/// place, over data that still parses as CSV.
+#[test]
+fn test_stats_writes_a_row_per_file_as_csv() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("csv")
+        .arg("--per-file")
+        .arg(&dir)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+
+    assert_eq!(
+        lines[0],
+        "path,file_name,ir,birthmark_type,functions,empty,\
+elements_min,elements_q1,elements_median,elements_q3,elements_max,\
+elements_mean,elements_stddev"
+    );
+    assert_eq!(lines.len(), 3, "expected a header and two rows: {text}");
+    for name in ["hello_clang", "hello_gcc"] {
+        assert!(
+            lines[1..].iter().any(|l| l.contains(&format!(",{name},"))),
+            "no row for {name}: {text}"
+        );
+    }
+}
+
+/// The same for Markdown, which reaches a different function: the per-file
+/// section is built where the summary tables are, and only when `--per-file`
+/// is given, so the two formats share no code on this path.
+#[test]
+fn test_stats_writes_a_per_file_section_as_markdown() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("markdown")
+        .arg("--per-file")
+        .arg(&dir)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+
+    let per_file = text
+        .split_once("## Per file")
+        .unwrap_or_else(|| panic!("no per-file section: {text}"))
+        .1;
+    for name in ["hello_clang", "hello_gcc"] {
+        assert!(
+            per_file.contains(name),
+            "{name} is not in the section: {text}"
+        );
+    }
+}
+
+/// `--top` is the third table, and the one whose rows have an order that
+/// means something: rank 1 is the most frequent element, so a sort that went
+/// the other way would still produce a well-formed table.
+#[test]
+fn test_stats_ranks_the_most_frequent_elements_as_csv() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("csv")
+        .arg("--top")
+        .arg("3")
+        .arg(&dir)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+
+    assert_eq!(lines[0], "ir,birthmark_type,rank,element,count");
+    assert_eq!(lines.len(), 4, "expected a header and three ranks: {text}");
+
+    let counts: Vec<u64> = lines[1..]
+        .iter()
+        .map(|l| l.rsplit(',').next().unwrap().parse().unwrap())
+        .collect();
+    assert!(
+        counts.windows(2).all(|w| w[0] >= w[1]),
+        "the ranks are not in descending order of count: {counts:?}"
+    );
+}
+
+/// One CSV file holds one table, so the two options that each replace the
+/// summary cannot both be given. The refusal names the formats that do take
+/// both, rather than only saying no.
+#[test]
+fn test_stats_refuses_two_csv_tables_and_says_where_to_put_them() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-f")
+        .arg("csv")
+        .arg("--per-file")
+        .arg("--top")
+        .arg("3")
+        .arg(&dir)
+        .assert()
+        .failure()
+        .stderr(
+            predicate::str::contains("--per-file")
+                .and(predicate::str::contains("-f json"))
+                .and(predicate::str::contains("-f markdown")),
+        );
+}
+
+/// `-o` is the other half of the driver: with it the report goes to the file
+/// and stdout stays empty, which is what lets `stats` be piped into something
+/// else without the report arriving twice.
+#[test]
+fn test_stats_writes_to_the_named_file_and_not_to_stdout() {
+    let temp_dir = tempdir().unwrap();
+    let dir = temp_dir.path().join("birthmarks");
+    birthmarks_in(&dir);
+    let dest = temp_dir.path().join("stats.md");
+
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .arg("stats")
+        .arg("-o")
+        .arg(&dest)
+        .arg(&dir)
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+
+    let written = fs::read_to_string(&dest).expect("the report was not written");
+    assert!(
+        written.contains("# Birthmark statistics"),
+        "the file does not hold the report: {written}"
+    );
+}
