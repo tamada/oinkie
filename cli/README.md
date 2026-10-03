@@ -14,7 +14,7 @@ Commands:
   lift         Lift binary files to JSON files of an intermediate representation, using a specified lifter
   extract      Extract birthmarks from a lifted binary file (JSON format)
   compare      Compare birthmarks and output the similarity score
-  reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+  review       Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores
   stats        Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
   run          Extract birthmarks and compare them in one command
   mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
@@ -142,14 +142,14 @@ Options:
           Print help (see a summary with '-h')
 ```
 
-### `reaggregate` command
+### `review` command
 
-Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score.
+Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores.
 
 ```sh
-Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores
 
-Usage: oinkie reaggregate [OPTIONS] <SCORE_DIRECTORY>
+Usage: oinkie review [OPTIONS] <SCORE_DIRECTORY>
 
 Arguments:
   <SCORE_DIRECTORY>  Path to the directory containing the element-wise similarity scores
@@ -162,8 +162,8 @@ Options:
                                 - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
                                              second birthmark when calculating the overall similarity score. This can reduce noise from less
                                              relevant matches and focus on the most significant similarities. [default: hungarian]
-  -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to reaggregate.
-                                The file contains the birthmark-wise similarity score list. [default: reaggregate.csv]
+  -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to review.
+                                The file contains the birthmark-wise similarity score list. [default: review.csv]
   -h, --help                    Print help
 ```
 

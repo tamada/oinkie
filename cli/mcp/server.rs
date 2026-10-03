@@ -147,7 +147,7 @@ pub struct RunParams {
     pub aggregator: Option<String>,
     /// Optional. Write the per-pair matrices here, as `oinkie run -d` does.
     /// The scores come back either way; this is for the detail behind them,
-    /// and for handing the directory to oinkie_reaggregate afterwards.
+    /// and for handing the directory to oinkie_review afterwards.
     #[serde(default)]
     pub dest: Option<String>,
     /// Refuse rather than compare more than this many pairs. Defaults to 500.
@@ -190,7 +190,7 @@ pub struct ExtractedAll {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct ReaggregateParams {
+pub struct ReviewParams {
     /// Directory holding the element-wise similarity CSVs that `compare` or
     /// `run` wrote -- the one they were given as their destination.
     pub score_directory: String,
@@ -200,13 +200,13 @@ pub struct ReaggregateParams {
     #[serde(default)]
     pub aggregator: Option<String>,
     /// Optional. Also write the recomputed scores to this CSV, as
-    /// `oinkie reaggregate` does. The scores come back either way.
+    /// `oinkie review` does. The scores come back either way.
     #[serde(default)]
     pub dest_file: Option<String>,
 }
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
-pub struct Reaggregated {
+pub struct Reviewed {
     pub aggregator: String,
     pub scores: Vec<Score>,
     /// Where the CSV was written, when one was asked for.
@@ -338,16 +338,16 @@ impl Oinkie {
     }
 
     #[tool(
-        name = "oinkie_reaggregate",
+        name = "oinkie_review",
         description = "Recompute the score for every pair in a directory of element-wise \
                        similarity CSVs, using a different aggregator, without comparing \
                        anything again. Use this to ask what the same comparison would have \
                        scored under 'topn' rather than 'hungarian'."
     )]
-    async fn oinkie_reaggregate(
+    async fn oinkie_review(
         &self,
-        Parameters(params): Parameters<ReaggregateParams>,
-    ) -> Result<Json<Reaggregated>, ErrorData> {
+        Parameters(params): Parameters<ReviewParams>,
+    ) -> Result<Json<Reviewed>, ErrorData> {
         let score_dir = self.roots.resolve(&params.score_directory)?;
         let dest = params
             .dest_file
@@ -374,7 +374,7 @@ impl Oinkie {
         let written = dest.clone();
         let scores = tokio::task::spawn_blocking(move || {
             let start = std::time::Instant::now();
-            let results = crate::reaggregator::reaggregate_all(&score_dir, &aggregator)?;
+            let results = crate::review::review_all(&score_dir, &aggregator)?;
             let scores = results
                 .iter()
                 .map(|r| Score {
@@ -391,12 +391,10 @@ impl Oinkie {
             Ok::<_, oinkie::Error>(scores)
         })
         .await
-        .map_err(|e| {
-            ErrorData::internal_error(format!("the reaggregation did not finish: {e}"), None)
-        })?
+        .map_err(|e| ErrorData::internal_error(format!("the review did not finish: {e}"), None))?
         .map_err(super::error::to_mcp)?;
 
-        Ok(Json(Reaggregated {
+        Ok(Json(Reviewed {
             aggregator: name,
             scores,
             dest_file: dest.map(|d| d.display().to_string()),

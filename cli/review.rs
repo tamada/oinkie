@@ -6,9 +6,9 @@ use crate::{CompareResult, cli};
 use ndarray::Array2;
 use oinkie::prelude::*;
 
-pub(crate) fn perform(opts: cli::ReaggregateOpts) -> Result<Vec<Duration>> {
+pub(crate) fn perform(opts: cli::ReviewOpts) -> Result<Vec<Duration>> {
     let start = std::time::Instant::now();
-    let results = reaggregate_all(opts.score_directory(), opts.aggregator())?;
+    let results = review_all(opts.score_directory(), opts.aggregator())?;
     super::store_and_get_durations(results, opts.dest_file(), start)
 }
 
@@ -18,22 +18,19 @@ pub(crate) fn perform(opts: cli::ReaggregateOpts) -> Result<Vec<Duration>> {
 /// because the MCP tool wants the scores themselves rather than a CSV. Both
 /// callers get the same numbers by construction rather than by two
 /// implementations agreeing.
-pub(crate) fn reaggregate_all(
-    score_dir: &Path,
-    aggregator: &Aggregator,
-) -> Result<Vec<CompareResult>> {
+pub(crate) fn review_all(score_dir: &Path, aggregator: &Aggregator) -> Result<Vec<CompareResult>> {
     let start = std::time::Instant::now();
     let crs = load_results(score_dir)?;
     log::info!("read the previous results {:?}", start.elapsed());
     let results = crs
         .iter()
-        .map(|cr| reaggregate(cr, score_dir, aggregator))
+        .map(|cr| review_pair(cr, score_dir, aggregator))
         .collect::<Vec<_>>();
     let results = Error::vec_result_to_result_vec(results)?;
     Ok(results.into_iter().map(|(cr, _)| cr).collect())
 }
 
-fn reaggregate(
+fn review_pair(
     cr: &CompareResult,
     score_dir: &Path,
     aggregator: &Aggregator,
@@ -215,7 +212,7 @@ mod tests {
 
     /// A record whose first field is none of the known prefixes is skipped
     /// rather than refused, so a file gaining a row does not stop an older
-    /// directory being reaggregated.
+    /// directory being reviewed.
     #[test]
     fn test_a_record_it_does_not_know_is_skipped() {
         let with_extra = format!("something,else\n{A_COMPARISON}");
@@ -246,11 +243,11 @@ mod tests {
         assert!(e.to_string().starts_with("IO error for"), "{e}");
     }
 
-    /// `reaggregate` passes a load failure through rather than scoring the
+    /// `review` passes a load failure through rather than scoring the
     /// pair as zero, which would be indistinguishable from two programs with
     /// nothing in common.
     #[test]
-    fn test_reaggregate_passes_a_load_failure_on() {
+    fn test_review_passes_a_load_failure_on() {
         let d = tempfile::tempdir().unwrap();
         let cr = CompareResult::new(
             0,
@@ -259,14 +256,14 @@ mod tests {
             PathBuf::new(),
             Duration::from_secs(0),
         );
-        let Err(e) = reaggregate(&cr, d.path(), &Aggregator::Hungarian) else {
+        let Err(e) = review_pair(&cr, d.path(), &Aggregator::Hungarian) else {
             panic!("a missing comparison file should not load");
         };
         assert!(e.to_string().starts_with("IO error for"), "{e}");
     }
 
     #[test]
-    fn test_reaggregate_rescores_from_the_stored_matrix() {
+    fn test_review_rescores_from_the_stored_matrix() {
         let d = dir_with(&[("00000.csv", A_COMPARISON)]);
         let cr = CompareResult::new(
             0,
@@ -275,7 +272,7 @@ mod tests {
             PathBuf::new(),
             Duration::from_secs(0),
         );
-        let (rescored, _) = reaggregate(&cr, d.path(), &Aggregator::Hungarian).unwrap();
+        let (rescored, _) = review_pair(&cr, d.path(), &Aggregator::Hungarian).unwrap();
         assert_eq!(rescored.index, 0);
         assert_eq!(rescored.path1, PathBuf::from("bin/hello_clang"));
         assert!(rescored.similarity > 0.0);
@@ -283,7 +280,7 @@ mod tests {
 
     /// Without a `results.csv` the directory is scanned for the numbered
     /// files instead, so a run that was interrupted before writing the
-    /// summary can still be reaggregated.
+    /// summary can still be reviewed.
     #[test]
     fn test_a_directory_without_a_summary_is_scanned_for_numbered_files() {
         let d = dir_with(&[

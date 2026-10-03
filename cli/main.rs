@@ -394,7 +394,7 @@ fn validate_extract_opts(opts: cli::ExtractOpts) -> Result<cli::ExtractOpts> {
     Ok(opts)
 }
 
-mod reaggregator;
+mod review;
 mod stats;
 
 #[cfg(feature = "mcp")]
@@ -407,7 +407,11 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Run(opts) => perform_run(opts),
         Compare(opts) => perform_compare(opts),
         Extract(opts) => validate_extract_opts(opts).and_then(perform_extract),
-        Reaggregate(opts) => reaggregator::perform(opts),
+        Review(opts) => review::perform(opts),
+        Reaggregate { .. } => Err(Error::Clap(clap::Error::raw(
+            clap::error::ErrorKind::InvalidSubcommand,
+            "reaggregate was renamed: use review.\n",
+        ))),
         Stats(opts) => stats::perform(opts),
         Lift(opts) => perform_lift(opts),
         Info => perform_info(),

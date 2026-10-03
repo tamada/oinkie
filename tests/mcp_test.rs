@@ -105,7 +105,7 @@ fn test_the_server_offers_the_tools_it_has() {
             "oinkie_compare".to_string(),
             "oinkie_extract".to_string(),
             "oinkie_info".to_string(),
-            "oinkie_reaggregate".to_string(),
+            "oinkie_review".to_string(),
             "oinkie_run".to_string(),
         ]
     );
@@ -191,8 +191,8 @@ fn call_tool(roots: &[&std::path::Path], name: &str, args: Value) -> Value {
     reply(&messages, 2).clone()
 }
 
-fn call_reaggregate(root: &std::path::Path, args: Value) -> Value {
-    call_tool(&[root], "oinkie_reaggregate", args)
+fn call_review(root: &std::path::Path, args: Value) -> Value {
+    call_tool(&[root], "oinkie_review", args)
 }
 
 /// The repository, canonicalized, since that is what a refusal compares
@@ -239,11 +239,11 @@ fn cli_run(dir: &std::path::Path, analysis: &str) -> Vec<f64> {
 /// The tool and the CLI have to agree, or the MCP surface is quietly its own
 /// implementation of the same thing.
 #[test]
-fn test_reaggregating_gives_what_the_cli_gives() {
+fn test_reviewing_gives_what_the_cli_gives() {
     let dir = tempfile::tempdir().unwrap();
     let scores = scored_directory(dir.path());
 
-    let result = call_reaggregate(
+    let result = call_review(
         dir.path(),
         serde_json::json!({
             "score_directory": scores.to_str().unwrap(),
@@ -262,7 +262,7 @@ fn test_reaggregating_gives_what_the_cli_gives() {
     let csv = dir.path().join("cli.csv");
     Command::cargo_bin("oinkie")
         .unwrap()
-        .args(["reaggregate", "-A", "topn:1", "-d"])
+        .args(["review", "-A", "topn:1", "-d"])
         .arg(&csv)
         .arg(&scores)
         .assert()
@@ -289,7 +289,7 @@ fn test_a_score_directory_outside_the_root_is_refused() {
     let outside = dir.path().join("outside");
     std::fs::create_dir_all(&outside).unwrap();
 
-    let result = call_reaggregate(
+    let result = call_review(
         &inside,
         serde_json::json!({ "score_directory": outside.to_str().unwrap() }),
     );
@@ -312,7 +312,7 @@ fn test_a_score_directory_outside_the_root_is_refused() {
 fn test_an_unknown_aggregator_is_reported_as_the_callers_mistake() {
     let dir = tempfile::tempdir().unwrap();
     let scores = scored_directory(dir.path());
-    let result = call_reaggregate(
+    let result = call_review(
         dir.path(),
         serde_json::json!({
             "score_directory": scores.to_str().unwrap(),
@@ -399,10 +399,10 @@ fn test_extract_then_compare_agrees_with_run() {
     assert!(two_step[0] < 1.0, "{two_step:?}");
 }
 
-/// A directory `oinkie_run` wrote has to be one `oinkie_reaggregate` can read,
+/// A directory `oinkie_run` wrote has to be one `oinkie_review` can read,
 /// or the tools do not compose and the caller has to leave for the CLI.
 #[test]
-fn test_a_directory_run_wrote_can_be_reaggregated() {
+fn test_a_directory_run_wrote_can_be_reviewed() {
     let dir = tempfile::tempdir().unwrap();
     let scores = dir.path().join("similarities");
 
@@ -424,7 +424,7 @@ fn test_a_directory_run_wrote_can_be_reaggregated() {
         Some(std::fs::canonicalize(&scores).unwrap().as_path())
     );
 
-    let again = call_reaggregate(
+    let again = call_review(
         dir.path(),
         serde_json::json!({"score_directory": scores.to_str().unwrap()}),
     );

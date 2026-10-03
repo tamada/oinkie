@@ -31,7 +31,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to JSON files of an intermediate representation, using a specified lifter')
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
-            [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
+            [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -86,11 +86,11 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
         }
-        'oinkie;reaggregate' {
+        'oinkie;review' {
             [CompletionResult]::new('-A', '-A ', [CompletionResultType]::ParameterName, 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.')
             [CompletionResult]::new('--aggregator', '--aggregator', [CompletionResultType]::ParameterName, 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.')
-            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the result CSV file of the comparing results to reaggregate. The file contains the birthmark-wise similarity score list.')
-            [CompletionResult]::new('--dest-file', '--dest-file', [CompletionResultType]::ParameterName, 'Specify the result CSV file of the comparing results to reaggregate. The file contains the birthmark-wise similarity score list.')
+            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the result CSV file of the comparing results to review. The file contains the birthmark-wise similarity score list.')
+            [CompletionResult]::new('--dest-file', '--dest-file', [CompletionResultType]::ParameterName, 'Specify the result CSV file of the comparing results to review. The file contains the birthmark-wise similarity score list.')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
@@ -129,7 +129,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('lift', 'lift', [CompletionResultType]::ParameterValue, 'Lift binary files to JSON files of an intermediate representation, using a specified lifter')
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
-            [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score')
+            [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -147,7 +147,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
         'oinkie;help;compare' {
             break
         }
-        'oinkie;help;reaggregate' {
+        'oinkie;help;review' {
             break
         }
         'oinkie;help;stats' {

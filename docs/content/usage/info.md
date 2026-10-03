@@ -78,5 +78,5 @@ any \\(k\\) is accepted, so `op-12gram-set` is a birthmark type even though it i
 not listed.
 
 `info` does not list the aggregators, which are given to `-A/--aggregator` on
-`compare`, `run` and `reaggregate` rather than named in an analysis. They are
+`compare`, `run` and `review` rather than named in an analysis. They are
 `hungarian` and `topn:N` (or `topn:all`); see those commands' `--help`.

@@ -81,7 +81,7 @@ TTY rewrites what passes through it and breaks the JSON-RPC framing.
 | `oinkie_run` | lifted programs in, a similarity per pair out — the whole question in one call |
 | `oinkie_extract` | write birthmarks, which `oinkie_compare` takes |
 | `oinkie_compare` | score birthmarks, to try another algorithm without re-reading the programs |
-| `oinkie_reaggregate` | recompute scores in a directory under a different aggregator |
+| `oinkie_review` | recompute scores in a directory under a different aggregator |
 
 Ask `oinkie_info` first. The names are precise — `op-3gram-freq-cosine` is a
 real one and `op-3gram-cosine` is not — and its lists are generated from the
@@ -89,7 +89,7 @@ same code that parses them, so they cannot drift from what is accepted.
 
 A destination directory is optional for `oinkie_run` and `oinkie_compare`, and
 is written in the shape `oinkie run -d` produces. That is what lets a directory
-one of them wrote be handed straight to `oinkie_reaggregate`.
+one of them wrote be handed straight to `oinkie_review`.
 
 ## 📁 `--root`
 

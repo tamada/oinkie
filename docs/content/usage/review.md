@@ -1,6 +1,7 @@
 ---
-title: "4. Reaggregating Scores (`reaggregate` command)"
-description: "How to recalculate and reaggregate similarity scores."
+title: "4. Reviewing Scores (`review` command)"
+description: "How to re-read a finished comparison under a different aggregator."
+aliases: ["/usage/reaggregate/"]
 date: 2026-06-22
 draft: false
 weight: 20
@@ -8,14 +9,16 @@ weight: 20
 
 {{< katex >}}
 
-The **reaggregate** command allows you to recalculate the program-wide similarity score from previously computed element-wise (function-to-function) similarity files. This avoids having to completely rerun expensive pairwise comparisons if you simply want to test a different aggregation method (e.g., swapping between `hungarian` and `topn:N`).
+The **review** command re-reads a comparison that is already finished. It recalculates the program-wide similarity score from previously computed element-wise (function-to-function) similarity files. This avoids having to completely rerun expensive pairwise comparisons if you simply want to test a different aggregation method (e.g., swapping between `hungarian` and `topn:N`).
+
+> `review` was called `reaggregate` before v0.8.0. The old name is refused with a message naming `review`.
 
 ---
 
 ## 🏃 Usage
 
 ```sh
-oinkie reaggregate [OPTIONS] <SCORE_DIRECTORY>
+oinkie review [OPTIONS] <SCORE_DIRECTORY>
 ```
 
 ### Arguments
@@ -28,7 +31,7 @@ oinkie reaggregate [OPTIONS] <SCORE_DIRECTORY>
   * **`hungarian`**: Optimal overall bipartite matching between functions.
   * **`topn:N`**: Only average the top \\(N\\) closest matches for each function.
 * `-d, --dest-file <RESULT.CSV>`  
-  The path to the destination CSV file where the reaggregated program-wise similarity scores list will be saved. `[default: reaggregate.csv]`
+  The path to the destination CSV file where the recomputed program-wise similarity scores list will be saved. `[default: review.csv]`
 
 ---
 
@@ -41,6 +44,6 @@ oinkie compare -d comparison_results -A hungarian ./birthmarks/*.json
 
 If you later want to analyze the results using the `topn:3` strategy, you do not need to compare all function sequences again. You can re-run just the aggregation stage:
 ```sh
-oinkie reaggregate -A topn:3 -d comparison_results/reaggregated_top3.csv comparison_results
+oinkie review -A topn:3 -d comparison_results/review_top3.csv comparison_results
 ```
 This significantly speeds up analysis workflows on large-scale datasets.
