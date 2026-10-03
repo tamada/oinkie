@@ -72,10 +72,26 @@ pub enum OinkieCommand {
     Compare(CompareOpts),
 
     #[command(
-        name = "reaggregate",
-        about = "Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score"
+        name = "review",
+        about = "Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores"
     )]
-    Reaggregate(ReaggregateOpts),
+    Review(ReviewOpts),
+
+    /// The old name of `review`, kept only to say so. Hidden from help and
+    /// completion; remove it in the next minor.
+    ///
+    /// It takes whatever it is given, so that `oinkie reaggregate -A topn:3 ...`
+    /// reaches the message instead of failing on an option it never declared.
+    #[command(
+        name = "reaggregate",
+        hide = true,
+        disable_help_flag = true,
+        trailing_var_arg = true
+    )]
+    Reaggregate {
+        #[clap(allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
 
     #[command(
         name = "stats",
@@ -302,7 +318,7 @@ impl ExtractOpts {
 }
 
 #[derive(Debug, clap::Parser)]
-pub struct ReaggregateOpts {
+pub struct ReviewOpts {
     #[clap(
         short = 'A',
         long,
@@ -323,9 +339,9 @@ Available:
         short,
         long,
         value_name = "RESULT.CSV",
-        help = "Specify the result CSV file of the comparing results to reaggregate.
+        help = "Specify the result CSV file of the comparing results to review.
 The file contains the birthmark-wise similarity score list.",
-        default_value = "reaggregate.csv"
+        default_value = "review.csv"
     )]
     dest_file: PathBuf,
 
@@ -337,7 +353,7 @@ The file contains the birthmark-wise similarity score list.",
     score_directory: PathBuf,
 }
 
-impl ReaggregateOpts {
+impl ReviewOpts {
     pub fn aggregator(&self) -> &Aggregator {
         &self.aggregator
     }

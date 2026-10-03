@@ -25,7 +25,7 @@ Commands:
   lift         Lift binary files to P-code JSON files using a specified lifter
   extract      Extract birthmarks from a lifted binary file (JSON format)
   compare      Compare birthmarks and output the similarity score
-  reaggregate  Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score
+  review       Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores
   stats        Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
   run          Extract birthmarks and compare them in one command
   mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
@@ -62,7 +62,7 @@ The toolkit's operations are divided into distinct stages. You can execute them 
 3. **[Comparing Birthmarks](compare)**  
    Compare extracted birthmarks between pairs of files using chosen similarity algorithms and matching heuristics.
    
-4. **[Reaggregating Scores](reaggregate)**  
+4. **[Reviewing Scores](review)**  
    Recalculate program-wide similarity scores from saved element-wise similarity scores.
    
 5. **[All-in-One Execution (Run)](run)**  

@@ -28,7 +28,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand lift 'Lift binary files to JSON files of an intermediate representation, using a specified lifter'
             cand extract 'Extract birthmarks from a lifted binary file (JSON format)'
             cand compare 'Compare birthmarks and output the similarity score'
-            cand reaggregate 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+            cand review 'Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores'
             cand stats 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is'
             cand run 'Extract birthmarks and compare them in one command'
             cand help 'Print this message or the help of the given subcommand(s)'
@@ -78,11 +78,11 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
-        &'oinkie;reaggregate'= {
+        &'oinkie;review'= {
             cand -A 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.'
             cand --aggregator 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.'
-            cand -d 'Specify the result CSV file of the comparing results to reaggregate. The file contains the birthmark-wise similarity score list.'
-            cand --dest-file 'Specify the result CSV file of the comparing results to reaggregate. The file contains the birthmark-wise similarity score list.'
+            cand -d 'Specify the result CSV file of the comparing results to review. The file contains the birthmark-wise similarity score list.'
+            cand --dest-file 'Specify the result CSV file of the comparing results to review. The file contains the birthmark-wise similarity score list.'
             cand -h 'Print help'
             cand --help 'Print help'
         }
@@ -118,7 +118,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand lift 'Lift binary files to JSON files of an intermediate representation, using a specified lifter'
             cand extract 'Extract birthmarks from a lifted binary file (JSON format)'
             cand compare 'Compare birthmarks and output the similarity score'
-            cand reaggregate 'Reaggregate the element-wise similarity scores and recalculate the birthmark-wise similarity score'
+            cand review 'Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores'
             cand stats 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is'
             cand run 'Extract birthmarks and compare them in one command'
             cand help 'Print this message or the help of the given subcommand(s)'
@@ -131,7 +131,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
         }
         &'oinkie;help;compare'= {
         }
-        &'oinkie;help;reaggregate'= {
+        &'oinkie;help;review'= {
         }
         &'oinkie;help;stats'= {
         }

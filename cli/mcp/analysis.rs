@@ -58,8 +58,8 @@ fn scores(results: &[CompareResult]) -> Vec<Score> {
 }
 
 /// Writes the pair CSVs' directory index, so that a directory this produced
-/// can be handed straight to `oinkie_reaggregate` -- or to `oinkie
-/// reaggregate` -- afterwards.
+/// can be handed straight to `oinkie_review` -- or to `oinkie
+/// review` -- afterwards.
 fn store(results: Vec<CompareResult>, dest: &Path, start: Instant) -> Result<()> {
     crate::store_and_get_durations(results, &dest.join("results.csv"), start).map(|_| ())
 }

@@ -31,8 +31,8 @@ _oinkie() {
             oinkie,lift)
                 cmd="oinkie__subcmd__lift"
                 ;;
-            oinkie,reaggregate)
-                cmd="oinkie__subcmd__reaggregate"
+            oinkie,review)
+                cmd="oinkie__subcmd__review"
                 ;;
             oinkie,run)
                 cmd="oinkie__subcmd__run"
@@ -55,8 +55,8 @@ _oinkie() {
             oinkie__subcmd__help,lift)
                 cmd="oinkie__subcmd__help__subcmd__lift"
                 ;;
-            oinkie__subcmd__help,reaggregate)
-                cmd="oinkie__subcmd__help__subcmd__reaggregate"
+            oinkie__subcmd__help,review)
+                cmd="oinkie__subcmd__help__subcmd__review"
                 ;;
             oinkie__subcmd__help,run)
                 cmd="oinkie__subcmd__help__subcmd__run"
@@ -71,7 +71,7 @@ _oinkie() {
 
     case "${cmd}" in
         oinkie)
-            opts="-l -h -V --level --help --version info lift extract compare reaggregate stats run help"
+            opts="-l -h -V --level --help --version info lift extract compare review stats run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -169,7 +169,7 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__help)
-            opts="info lift extract compare reaggregate stats run help"
+            opts="info lift extract compare review stats run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -252,7 +252,7 @@ _oinkie() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        oinkie__subcmd__help__subcmd__reaggregate)
+        oinkie__subcmd__help__subcmd__review)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -366,7 +366,7 @@ _oinkie() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        oinkie__subcmd__reaggregate)
+        oinkie__subcmd__review)
             opts="-A -d -h --aggregator --dest-file --help <SCORE_DIRECTORY>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )

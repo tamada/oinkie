@@ -350,8 +350,25 @@ fn test_run_command() {
     );
 }
 
+/// The old name is refused, not aliased, and the refusal names the new one --
+/// including when it is handed the arguments the old command took.
 #[test]
-fn test_reaggregate_command() {
+fn test_the_old_name_reaggregate_is_refused_naming_review() {
+    for args in [
+        vec!["reaggregate"],
+        vec!["reaggregate", "-A", "topn:3", "-d", "x.csv", "out/"],
+    ] {
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(&args)
+            .assert()
+            .failure()
+            .stderr(predicates::str::contains("use review"));
+    }
+}
+
+#[test]
+fn test_review_command() {
     let temp_dir = tempdir().unwrap();
     let birthmarks_dir = temp_dir.path().join("birthmarks");
     let similarities_dir = temp_dir.path().join("similarities");
@@ -388,10 +405,10 @@ fn test_reaggregate_command() {
         .assert()
         .success();
 
-    // Reaggregate
-    let dest_file = temp_dir.path().join("reaggregate.csv");
+    // Review
+    let dest_file = temp_dir.path().join("review.csv");
     let mut cmd = Command::cargo_bin("oinkie").unwrap();
-    cmd.arg("reaggregate")
+    cmd.arg("review")
         .arg("-A")
         .arg("hungarian")
         .arg("-d")
