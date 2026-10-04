@@ -118,7 +118,9 @@ fn load_comparison_file(
     r
 }
 
-fn load_comparison<P: AsRef<Path>>(path: P) -> Result<(Array2<f64>, PathBuf, PathBuf, Duration)> {
+pub(crate) fn load_comparison<P: AsRef<Path>>(
+    path: P,
+) -> Result<(Array2<f64>, PathBuf, PathBuf, Duration)> {
     let mut file = std::fs::File::open(path.as_ref())
         .map_err(|e| Error::Io(path.as_ref().to_path_buf(), e))?;
     let mut csv_reader = csv::ReaderBuilder::new()

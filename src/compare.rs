@@ -5,7 +5,7 @@ use crate::{Error, Result};
 use itertools::Itertools;
 use ndarray::Array2;
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::{io::Write, path::Path, time::Instant};
+use std::time::Instant;
 
 #[cfg_attr(doc, katexit::katexit)]
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,15 +96,6 @@ impl PairingStrategy {
     }
 }
 
-/// What a comparison's two sides say about themselves in the score CSV.
-///
-/// Public only until the score-CSV format moves to the command line, which
-/// owns it (#133).
-pub trait CsvInfo {
-    fn csv_info(&self) -> String;
-    fn names(&self) -> Vec<String>;
-}
-
 pub struct Comparison<'a, S> {
     columns: &'a S,
     rows: &'a S,
@@ -113,17 +104,7 @@ pub struct Comparison<'a, S> {
     similarities: Vec<f64>,
 }
 
-/// Quotes a value for embedding into a CSV field when it contains
-/// characters that would otherwise break the record structure.
-pub fn escape_csv_string(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
-        format!("\"{}\"", s.replace('"', "\"\""))
-    } else {
-        s.to_string()
-    }
-}
-
-impl<'a, S: CsvInfo> Comparison<'a, S> {
+impl<'a, S> Comparison<'a, S> {
     pub(crate) fn new(
         columns: &'a S,
         rows: &'a S,
@@ -140,38 +121,24 @@ impl<'a, S: CsvInfo> Comparison<'a, S> {
         }
     }
 
-    pub fn store<P: AsRef<Path>>(&self, dest: P) -> Result<()> {
-        let dest = dest.as_ref();
-        let io_err = |e| Error::Io(dest.to_path_buf(), e);
-        let mut file = std::fs::File::create(dest).map_err(io_err)?;
-        let mut out = std::io::BufWriter::new(&mut file);
-        writeln!(
-            out,
-            "result,{},{}",
-            self.duration.as_nanos(),
-            self.similarity()
-        )
-        .map_err(io_err)?;
-        writeln!(out, "left,{}", self.columns.csv_info()).map_err(io_err)?;
-        writeln!(out, "right,{}", self.rows.csv_info()).map_err(io_err)?;
-        let b1_names = self.columns.names();
-        let b2_names = self.rows.names();
-        write!(
-            out,
-            "matrix,,{}",
-            b1_names.iter().map(|s| escape_csv_string(s)).join(",")
-        )
-        .map_err(io_err)?;
-        for (j, item) in b2_names.iter().enumerate() {
-            write!(out, "\n{}, {}", j, escape_csv_string(item)).map_err(io_err)?;
-            for i in 0..b1_names.len() {
-                let value = self.matrix[[i, j]];
-                write!(out, ",{value}").map_err(io_err)?;
-            }
-        }
-        writeln!(out).map_err(io_err)?;
-        out.flush().map_err(io_err)?;
-        Ok(())
+    /// The left-hand side: one column of [`Comparison::matrix`] per function.
+    pub fn columns(&self) -> &S {
+        self.columns
+    }
+
+    /// The right-hand side: one row of [`Comparison::matrix`] per function.
+    pub fn rows(&self) -> &S {
+        self.rows
+    }
+
+    /// The function-to-function scores, indexed `[column, row]`.
+    ///
+    /// Square, because the assignment that aggregates it needs it to be: as
+    /// many rows and columns as the longer side has functions, with the cells
+    /// past the shorter side left at 0.0. Empty when either side has no
+    /// functions. The scores proper are the first `columns` x `rows` cells.
+    pub fn matrix(&self) -> &Array2<f64> {
+        &self.matrix
     }
 
     pub fn similarity(&self) -> f64 {
@@ -1079,6 +1046,7 @@ fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f
 mod tests {
     use super::*;
     use crate::birthmarks::{BirthmarkType, Kgram};
+    use std::path::Path;
 
     /// `Algorithm::ALL` is written by hand, so it is held to the enum: the
     /// `match` stops compiling when a variant is added, and the assertion
@@ -1475,44 +1443,6 @@ mod tests {
     }
 
     #[test]
-    fn comparison_store_writes_a_parsable_matrix() {
-        let b1 = birthmark("left", &[("f", &["A", "B"]), ("g", &["B"])]);
-        let b2 = birthmark("right", &[("h", &["A"]), ("i", &["B"])]);
-        let c = Jaccard
-            .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
-            .unwrap();
-
-        let dir = tempfile::tempdir().unwrap();
-        let dest = dir.path().join("00000.csv");
-        c.store(&dest).expect("failed to store the comparison");
-
-        let content = std::fs::read_to_string(&dest).unwrap();
-        assert!(content.starts_with("result,"));
-        assert!(content.contains("\nleft,birthmark,left,"));
-        assert!(content.contains("\nright,birthmark,right,"));
-        assert!(content.contains("\nmatrix,,"));
-        // one line per row element, each prefixed with its index
-        assert_eq!(
-            content
-                .lines()
-                .filter(|l| l.starts_with('0') || l.starts_with('1'))
-                .count(),
-            2
-        );
-    }
-
-    #[test]
-    fn comparison_store_reports_io_errors() {
-        let b = birthmark("a", &[("f", &["A"])]);
-        let c = Jaccard
-            .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
-            .unwrap();
-        // a directory that does not exist cannot receive the result file
-        let err = c.store("no/such/directory/out.csv").unwrap_err();
-        assert!(matches!(err, Error::Io(..)));
-    }
-
-    #[test]
     fn comparator_dispatches_every_algorithm() {
         let b = birthmark("a", &[("f", &["A", "B"])]);
         for algorithm in [
@@ -1585,13 +1515,5 @@ mod tests {
         // an empty vector has no direction, so both are treated as identical
         assert_eq!(cosine_similarity(&empty, &empty), 1.0);
         assert_eq!(weighted_jaccard(&empty, &empty), 1.0);
-    }
-
-    #[test]
-    fn escape_csv_string_quotes_only_when_needed() {
-        assert_eq!(escape_csv_string("plain"), "plain");
-        assert_eq!(escape_csv_string("a,b"), "\"a,b\"");
-        assert_eq!(escape_csv_string("a\"b"), "\"a\"\"b\"");
-        assert_eq!(escape_csv_string("a\nb"), "\"a\nb\"");
     }
 }

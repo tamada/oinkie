@@ -139,7 +139,7 @@ pub fn run(
                 .comparator()
                 .compare_programs(&p1, &p2, aggregator)?;
             if let Some(d) = dest {
-                comparison.store(d.join(format!("{i:05}.csv")))?;
+                crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
             }
             Ok(CompareResult::new(
                 i,
@@ -174,7 +174,7 @@ pub fn compare(
             b2.set_json_path(right.clone());
             let comparison = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
             if let Some(d) = dest {
-                comparison.store(d.join(format!("{i:05}.csv")))?;
+                crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
             }
             Ok(CompareResult::new(
                 i,
