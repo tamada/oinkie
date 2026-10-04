@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::compare::{Algorithm, Comparator, CsvInfo};
+use crate::compare::{Algorithm, Comparator};
 use crate::{Error, Result};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -180,70 +180,6 @@ pub struct Metadata {
     pub ir: crate::lift::Ir,
 }
 
-impl Metadata {
-    pub fn csv_info(&self) -> String {
-        format!(
-            "birthmark,{},{},{},{},{},{}",
-            crate::compare::escape_csv_string(&self.file_name),
-            crate::compare::escape_csv_string(&self.path.display().to_string()),
-            self.birthmark_type,
-            self.extracted_at.to_rfc3339(),
-            self.duration.as_nanos(),
-            self.ir
-        )
-    }
-
-    /// The inverse of [`Metadata::csv_info`], kept only to test it: the score
-    /// CSV is read back by the command line's own parser, and this goes when
-    /// that format moves there (#133).
-    #[cfg(test)]
-    pub(crate) fn parse(line: &str) -> Result<Self> {
-        let r = csv::ReaderBuilder::new()
-            .flexible(true)
-            .has_headers(false)
-            .from_reader(line.as_bytes());
-        if let Some(result) = r.into_records().next() {
-            let record = result.map_err(Error::Csv)?;
-            let items = record.iter().collect::<Vec<_>>();
-            // Six is a record written before the ir field existed; seven is
-            // one written since. Both are read, for the same reason the JSON
-            // field is defaulted.
-            if items.len() != 6 && items.len() != 7 {
-                return Err(Error::Parse(format!(
-                    "expected 6 or 7 items in metadata, got {}",
-                    items.len()
-                )));
-            }
-            let file_name = items[1].to_string();
-            let path = PathBuf::from(items[2]);
-            let birthmark_type: BirthmarkType = items[3].try_into()?;
-            let extracted_at = chrono::DateTime::parse_from_rfc3339(items[4])
-                .map_err(|e| Error::Parse(format!("invalid extracted_at datetime: {}", e)))?
-                .with_timezone(&chrono::Utc);
-            let duration = items[5]
-                .parse::<u64>()
-                .map_err(|e| Error::Parse(format!("invalid duration: {}", e)))?;
-            // Ir::from_str already reports what was wrong and in this
-            // Error type, so wrapping it again would only prefix a second
-            // "Parse error:" onto the same sentence.
-            let ir = match items.get(6) {
-                Some(text) => text.parse()?,
-                None => crate::lift::Ir::default(),
-            };
-            Ok(Self {
-                file_name,
-                path,
-                birthmark_type,
-                extracted_at,
-                duration: Duration::from_nanos(duration),
-                ir,
-            })
-        } else {
-            Err(Error::Parse(format!("invalid metadata line: {line}")))
-        }
-    }
-}
-
 fn serialize_duration_as_nanos<S>(
     duration: &std::time::Duration,
     serializer: S,
@@ -269,25 +205,6 @@ pub struct Birthmark {
     pub elements: Vec<Elements>,
     #[serde(skip)]
     pub json_path: Option<PathBuf>,
-}
-
-impl CsvInfo for Birthmark {
-    fn csv_info(&self) -> String {
-        let json_path = self
-            .json_path
-            .as_ref()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-        format!(
-            "{},{}",
-            self.metadata.csv_info(),
-            crate::compare::escape_csv_string(&json_path)
-        )
-    }
-
-    fn names(&self) -> Vec<String> {
-        self.elements.iter().map(|e| e.name.clone()).collect()
-    }
 }
 
 impl Birthmark {
@@ -341,6 +258,17 @@ impl Birthmark {
 
     pub fn birthmark_type(&self) -> &BirthmarkType {
         &self.metadata.birthmark_type
+    }
+
+    /// The representation the program was lifted to.
+    pub fn ir(&self) -> crate::lift::Ir {
+        self.metadata.ir
+    }
+
+    /// Where this birthmark was read from, once [`Birthmark::set_json_path`]
+    /// has said so.
+    pub fn json_path(&self) -> Option<&Path> {
+        self.json_path.as_deref()
     }
 
     /// The birthmark of each function, in the order they were extracted.
@@ -744,77 +672,6 @@ fn parse_k_value(k: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    pub fn test_metadata_csv_info_roundtrip_with_comma_in_path() {
-        let metadata = Metadata {
-            file_name: "app, v1".to_string(),
-            path: PathBuf::from("dir,with,commas/app"),
-            extracted_at: chrono::Utc::now(),
-            duration: Duration::from_nanos(42),
-            birthmark_type: BirthmarkType::OpSeq,
-            ir: crate::lift::Ir::GhidraPcode,
-        };
-        let parsed =
-            Metadata::parse(&metadata.csv_info()).expect("failed to parse escaped metadata");
-        assert_eq!(parsed.file_name, metadata.file_name);
-        assert_eq!(parsed.path, metadata.path);
-        assert_eq!(parsed.birthmark_type, metadata.birthmark_type);
-    }
-
-    #[test]
-    pub fn test_parse_metadata() {
-        let metadata = Metadata::parse("birthmark,bzip2-1.0.2,${HOME}/oinkie/bzip2-1.0.2,op-seq,2026-04-17T04:57:55.385904+00:00,4462500")
-            .expect("failed to parse metadata");
-        assert_eq!(metadata.file_name, "bzip2-1.0.2");
-        assert_eq!(metadata.path, PathBuf::from("${HOME}/oinkie/bzip2-1.0.2"));
-        assert_eq!(metadata.birthmark_type, BirthmarkType::OpSeq);
-        assert_eq!(
-            metadata.extracted_at,
-            chrono::DateTime::parse_from_rfc3339("2026-04-17T04:57:55.385904+00:00")
-                .expect("failed to parse extracted_at")
-                .with_timezone(&chrono::Utc)
-        );
-        assert_eq!(metadata.duration, Duration::from_nanos(4462500));
-    }
-
-    #[test]
-    fn test_parse_metadata_rejects_wrong_field_count() {
-        let err = Metadata::parse("birthmark,name,path").unwrap_err();
-        assert!(matches!(err, Error::Parse(msg) if msg.contains("expected 6 or 7 items")));
-    }
-
-    /// A record written before the ir field existed still parses, and reads as
-    /// Ghidra's P-Code — the only representation any of them can hold.
-    #[test]
-    fn test_parse_metadata_without_ir() {
-        let metadata = Metadata::parse(
-            "birthmark,bzip2,/tmp/bzip2,op-seq,2026-04-17T04:57:55.385904+00:00,4462500",
-        )
-        .expect("a six-field record must still parse");
-        assert_eq!(metadata.ir, crate::lift::Ir::GhidraPcode);
-    }
-
-    #[test]
-    fn test_parse_metadata_rejects_an_unknown_ir() {
-        assert!(
-            Metadata::parse(
-                "birthmark,b,/tmp/b,op-seq,2026-04-17T04:57:55+00:00,1,not-a-representation"
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn test_parse_metadata_rejects_empty_line() {
-        assert!(Metadata::parse("").is_err());
-    }
-
-    #[test]
-    fn test_parse_metadata_rejects_bad_datetime_and_duration() {
-        assert!(Metadata::parse("birthmark,n,p,op-seq,not-a-date,1").is_err());
-        assert!(Metadata::parse("birthmark,n,p,op-seq,2026-04-17T04:57:55+00:00,x").is_err());
-    }
 
     #[test]
     fn test_birthmark_type_try_from_str() {
@@ -1222,11 +1079,10 @@ mod tests {
         assert!(!b.is_empty());
         assert!(b.extracted_at() <= chrono::Utc::now());
 
-        // csv_info leaves the json path empty until it is set
-        assert!(b.csv_info().ends_with(','));
+        // the json path is unknown until it is set
+        assert_eq!(b.json_path(), None);
         b.set_json_path(PathBuf::from("/tmp/sample.json"));
-        assert!(b.csv_info().ends_with("/tmp/sample.json"));
-        assert_eq!(b.names(), vec!["main".to_string()]);
+        assert_eq!(b.json_path(), Some(Path::new("/tmp/sample.json")));
     }
 
     #[test]

@@ -178,37 +178,21 @@ impl Program {
     pub fn set_json_path(&mut self, path: PathBuf) {
         dispatch!(&mut self.0, p => p.set_json_path(path))
     }
-}
 
-impl crate::compare::CsvInfo for Program {
-    fn csv_info(&self) -> String {
-        dispatch!(&self.0, p => p.csv_info())
+    /// Where this program was read from, once [`Program::set_json_path`] has
+    /// said so.
+    pub fn json_path(&self) -> Option<&Path> {
+        dispatch!(&self.0, p => p.json_path.as_deref())
     }
 
-    fn names(&self) -> Vec<String> {
-        dispatch!(&self.0, p => p.names())
-    }
-}
-
-impl<T> crate::compare::CsvInfo for TypedProgram<T> {
-    fn csv_info(&self) -> String {
-        let json_path = self
-            .json_path
-            .as_ref()
-            .map(|p| p.display().to_string())
-            .unwrap_or_default();
-        format!(
-            "program,{},{},{},{},{}",
-            crate::compare::escape_csv_string(&self.name),
-            crate::compare::escape_csv_string(&self.path.display().to_string()),
-            self.symbols.len(),
-            self.functions.len(),
-            crate::compare::escape_csv_string(&json_path)
-        )
+    /// How many symbols the lifted file names.
+    pub fn symbol_count(&self) -> usize {
+        dispatch!(&self.0, p => p.symbols.len())
     }
 
-    fn names(&self) -> Vec<String> {
-        self.functions.iter().map(|f| f.name.clone()).collect()
+    /// The name of each function, in the order the file lists them.
+    pub fn function_names(&self) -> Vec<&str> {
+        dispatch!(&self.0, p => p.functions.iter().map(|f| f.name.as_str()).collect())
     }
 }
 

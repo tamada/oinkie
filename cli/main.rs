@@ -1,12 +1,13 @@
 mod cli;
 mod dest_name;
+mod score_csv;
 mod values;
 mod vocabulary;
 
 use clap::Parser;
 use indicatif::ProgressBar;
 use oinkie::birthmarks::Birthmark;
-use oinkie::compare::{Aggregator, Comparator, escape_csv_string};
+use oinkie::compare::{Aggregator, Comparator};
 use oinkie::extract::Extractor;
 use oinkie::lift::{Lifter, LifterBuilder};
 use oinkie::{Error, Program, Result};
@@ -75,7 +76,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                 ));
                 let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
                 pbar.inc(1);
-                result.store(&dest_file)?;
+                score_csv::store(&result, &dest_file)?;
                 Ok(CompareResult::new(
                     i,
                     result.similarity(),
@@ -292,7 +293,7 @@ fn compare_impl(
         ));
         let result = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
         pbar.inc(1);
-        result.store(&dest_file)?;
+        score_csv::store(&result, &dest_file)?;
         Ok(CompareResult::new(
             i,
             result.similarity(),
@@ -605,8 +606,8 @@ impl CompareResult {
             "{},{},{},{},{}",
             self.index,
             self.similarity,
-            escape_csv_string(&self.path1.display().to_string()),
-            escape_csv_string(&self.path2.display().to_string()),
+            score_csv::escape(&self.path1.display().to_string()),
+            score_csv::escape(&self.path2.display().to_string()),
             self.duration.as_nanos()
         )
     }

@@ -498,6 +498,16 @@ mod tests {
         }
     }
 
+    /// A name that is no representation is refused, and the refusal names
+    /// what was given. This used to be reached only through the score CSV's
+    /// metadata parser, which went with the format to the command line.
+    #[test]
+    fn test_an_unknown_representation_is_refused_by_name() {
+        let err = "ghidra-pcodes".parse::<Ir>().unwrap_err();
+        assert!(matches!(err, crate::Error::Parse(_)), "{err:?}");
+        assert!(err.to_string().contains("ghidra-pcodes"), "{err}");
+    }
+
     /// `Ir::ALL` is written by hand, so it is held to the enum: the `match`
     /// below stops compiling when a variant is added, and the assertion fails
     /// when it is added there but not to the list.
