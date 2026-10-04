@@ -10,6 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum BirthmarkType {
     FcSeq,
     FcSet,
@@ -870,6 +871,32 @@ mod tests {
                 "rendered: {rendered}"
             );
         }
+    }
+
+    /// `BirthmarkType::all` is written by hand, so it is held to the enum: the
+    /// `match` stops compiling when a family is added, and the assertion fails
+    /// when it is added there but not to the list. Callers rely on `all` to
+    /// see every family -- the command line's descriptions are checked
+    /// against it -- since `#[non_exhaustive]` stops them matching the enum
+    /// exhaustively themselves.
+    #[test]
+    fn test_all_lists_every_birthmark_family() {
+        fn family(bt: &BirthmarkType) -> usize {
+            match bt {
+                BirthmarkType::FcSeq => 0,
+                BirthmarkType::FcSet => 1,
+                BirthmarkType::FcFreq => 2,
+                BirthmarkType::OpFreq => 3,
+                BirthmarkType::OpSeq => 4,
+                BirthmarkType::OpSet => 5,
+                BirthmarkType::OpKgramSeq(_) => 6,
+                BirthmarkType::OpKgramFreq(_) => 7,
+                BirthmarkType::OpKgramSet(_) => 8,
+            }
+        }
+        let mut seen = BirthmarkType::all(1).iter().map(family).collect::<Vec<_>>();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..9).collect::<Vec<_>>());
     }
 
     /// A list of birthmarks and the parser are two views of one vocabulary.

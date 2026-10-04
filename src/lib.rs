@@ -37,6 +37,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// `map_err(Error::Csv)` at the call site says more than a conversion hidden
 /// inside a `?`.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("{}", render_group(.0))]
     Array(Vec<Self>),
@@ -134,6 +135,59 @@ fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::compare::Algorithm
 }
 
 impl Error {
+    /// Whether the caller could have avoided this by asking differently: a
+    /// name, a pairing or a number they supplied, or a file they named.
+    ///
+    /// Decided here, by an exhaustive match, because this is the one place the
+    /// match can stay exhaustive. `Error` is `#[non_exhaustive]`, so a crate
+    /// that matches on it has to have a wildcard arm, and a new variant would
+    /// fall into that arm unclassified. Inside the crate that defines it, a
+    /// new variant stops the build here until someone decides which it is.
+    pub fn is_caller_fault(&self) -> bool {
+        match self {
+            // A name, a pairing or a number that the caller supplied.
+            Error::BirthmarkType(_)
+            | Error::IncompatibleAnalysis(_, _)
+            | Error::Mismatch(_, _)
+            | Error::IrMismatch(_, _)
+            | Error::ParseFloat(_, _)
+            | Error::ParseInt(_, _) => true,
+
+            // A file the caller named, which they can name differently.
+            Error::Io(_, _) | Error::Json(_, _) => true,
+
+            // Something went wrong inside, or in a file oinkie itself
+            // produced; or in the machine it runs on, which no argument can
+            // change. A missing tool was never the caller's fault either, back
+            // when it arrived as a `Parse`.
+            Error::ToolNotFound { .. }
+            | Error::Csv(_)
+            | Error::InvalidPcode(_)
+            | Error::LapJV(_)
+            | Error::ShapeError(_)
+            | Error::UnreadableOutput(_, _) => false,
+
+            // `Parse` is a catch-all carrying a string, and the strings it
+            // carries come from both sides: "Invalid aggregator" is the
+            // caller's, while "could not start N lift jobs" is not. Nothing in
+            // the variant says which.
+            //
+            // So it does not claim the caller is at fault. Telling a caller it
+            // asked wrongly when it did not is the more expensive mistake --
+            // it will try different arguments, repeatedly, against something
+            // no argument can fix. A caller wanting a definite answer for a
+            // value it took (the aggregator is what reaches `Parse` that way)
+            // should validate that value itself rather than rely on this.
+            Error::Parse(_) => false,
+
+            // A group is the caller's fault only if all of it is. One internal
+            // failure in a batch makes the whole batch an internal failure,
+            // since saying "you asked wrongly" about it would be wrong for
+            // that one.
+            Error::Array(errs) => errs.iter().all(Error::is_caller_fault),
+        }
+    }
+
     pub fn vec_result_to_result_vec<T>(vec: Vec<Result<T>>) -> Result<Vec<T>> {
         let mut results = Vec::new();
         let mut errs = Vec::new();
@@ -369,6 +423,67 @@ mod tests {
                 "Ghidra not found. Give its home directory, set GHIDRA_HOME, or install it in one of: /opt/ghidra, /usr/local/ghidra".to_string(),
             ),
         ]
+    }
+
+    /// `Parse` carries a string and nothing else, and those strings come from
+    /// both sides. Since the variant cannot say which, it does not claim the
+    /// caller is at fault -- no argument would fix this one.
+    #[test]
+    fn test_the_catch_all_does_not_claim_the_caller_is_at_fault() {
+        let e = Error::Parse("could not start 4 lift jobs".to_string());
+        assert!(!e.is_caller_fault());
+    }
+
+    #[test]
+    fn test_a_bad_name_is_the_callers_fault_and_a_broken_file_of_ours_is_not() {
+        assert!(Error::BirthmarkType("nonsense".to_string()).is_caller_fault());
+        assert!(!Error::InvalidPcode(9999).is_caller_fault());
+        let missing = Error::ToolNotFound {
+            tool: "Ghidra",
+            env: "GHIDRA_HOME",
+            candidates: &[],
+        };
+        assert!(!missing.is_caller_fault(), "no argument installs a tool");
+    }
+
+    /// A file the caller named is theirs to name differently, whether it is
+    /// missing or is not the JSON it should be.
+    #[test]
+    fn test_a_file_the_caller_named_is_the_callers_fault() {
+        let missing = Error::Io(
+            PathBuf::from("no/such.json"),
+            std::io::Error::new(std::io::ErrorKind::NotFound, "no such file"),
+        );
+        assert!(missing.is_caller_fault());
+        let json = serde_json::from_str::<i32>("nope").unwrap_err();
+        assert!(Error::Json(PathBuf::from("bad.json"), json).is_caller_fault());
+    }
+
+    /// A group of nothing but the caller's own mistakes is still theirs.
+    /// Asserted in both directions, or `all` could be inverted and only one
+    /// of these would notice.
+    #[test]
+    fn test_a_group_of_the_callers_mistakes_is_the_callers_fault() {
+        let e = Error::Array(vec![
+            Error::BirthmarkType("nonsense".to_string()),
+            Error::BirthmarkType("also nonsense".to_string()),
+        ]);
+        assert!(e.is_caller_fault());
+    }
+
+    /// One internal failure makes the batch internal. Reporting "you asked
+    /// wrongly" for a group containing something the caller could not have
+    /// avoided would be wrong about that one.
+    #[test]
+    fn test_one_internal_failure_makes_the_whole_group_internal() {
+        let e = Error::Array(vec![
+            Error::BirthmarkType("the caller's".to_string()),
+            Error::UnreadableOutput(
+                PathBuf::from("bin/sample"),
+                Box::new(Error::Parse("ours".to_string())),
+            ),
+        ]);
+        assert!(!e.is_caller_fault());
     }
 
     #[test]

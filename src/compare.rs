@@ -9,6 +9,7 @@ use std::{io::Write, path::Path, time::Instant};
 
 #[cfg_attr(doc, katexit::katexit)]
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum PairingStrategy {
     /// All possible combinations including self-comparisons ($_nC_2 + n$).
     /// Used for full matrix visualization or comprehensive heatmaps.
@@ -192,6 +193,7 @@ pub enum Size {
 }
 
 #[derive(Debug, Clone, Default)]
+#[non_exhaustive]
 pub enum Aggregator {
     TopN(Size),
     #[default]
@@ -371,6 +373,7 @@ trait ProgramComparator<T: crate::Op> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Algorithm {
     /// Cosine similarity based on term frequency vectors. Available: seq and freq.
     Cosine,
