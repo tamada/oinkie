@@ -110,9 +110,12 @@ pub(crate) fn store<S: Side, P: AsRef<Path>>(comparison: &Comparison<S>, dest: P
 }
 
 /// Quotes a value for embedding into a CSV field when it contains
-/// characters that would otherwise break the record structure.
+/// characters that would otherwise break the record structure: a comma, a
+/// quote, or either of the two characters that end a record. A carriage
+/// return ends one as surely as a line feed, and both are legal in a Unix path
+/// or a function name.
 pub(crate) fn escape(s: &str) -> String {
-    if s.contains(',') || s.contains('"') || s.contains('\n') {
+    if s.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", s.replace('"', "\"\""))
     } else {
         s.to_string()
@@ -194,22 +197,32 @@ mod tests {
         assert_eq!(right, b2.path());
     }
 
-    /// A path with commas in it, or quotes, is quoted on the way out and comes
-    /// back whole through the reader `review` uses.
+    /// A path with commas, quotes or a line break in it is quoted on the way
+    /// out and comes back whole through the reader `review` uses. A carriage
+    /// return ends a record as surely as a line feed does, and both are legal
+    /// in a Unix path.
     #[test]
     fn test_a_path_that_needs_quoting_survives_the_round_trip() {
-        let mut b1 = birthmark(CLANG);
-        let b2 = birthmark(GCC);
-        b1.metadata.path = PathBuf::from("dir,with \"commas\"/app, v1");
-        let c = Algorithm::Jaccard
-            .comparator()
-            .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
-            .unwrap();
-        let dir = tempfile::tempdir().unwrap();
-        let dest = dir.path().join("00000.csv");
-        store(&c, &dest).unwrap();
-        let (_, left, _, _) = crate::review::load_comparison(&dest).unwrap();
-        assert_eq!(left, PathBuf::from("dir,with \"commas\"/app, v1"));
+        for path in [
+            "dir,with \"commas\"/app, v1",
+            "dir/with\nline feed",
+            "dir/with\rcarriage return",
+        ] {
+            let mut b1 = birthmark(CLANG);
+            let b2 = birthmark(GCC);
+            b1.metadata.path = PathBuf::from(path);
+            let c = Algorithm::Jaccard
+                .comparator()
+                .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
+                .unwrap();
+            let dir = tempfile::tempdir().unwrap();
+            let dest = dir.path().join("00000.csv");
+            store(&c, &dest).unwrap();
+            let (_, left, right, _) =
+                crate::review::load_comparison(&dest).unwrap_or_else(|e| panic!("{path:?}: {e}"));
+            assert_eq!(left, PathBuf::from(path), "{path:?}");
+            assert_eq!(right, b2.path(), "{path:?}: the next record was disturbed");
+        }
     }
 
     /// A program's line names it, counts its symbols and then its functions,
@@ -284,5 +297,6 @@ mod tests {
         assert_eq!(escape("a,b"), "\"a,b\"");
         assert_eq!(escape("a\"b"), "\"a\"\"b\"");
         assert_eq!(escape("a\nb"), "\"a\nb\"");
+        assert_eq!(escape("a\rb"), "\"a\rb\"");
     }
 }
