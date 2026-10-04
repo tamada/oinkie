@@ -386,7 +386,7 @@ impl std::str::FromStr for Algorithm {
         let name = s.to_lowercase();
         Algorithm::ALL
             .iter()
-            .find(|a| a.cli_name() == name || a.hyphenated() == name)
+            .find(|a| a.name() == name || a.hyphenated() == name)
             .cloned()
             .ok_or_else(|| Error::Parse(format!("{s}: unknown algorithm")))
     }
@@ -449,12 +449,12 @@ impl Algorithm {
 
     /// The same name with a hyphen between its words.
     ///
-    /// It differs from [`Algorithm::cli_name`] for `weightedjaccard` alone;
+    /// It differs from [`Algorithm::name`] for `weightedjaccard` alone;
     /// the other seven are single words and spell the same either way.
     fn hyphenated(&self) -> &'static str {
         match self {
             Algorithm::WeightedJaccard => "weighted-jaccard",
-            other => other.cli_name(),
+            other => other.name(),
         }
     }
 
@@ -466,7 +466,7 @@ impl Algorithm {
     }
 
     /// The spelling this algorithm has in an analysis name.
-    pub fn cli_name(&self) -> &'static str {
+    pub fn name(&self) -> &'static str {
         self.spec().0
     }
 
@@ -1119,11 +1119,8 @@ mod tests {
     fn test_an_algorithm_is_read_from_either_spelling() {
         use std::str::FromStr;
         for a in Algorithm::ALL {
-            assert_eq!(&Algorithm::from_str(a.cli_name()).unwrap(), a);
-            assert_eq!(
-                &Algorithm::from_str(&a.cli_name().to_uppercase()).unwrap(),
-                a
-            );
+            assert_eq!(&Algorithm::from_str(a.name()).unwrap(), a);
+            assert_eq!(&Algorithm::from_str(&a.name().to_uppercase()).unwrap(), a);
         }
         assert_eq!(
             Algorithm::from_str("weighted-jaccard").unwrap(),

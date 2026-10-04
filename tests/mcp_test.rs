@@ -166,7 +166,7 @@ fn test_the_vocabulary_served_is_the_one_the_library_generates() {
     for bt in BirthmarkType::all(ceiling) {
         for algorithm in Algorithm::ALL {
             if bt.pairs_with(algorithm) {
-                expected.push(format!("{bt}-{}", algorithm.cli_name()));
+                expected.push(format!("{bt}-{}", algorithm.name()));
             }
         }
     }

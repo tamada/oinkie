@@ -362,15 +362,11 @@ impl HomeSpec {
                 return Ok(p);
             }
         }
-        let looked_in = if self.candidates.is_empty() {
-            String::new()
-        } else {
-            format!(", or install it in one of: {}", self.candidates.join(", "))
-        };
-        Err(crate::Error::Parse(format!(
-            "{} not found. Specify it with --home, set {}{looked_in}",
-            self.tool, self.env
-        )))
+        Err(crate::Error::ToolNotFound {
+            tool: self.tool,
+            env: self.env,
+            candidates: self.candidates,
+        })
     }
 }
 
@@ -605,7 +601,12 @@ mod tests {
     fn test_a_ghidra_that_is_nowhere_says_what_to_set_and_where_it_looked() {
         let spec = Ir::GhidraPcode.home_spec();
         let err = spec.find_in(|_| None, |_| false).unwrap_err().to_string();
-        assert!(err.contains("--home"), "does not offer --home: {err}");
+        // The library says what to set and where it looked, and nothing about
+        // how a particular caller passes a home: that is the caller's to add.
+        assert!(
+            !err.contains("--"),
+            "names a command-line option the library has no business knowing: {err}"
+        );
         assert!(
             err.contains("GHIDRA_HOME"),
             "does not name the variable: {err}"

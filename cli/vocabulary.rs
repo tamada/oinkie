@@ -201,7 +201,7 @@ pub fn advertised_analyses() -> Vec<String> {
     for birthmark in advertised_birthmarks() {
         for algorithm in Algorithm::ALL {
             if birthmark.pairs_with(algorithm) {
-                names.push(format!("{birthmark}-{}", algorithm.cli_name()));
+                names.push(format!("{birthmark}-{}", algorithm.name()));
             }
         }
     }

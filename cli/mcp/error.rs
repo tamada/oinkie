@@ -25,8 +25,12 @@ fn is_the_callers_fault(e: &Error) -> bool {
         // A file the caller named, which they can name differently.
         Error::Io(_, _) | Error::Json(_, _) => true,
 
-        // Something went wrong inside, or in a file oinkie itself produced.
-        Error::Csv(_)
+        // Something went wrong inside, or in a file oinkie itself produced; or
+        // in the machine the server runs on, which no argument can change. A
+        // missing Ghidra was never the caller's fault here either, back when it
+        // arrived as a `Parse`.
+        Error::ToolNotFound { .. }
+        | Error::Csv(_)
         | Error::InvalidPcode(_)
         | Error::LapJV(_)
         | Error::ShapeError(_)

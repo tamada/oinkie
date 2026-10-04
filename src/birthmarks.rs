@@ -941,10 +941,7 @@ mod tests {
     #[test]
     fn test_an_algorithm_answers_to_both_of_its_spellings() {
         for algorithm in Algorithm::ALL {
-            assert_eq!(
-                parse_algorithm(algorithm.cli_name()).as_ref(),
-                Some(algorithm)
-            );
+            assert_eq!(parse_algorithm(algorithm.name()).as_ref(), Some(algorithm));
         }
         // `weighted-jaccard` is the only one that is spelled two ways.
         assert_eq!(
@@ -1073,7 +1070,7 @@ mod tests {
     fn test_analysis_type_accepts_every_canonical_pairing() {
         for prefix in ["op", "fc", "op-4gram"] {
             for algorithm in Algorithm::ALL {
-                let (algorithm_name, shape) = (algorithm.cli_name(), algorithm.shape());
+                let (algorithm_name, shape) = (algorithm.name(), algorithm.shape());
                 let shape_name = match shape {
                     Shape::Seq => "seq",
                     Shape::Set => "set",
@@ -1107,15 +1104,15 @@ mod tests {
                     paired,
                     birthmark.shape() == algorithm.shape(),
                     "{birthmark}/{}",
-                    algorithm.cli_name()
+                    algorithm.name()
                 );
                 assert_eq!(
                     AnalysisType::new(birthmark.clone(), algorithm.clone()).is_ok(),
                     paired,
                     "new disagrees with pairs_with for {birthmark}/{}",
-                    algorithm.cli_name()
+                    algorithm.name()
                 );
-                let name = format!("{birthmark}-{}", algorithm.cli_name());
+                let name = format!("{birthmark}-{}", algorithm.name());
                 assert_eq!(
                     AnalysisType::try_from(name.clone()).is_ok(),
                     paired,

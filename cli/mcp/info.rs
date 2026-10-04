@@ -174,7 +174,7 @@ mod tests {
     /// the same way, and that is correct rather than a slip: an `algorithm`
     /// argument is parsed by clap, which knows `weighted-jaccard`, while an
     /// analysis name is parsed by the library's own split, which produced
-    /// `weightedjaccard` from `cli_name`. Both parse inside an analysis (#71).
+    /// `weightedjaccard` from `name`. Both parse inside an analysis (#71).
     ///
     /// Asserted rather than merely written down, because the two lists sit
     /// next to each other in one tool result and a reader will notice.

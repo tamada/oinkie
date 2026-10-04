@@ -453,6 +453,31 @@ fn parallel_lift_notice(jobs: usize) -> Option<String> {
     })
 }
 
+/// The library says a tool was not found and what to set; this is where the
+/// way to give its home on the command line is added.
+///
+/// The wording is what `lift` has always said, so the library's change of
+/// shape is not something a person at a terminal sees.
+fn with_home_hint(e: Error) -> Error {
+    match e {
+        Error::ToolNotFound {
+            tool,
+            env,
+            candidates,
+        } => {
+            let looked_in = if candidates.is_empty() {
+                String::new()
+            } else {
+                format!(", or install it in one of: {}", candidates.join(", "))
+            };
+            Error::Parse(format!(
+                "{tool} not found. Specify it with --home, set {env}{looked_in}"
+            ))
+        }
+        other => other,
+    }
+}
+
 fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
     let dest = opts.dest();
     let pb = ProgressBar::new(opts.len() as u64)
@@ -469,7 +494,8 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
         .home(opts.home().map(|p| p.to_path_buf()))
         .script(opts.script().map(|p| p.to_path_buf()))
         .intermediate_dir(opts.intermediate_dir().map(|p| p.to_path_buf()))
-        .build()?;
+        .build()
+        .map_err(with_home_hint)?;
 
     // Said at most once per process, however many files `-j` lifts at a time,
     // and only when something is about to be lifted: a `--skip` run that finds
@@ -686,6 +712,35 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tool that is nowhere is reported the way `lift` always reported it,
+    /// with `--home` offered first; anything else passes through untouched.
+    #[test]
+    fn test_a_missing_tool_is_reported_with_the_flag_that_supplies_it() {
+        let missing = Error::ToolNotFound {
+            tool: "Ghidra",
+            env: "GHIDRA_HOME",
+            candidates: &["/opt/ghidra", "/usr/local/ghidra"],
+        };
+        assert_eq!(
+            with_home_hint(missing).to_string(),
+            "Parse error: Ghidra not found. Specify it with --home, set GHIDRA_HOME, or install it in one of: /opt/ghidra, /usr/local/ghidra"
+        );
+        let nowhere = Error::ToolNotFound {
+            tool: "Nowhere",
+            env: "NOWHERE_HOME",
+            candidates: &[],
+        };
+        assert_eq!(
+            with_home_hint(nowhere).to_string(),
+            "Parse error: Nowhere not found. Specify it with --home, set NOWHERE_HOME"
+        );
+        let other = Error::Parse("something else".to_string());
+        assert_eq!(
+            with_home_hint(other).to_string(),
+            "Parse error: something else"
+        );
+    }
 
     #[test]
     fn test_find_ghidra_home_from_opt() {
