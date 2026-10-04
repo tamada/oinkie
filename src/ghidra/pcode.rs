@@ -347,7 +347,7 @@ impl TryFrom<String> for PcodeOp {
         ];
         if let Some(code) = pcodes.iter().position(|&m| m == value) {
             if code != 45 {
-                PcodeOp::from_u32(code as u32).ok_or_else(|| Error::InvalidPcode(code as u32))
+                PcodeOp::from_u32(code as u32).ok_or(Error::InvalidPcode(code as u32))
             } else {
                 Err(Error::InvalidPcode(code as u32))
             }

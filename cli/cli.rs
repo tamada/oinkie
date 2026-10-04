@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 pub use crate::values::Analysis;
 use crate::values::{AnalysisParser, BirthmarkTypeParser};
+use crate::vocabulary::{algorithm_parser, ir_parser, strategy_parser};
 use clap::ValueEnum;
 use oinkie::prelude::*;
 
@@ -151,7 +152,7 @@ pub struct LiftOpts {
     #[clap(
         short = 'r',
         long,
-        value_enum,
+        value_parser = ir_parser(),
         default_value_t = Ir::default(),
         help = "Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool."
     )]
@@ -461,7 +462,7 @@ impl StatsOpts {
 
 #[derive(Debug, clap::Parser)]
 pub struct CompareOpts {
-    #[clap(short, long, value_enum, default_value_t = Algorithm::Jaccard, value_name = "ALGORITHM", ignore_case = true, help = "Specify the similarity calculation algorithm.")]
+    #[clap(short, long, value_parser = algorithm_parser(), default_value = "jaccard", value_name = "ALGORITHM", ignore_case = true, help = "Specify the similarity calculation algorithm.")]
     algorithm: Algorithm,
 
     #[clap(
@@ -480,7 +481,7 @@ Available:
     )]
     aggregator: Aggregator,
 
-    #[clap(short, long, value_enum, default_value_t = PairingStrategy::AllAndSelf, value_name = "STRATEGY", ignore_case = true, help = "Specify the pairing strategy for comparing files.")]
+    #[clap(short, long, value_parser = strategy_parser(), default_value = "all-and-self", value_name = "STRATEGY", ignore_case = true, help = "Specify the pairing strategy for comparing files.")]
     strategy: PairingStrategy,
 
     #[clap(
@@ -545,7 +546,7 @@ Run 'oinkie info' for the birthmarks and the algorithms they pair with. Any k
 parses in a k-gram name, not only the ones listed.")]
     pub(crate) analysis: Analysis,
 
-    #[clap(short, long, value_enum, default_value_t = PairingStrategy::AllAndSelf, ignore_case = true, help = "Pairing strategy for file comparisons")]
+    #[clap(short, long, value_parser = strategy_parser(), default_value = "all-and-self", ignore_case = true, help = "Pairing strategy for file comparisons")]
     pub strategy: PairingStrategy,
 
     #[clap(

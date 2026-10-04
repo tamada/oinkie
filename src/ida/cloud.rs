@@ -198,8 +198,8 @@ mod tests {
     }
 
     /// An installation with no plugins directory says nothing rather than
-    /// failing. `--home` takes what the user passed without checking it, so
-    /// this is reached by a typo as much as by anything.
+    /// failing. A home is taken as the caller gave it, without checking it,
+    /// so this is reached by a typo as much as by anything.
     #[test]
     fn test_an_unreadable_installation_says_nothing() {
         assert_eq!(inspect(Path::new("/oinkie-no-such-ida")), Verdict::NoCloud);

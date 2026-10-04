@@ -9,7 +9,7 @@
 #![cfg(feature = "mcp")]
 
 use assert_cmd::Command;
-use oinkie::prelude::{AnalysisType, BirthmarkType};
+use oinkie::prelude::{Algorithm, BirthmarkType};
 use serde_json::Value;
 
 /// One session: initialize, then whatever else is asked, then EOF -- which is
@@ -141,9 +141,15 @@ fn test_the_vocabulary_served_is_the_one_the_library_generates() {
         .iter()
         .map(|b| b["name"].as_str().unwrap().to_string())
         .collect::<Vec<_>>();
+    // The server lists k-grams up to the ceiling `cli/vocabulary.rs` calls
+    // `MAX_ADVERTISED_K`. It is written out here because that constant lives
+    // in the binary, which a test cannot import -- and so that changing it
+    // fails here, loudly, rather than passing by recomputing the same number.
+    let ceiling = 8;
     assert_eq!(
         birthmarks,
-        BirthmarkType::advertised()
+        BirthmarkType::all(ceiling)
+            .iter()
             .map(|bt| bt.to_string())
             .collect::<Vec<_>>()
     );
@@ -154,10 +160,17 @@ fn test_the_vocabulary_served_is_the_one_the_library_generates() {
         .iter()
         .map(|a| a.as_str().unwrap().to_string())
         .collect::<Vec<_>>();
-    assert_eq!(
-        analyses,
-        AnalysisType::advertised_names().collect::<Vec<_>>()
-    );
+    // Every advertised birthmark crossed with the algorithms that operate on
+    // its shape, in that order.
+    let mut expected = Vec::new();
+    for bt in BirthmarkType::all(ceiling) {
+        for algorithm in Algorithm::ALL {
+            if bt.pairs_with(algorithm) {
+                expected.push(format!("{bt}-{}", algorithm.cli_name()));
+            }
+        }
+    }
+    assert_eq!(analyses, expected);
 
     // and the result is structured rather than a wall of text to re-parse
     assert!(v["notes"].as_array().is_some_and(|n| !n.is_empty()));

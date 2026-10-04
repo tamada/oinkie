@@ -8,7 +8,7 @@
 //!
 //! Every bug fixed in this file was a real one:
 //!
-//! - a relative `--intermediate` was resolved twice, once by the caller and
+//! - a relative intermediate directory was resolved twice, once by the caller and
 //!   again by Ghidra against its own working directory, which is that
 //!   directory nested inside itself
 //! - the script writes into the process's working directory, so two lifts of
@@ -89,7 +89,7 @@ impl Headless<'_> {
         // The child changes directory before it execs, so a relative program
         // path is resolved against the working directory rather than the
         // caller's -- Rust documents the behaviour as platform-specific and
-        // unstable. A relative `--home` therefore passes the caller's own
+        // unstable. A relative home therefore passes the caller's own
         // existence check and then fails to spawn.
         let program = std::fs::canonicalize(self.program)
             .map_err(|e| Error::Io(self.program.to_path_buf(), e))?;
@@ -136,8 +136,8 @@ impl Headless<'_> {
     fn resolve_work_dir(&self) -> Result<(PathBuf, Option<tempfile::TempDir>)> {
         match self.work_dir {
             Some(d) => {
-                // Created because every other destination directory in the CLI
-                // is, and canonicalized because it is passed to the tool as an
+                // Created because the caller may name a directory that does not
+                // exist yet, and canonicalized because it is passed to the tool as an
                 // argument while also being its working directory -- left
                 // relative, the tool resolves it a second time against itself.
                 std::fs::create_dir_all(d).map_err(|e| Error::Io(d.to_path_buf(), e))?;
@@ -510,8 +510,8 @@ mod tests {
     /// A relative program path is resolved against the *child's* working
     /// directory, which is the tool's scratch directory rather than the
     /// caller's. Rust documents that as platform-specific and unstable, and
-    /// the effect is that `--home ghidra_rel` passes the caller's own
-    /// existence check and then fails to spawn with "No such file or
+    /// the effect is that a relative home such as `ghidra_rel` passes the
+    /// caller's own existence check and then fails to spawn with "No such file or
     /// directory" naming a path that does exist.
     #[cfg(unix)]
     #[test]

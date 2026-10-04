@@ -30,10 +30,6 @@ pub enum Error {
     Array(Vec<Self>),
     #[error("{0}: unknown birthmark type")]
     BirthmarkType(String),
-    /// clap's own message already begins `error: `, so this adds no prefix of
-    /// its own. It used to read `Clap error: error: ...` (#62).
-    #[error("{0}")]
-    Clap(#[source] clap::Error),
     #[error("CSV error: {0}")]
     Csv(#[source] csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
@@ -195,7 +191,6 @@ mod tests {
         match e {
             Error::Array(_) => "Array",
             Error::BirthmarkType(_) => "BirthmarkType",
-            Error::Clap(_) => "Clap",
             Error::Csv(_) => "Csv",
             Error::IncompatibleAnalysis(_, _) => "IncompatibleAnalysis",
             Error::IrMismatch(_, _) => "IrMismatch",
@@ -237,7 +232,6 @@ mod tests {
         let int_err = "x".parse::<i32>().unwrap_err();
         let shape_err = ndarray::Array2::from_shape_vec((2, 2), vec![1.0]).unwrap_err();
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
-        let clap_err = clap::Error::raw(clap::error::ErrorKind::InvalidValue, "boom");
 
         let (csv_msg, lapjv_msg, json_msg) = (
             csv_err.to_string(),
@@ -249,7 +243,7 @@ mod tests {
             int_err.to_string(),
             shape_err.to_string(),
         );
-        let (io_msg, clap_msg) = (io_err.to_string(), clap_err.to_string());
+        let io_msg = io_err.to_string();
 
         vec![
             (
@@ -264,13 +258,6 @@ mod tests {
             (
                 Error::BirthmarkType("nonsense".to_string()),
                 "nonsense: unknown birthmark type".to_string(),
-            ),
-            (
-                // No prefix of its own: clap's message already begins
-                // "error: ", and this used to put "Clap error: " in front of
-                // that (#62).
-                Error::Clap(clap_err),
-                clap_msg.clone(),
             ),
             (Error::Csv(csv_err), format!("CSV error: {csv_msg}")),
             (

@@ -20,8 +20,7 @@ fn is_the_callers_fault(e: &Error) -> bool {
         | Error::Mismatch(_, _)
         | Error::IrMismatch(_, _)
         | Error::ParseFloat(_, _)
-        | Error::ParseInt(_, _)
-        | Error::Clap(_) => true,
+        | Error::ParseInt(_, _) => true,
 
         // A file the caller named, which they can name differently.
         Error::Io(_, _) | Error::Json(_, _) => true,

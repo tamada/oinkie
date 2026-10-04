@@ -12,6 +12,7 @@
 //! advertised list stop at `MAX_ADVERTISED_K` while `--analysis
 //! op-9gram-set-dice` still runs.
 
+use crate::vocabulary::{advertised_analyses, advertised_birthmarks, describe};
 use clap::builder::{PossibleValue, TypedValueParser};
 use clap::error::ErrorKind;
 use oinkie::prelude::{AnalysisType, BirthmarkType};
@@ -55,7 +56,7 @@ impl TypedValueParser for AnalysisParser {
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
         Some(Box::new(
-            AnalysisType::advertised_names().map(PossibleValue::new),
+            advertised_analyses().into_iter().map(PossibleValue::new),
         ))
     }
 }
@@ -77,8 +78,8 @@ impl TypedValueParser for BirthmarkTypeParser {
     }
 
     fn possible_values(&self) -> Option<Box<dyn Iterator<Item = PossibleValue> + '_>> {
-        Some(Box::new(BirthmarkType::advertised().map(|bt| {
-            PossibleValue::new(bt.to_string()).help(bt.description())
+        Some(Box::new(advertised_birthmarks().into_iter().map(|bt| {
+            PossibleValue::new(bt.to_string()).help(describe(&bt))
         })))
     }
 }
@@ -107,6 +108,7 @@ fn invalid_value(cmd: &clap::Command, e: oinkie::Error) -> clap::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::vocabulary::MAX_ADVERTISED_K;
     use clap::builder::TypedValueParser;
 
     fn advertised<P: TypedValueParser>(parser: &P) -> Vec<PossibleValue> {
@@ -126,22 +128,19 @@ mod tests {
             .iter()
             .map(|pv| pv.get_name().to_string())
             .collect::<Vec<_>>();
-        assert_eq!(
-            offered,
-            AnalysisType::advertised_names().collect::<Vec<_>>()
-        );
+        assert_eq!(offered, advertised_analyses());
         assert!(offered.contains(&"op-3gram-set-dice".to_string()));
     }
 
     #[test]
     fn test_the_offered_birthmarks_are_the_ones_the_library_generates() {
         let offered = advertised(&BirthmarkTypeParser);
-        let expected = BirthmarkType::advertised().collect::<Vec<_>>();
+        let expected = advertised_birthmarks();
         assert_eq!(offered.len(), expected.len());
         for (pv, bt) in offered.iter().zip(expected) {
             assert_eq!(pv.get_name(), bt.to_string());
             // the help is what `--help` and the shells show beside the name
-            assert_eq!(pv.get_help().map(|h| h.to_string()), Some(bt.description()));
+            assert_eq!(pv.get_help().map(|h| h.to_string()), Some(describe(&bt)));
         }
     }
 
@@ -150,7 +149,7 @@ mod tests {
     #[test]
     fn test_a_name_past_the_end_of_the_list_still_parses() {
         let cmd = clap::Command::new("oinkie");
-        let name = format!("op-{}gram-set-dice", oinkie::prelude::MAX_ADVERTISED_K + 1);
+        let name = format!("op-{}gram-set-dice", MAX_ADVERTISED_K + 1);
         assert!(
             !advertised(&AnalysisParser)
                 .iter()

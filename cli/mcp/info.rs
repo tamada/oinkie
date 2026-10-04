@@ -12,8 +12,9 @@
 //! `Aggregator::from_str`, so the list cannot advertise something the parser
 //! would refuse.
 
-use clap::ValueEnum;
-use oinkie::prelude::*;
+use crate::vocabulary::{
+    ALGORITHMS, MAX_ADVERTISED_K, STRATEGIES, advertised_analyses, advertised_birthmarks, describe,
+};
 use rmcp::schemars;
 use serde::Serialize;
 
@@ -68,39 +69,31 @@ const AGGREGATORS: &[(&str, &str)] = &[
     ),
 ];
 
-fn named_variants<T: ValueEnum>() -> Vec<Named> {
-    T::value_variants()
-        .iter()
-        .filter_map(|v| v.to_possible_value())
-        .map(|pv| Named {
-            name: pv.get_name().to_string(),
-            // Empty rather than a panic. `oinkie info` unwraps this and a test
-            // guards it; here the same missing doc comment would take down a
-            // running server, so it is a test's job rather than a runtime one.
-            description: pv.get_help().map(|h| h.to_string()).unwrap_or_default(),
-        })
-        .collect()
-}
-
 pub fn vocabulary() -> Vocabulary {
     Vocabulary {
-        birthmarks: BirthmarkType::advertised()
+        birthmarks: advertised_birthmarks()
+            .into_iter()
             .map(|bt| Named {
+                description: describe(&bt),
                 name: bt.to_string(),
-                description: bt.description(),
             })
             .collect(),
-        algorithms: Algorithm::value_variants()
+        algorithms: ALGORITHMS
             .iter()
-            .filter_map(|a| a.to_possible_value().map(|pv| (a, pv)))
-            .map(|(a, pv)| AlgorithmInfo {
-                name: pv.get_name().to_string(),
-                description: pv.get_help().map(|h| h.to_string()).unwrap_or_default(),
-                operates_on: a.shape().description().to_string(),
+            .map(|(algorithm, name, help)| AlgorithmInfo {
+                name: (*name).to_string(),
+                description: (*help).to_string(),
+                operates_on: algorithm.shape().description().to_string(),
             })
             .collect(),
-        analyses: AnalysisType::advertised_names().collect(),
-        strategies: named_variants::<PairingStrategy>(),
+        analyses: advertised_analyses(),
+        strategies: STRATEGIES
+            .iter()
+            .map(|(_, name, help)| Named {
+                name: (*name).to_string(),
+                description: (*help).to_string(),
+            })
+            .collect(),
         aggregators: AGGREGATORS
             .iter()
             .map(|(name, description)| Named {
@@ -136,6 +129,7 @@ pub fn vocabulary() -> Vocabulary {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oinkie::prelude::{Aggregator, AnalysisType};
     use std::str::FromStr;
 
     /// The whole point of this module: what it advertises is what the library
@@ -149,7 +143,8 @@ mod tests {
             .into_iter()
             .map(|n| n.name)
             .collect::<Vec<_>>();
-        let expected = BirthmarkType::advertised()
+        let expected = advertised_birthmarks()
+            .iter()
             .map(|bt| bt.to_string())
             .collect::<Vec<_>>();
         assert_eq!(offered, expected);
@@ -158,10 +153,7 @@ mod tests {
 
     #[test]
     fn test_the_analyses_are_the_ones_the_library_generates() {
-        assert_eq!(
-            vocabulary().analyses,
-            AnalysisType::advertised_names().collect::<Vec<_>>()
-        );
+        assert_eq!(vocabulary().analyses, advertised_analyses());
     }
 
     #[test]
@@ -171,10 +163,9 @@ mod tests {
             .into_iter()
             .map(|a| a.name)
             .collect::<Vec<_>>();
-        let expected = Algorithm::value_variants()
+        let expected = ALGORITHMS
             .iter()
-            .filter_map(|a| a.to_possible_value())
-            .map(|pv| pv.get_name().to_string())
+            .map(|(_, name, _)| name.to_string())
             .collect::<Vec<_>>();
         assert_eq!(offered, expected);
     }

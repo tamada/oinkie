@@ -1,12 +1,11 @@
 use crate::{Iterable, prelude::*};
-use clap::ValueEnum;
 use itertools::Itertools;
 use ndarray::Array2;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::{io::Write, path::Path, time::Instant};
 
 #[cfg_attr(doc, katexit::katexit)]
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PairingStrategy {
     /// All possible combinations including self-comparisons ($_nC_2 + n$).
     /// Used for full matrix visualization or comprehensive heatmaps.
@@ -34,6 +33,19 @@ pub enum PairingStrategy {
 }
 
 impl PairingStrategy {
+    /// Every strategy, in the order they are declared.
+    ///
+    /// Written out because nothing derives it; a test holds it to the enum
+    /// with an exhaustive `match`.
+    pub const ALL: &'static [PairingStrategy] = &[
+        PairingStrategy::AllAndSelf,
+        PairingStrategy::All,
+        PairingStrategy::SelfCoverage,
+        PairingStrategy::Adjacent,
+        PairingStrategy::FirstVsOthers,
+        PairingStrategy::LastVsOthers,
+    ];
+
     pub fn compare_count<T>(&self, targets: &[T]) -> usize {
         match self {
             PairingStrategy::All => targets.len() * targets.len().saturating_sub(1) / 2,
@@ -346,7 +358,7 @@ trait ProgramComparator<T: crate::Op> {
     fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64;
 }
 
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Algorithm {
     /// Cosine similarity based on term frequency vectors. Available: seq and freq.
     Cosine,
@@ -366,6 +378,20 @@ pub enum Algorithm {
     WeightedJaccard,
 }
 
+/// Reads either spelling of an algorithm's name, in any case.
+impl std::str::FromStr for Algorithm {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let name = s.to_lowercase();
+        Algorithm::ALL
+            .iter()
+            .find(|a| a.cli_name() == name || a.hyphenated() == name)
+            .cloned()
+            .ok_or_else(|| Error::Parse(format!("{s}: unknown algorithm")))
+    }
+}
+
 impl std::fmt::Display for Algorithm {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
@@ -382,15 +408,29 @@ impl std::fmt::Display for Algorithm {
 }
 
 impl Algorithm {
-    /// The CLI spelling of this algorithm and the shape it operates on, in one
+    /// Every algorithm, in the order they are declared.
+    ///
+    /// Written out because nothing derives it; a test holds it to the enum
+    /// with an exhaustive `match`.
+    pub const ALL: &'static [Algorithm] = &[
+        Algorithm::Cosine,
+        Algorithm::Dice,
+        Algorithm::Euclidean,
+        Algorithm::Jaccard,
+        Algorithm::Levenshtein,
+        Algorithm::Lcs,
+        Algorithm::Simpson,
+        Algorithm::WeightedJaccard,
+    ];
+
+    /// The spelling of this algorithm and the shape it operates on, in one
     /// table so that the parser, the validation and the error message cannot
     /// drift apart.
     ///
-    /// Written out rather than derived from `ValueEnum`, whose kebab-case
-    /// renders `WeightedJaccard` as `weighted-jaccard`. This is the canonical
-    /// spelling inside an analysis name and the one the completion list is
-    /// built from; the kebab-case is accepted there too, since it is what
-    /// `compare --algorithm` takes and what `oinkie info` prints (#71).
+    /// This is the canonical spelling inside an analysis name. A name with a
+    /// hyphen between its words is accepted as well (see
+    /// [`Algorithm::hyphenated`]), so that a name built from either spelling
+    /// parses (#71).
     ///
     /// A hyphen here is no longer forbidden. It was, while an analysis name
     /// was split on its last one.
@@ -407,6 +447,17 @@ impl Algorithm {
         }
     }
 
+    /// The same name with a hyphen between its words.
+    ///
+    /// It differs from [`Algorithm::cli_name`] for `weightedjaccard` alone;
+    /// the other seven are single words and spell the same either way.
+    fn hyphenated(&self) -> &'static str {
+        match self {
+            Algorithm::WeightedJaccard => "weighted-jaccard",
+            other => other.cli_name(),
+        }
+    }
+
     /// The birthmark shape this algorithm computes over. Anything else it is
     /// handed is converted to this first, which is why a pairing that does not
     /// match is rejected rather than quietly re-encoded.
@@ -414,8 +465,7 @@ impl Algorithm {
         self.spec().1
     }
 
-    /// The spelling this algorithm has in an analysis name. Public because
-    /// the CLI builds its completion list from it.
+    /// The spelling this algorithm has in an analysis name.
     pub fn cli_name(&self) -> &'static str {
         self.spec().0
     }
@@ -1022,6 +1072,66 @@ fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `Algorithm::ALL` is written by hand, so it is held to the enum: the
+    /// `match` stops compiling when a variant is added, and the assertion
+    /// fails when it is added there but not to the list.
+    #[test]
+    fn test_all_lists_every_algorithm_exactly_once() {
+        fn index(a: &Algorithm) -> usize {
+            match a {
+                Algorithm::Cosine => 0,
+                Algorithm::Dice => 1,
+                Algorithm::Euclidean => 2,
+                Algorithm::Jaccard => 3,
+                Algorithm::Levenshtein => 4,
+                Algorithm::Lcs => 5,
+                Algorithm::Simpson => 6,
+                Algorithm::WeightedJaccard => 7,
+            }
+        }
+        let mut seen = Algorithm::ALL.iter().map(index).collect::<Vec<_>>();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..8).collect::<Vec<_>>());
+    }
+
+    /// The same for `PairingStrategy::ALL`.
+    #[test]
+    fn test_all_lists_every_pairing_strategy_exactly_once() {
+        fn index(p: &PairingStrategy) -> usize {
+            match p {
+                PairingStrategy::AllAndSelf => 0,
+                PairingStrategy::All => 1,
+                PairingStrategy::SelfCoverage => 2,
+                PairingStrategy::Adjacent => 3,
+                PairingStrategy::FirstVsOthers => 4,
+                PairingStrategy::LastVsOthers => 5,
+            }
+        }
+        let mut seen = PairingStrategy::ALL.iter().map(index).collect::<Vec<_>>();
+        seen.sort_unstable();
+        assert_eq!(seen, (0..6).collect::<Vec<_>>());
+    }
+
+    /// Both spellings of an algorithm's name read back to it, in any case; a
+    /// name that is not one is refused naming what was given.
+    #[test]
+    fn test_an_algorithm_is_read_from_either_spelling() {
+        use std::str::FromStr;
+        for a in Algorithm::ALL {
+            assert_eq!(&Algorithm::from_str(a.cli_name()).unwrap(), a);
+            assert_eq!(
+                &Algorithm::from_str(&a.cli_name().to_uppercase()).unwrap(),
+                a
+            );
+        }
+        assert_eq!(
+            Algorithm::from_str("weighted-jaccard").unwrap(),
+            Algorithm::WeightedJaccard
+        );
+        let err = Algorithm::from_str("nonsense").unwrap_err().to_string();
+        assert!(err.contains("nonsense"), "{err}");
+    }
     use crate::birthmarks::Metadata;
     use std::path::PathBuf;
 
