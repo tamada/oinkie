@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn test_a_kgram_is_named_the_way_the_library_names_it() {
         let at = run_analysis("op-3gram-set-dice").expect("the library spelling should parse");
-        assert_eq!(at.birthmark, BirthmarkType::OpKgramSet(3));
+        assert_eq!(at.birthmark(), &BirthmarkType::OpKgramSet(3));
         assert!(extract_birthmark("op-3gram-set").is_ok());
     }
 
@@ -906,7 +906,7 @@ mod tests {
     fn test_a_k_past_the_advertised_list_is_still_accepted() {
         let beyond = vocabulary::MAX_ADVERTISED_K + 1;
         let at = run_analysis(&format!("op-{beyond}gram-freq-cosine")).unwrap();
-        assert_eq!(at.birthmark, BirthmarkType::OpKgramFreq(beyond));
+        assert_eq!(at.birthmark(), &BirthmarkType::OpKgramFreq(beyond));
         assert!(extract_birthmark(&format!("op-{beyond}gram-freq")).is_ok());
     }
 
@@ -928,12 +928,15 @@ mod tests {
     #[test]
     fn test_the_defaults_are_names_the_library_parses() {
         let at = run_analysis("op-set-jaccard").unwrap();
-        assert_eq!(at.birthmark, BirthmarkType::OpSet);
+        assert_eq!(at.birthmark(), &BirthmarkType::OpSet);
         let opts = cli::OinkieOpts::try_parse_from(vec!["oinkie", "run", "x.json"]).unwrap();
         let cli::OinkieCommand::Run(run_opts) = opts.command else {
             panic!("Expected Run command");
         };
-        assert_eq!(run_opts.analysis_type().unwrap().birthmark, at.birthmark);
+        assert_eq!(
+            run_opts.analysis_type().unwrap().birthmark(),
+            at.birthmark()
+        );
         assert!(cli::OinkieOpts::try_parse_from(vec!["oinkie", "extract", "x.json"]).is_ok());
     }
 

@@ -1,7 +1,7 @@
 use rustc_hash::FxHashMap;
 
-use crate::birthmarks::{Birthmark, BirthmarkType, Data, Elements, Kgram, Metadata};
-use crate::program::{Function, TypedProgram};
+use crate::birthmarks::{Birthmark, BirthmarkType, Data, Function, Kgram, Metadata};
+use crate::program::{TypedFunction, TypedProgram};
 use crate::{Iterable, Result};
 
 pub struct Extractor {
@@ -53,7 +53,7 @@ fn extract_birthmark_op<T: crate::Op>(
     {
         log::warn!("{}", reason.message(p.path(), p.ir()));
     }
-    let elements = p
+    let functions = p
         .iter()
         .map(|f| {
             let name = f.name().to_string();
@@ -72,13 +72,13 @@ fn extract_birthmark_op<T: crate::Op>(
                     Data::KgramSet(extract_op_kgram_seq(f, *k).into_iter().collect())
                 }
             };
-            Elements { name, data }
+            Function { name, data }
         })
         .collect::<Vec<_>>();
     let metadata = build_metadata(p, bt.clone(), now);
     Ok(Birthmark {
         metadata,
-        elements,
+        functions,
         json_path: None,
     })
 }
@@ -106,7 +106,7 @@ fn build_metadata<T>(
     }
 }
 
-fn extract_op_kgram_seq<T: crate::Op>(f: &Function<T>, k: usize) -> Vec<Kgram> {
+fn extract_op_kgram_seq<T: crate::Op>(f: &TypedFunction<T>, k: usize) -> Vec<Kgram> {
     f.ops()
         .map(|s| s.into())
         .collect::<Vec<_>>()
@@ -115,7 +115,7 @@ fn extract_op_kgram_seq<T: crate::Op>(f: &Function<T>, k: usize) -> Vec<Kgram> {
         .collect()
 }
 
-fn extract_op_kgram_freq<T: crate::Op>(f: &Function<T>, k: usize) -> FxHashMap<Kgram, usize> {
+fn extract_op_kgram_freq<T: crate::Op>(f: &TypedFunction<T>, k: usize) -> FxHashMap<Kgram, usize> {
     seq_to_freq(extract_op_kgram_seq(f, k).into_iter())
 }
 
@@ -196,7 +196,7 @@ fn empty_family<T: crate::Op>(p: &TypedProgram<T>) -> Option<EmptyFamily> {
     })
 }
 
-fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &TypedProgram<T>) -> Vec<String> {
+fn extract_function_calls<T: crate::Op>(f: &TypedFunction<T>, p: &TypedProgram<T>) -> Vec<String> {
     f.iter()
         .filter(|op| op.is_call())
         .filter_map(|op| op.symbol_key())
@@ -206,7 +206,7 @@ fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &TypedProgram<T>) ->
 }
 
 fn extract_function_calls_freq<T: crate::Op>(
-    f: &Function<T>,
+    f: &TypedFunction<T>,
     p: &TypedProgram<T>,
 ) -> FxHashMap<String, usize> {
     extract_function_calls(f, p)
@@ -423,7 +423,7 @@ mod tests {
                 .extract_each_typed(&program)
                 .unwrap_or_else(|e| panic!("{fixture}: {e}"));
             assert!(
-                birthmark.elements.iter().any(|e| !e.is_empty()),
+                birthmark.functions.iter().any(|e| !e.is_empty()),
                 "{fixture}: every fc-set element is empty"
             );
         }

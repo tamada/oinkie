@@ -54,7 +54,7 @@ fn test_every_level_finds_the_call_that_is_there() {
             .extract(&p)
             .unwrap_or_else(|e| panic!("{level}: {e}"));
         let calls: Vec<String> = b
-            .elements()
+            .functions()
             .iter()
             .flat_map(|e| e.ops().map(|s| s.to_string()))
             .collect();

@@ -251,14 +251,14 @@ pub(crate) fn compute(paths: &[PathBuf], top: Option<usize>) -> Report {
 
 fn read_file(path: &Path, birthmark: &Birthmark) -> FileData {
     let lengths = birthmark
-        .elements
+        .functions()
         .iter()
         .map(|f| f.len())
         .collect::<Vec<_>>();
     let mut counts = FxHashMap::default();
     let mut occurrences = None;
-    for function in &birthmark.elements {
-        match &function.data {
+    for function in birthmark.functions() {
+        match function.data() {
             Data::Seq(seq) => seq.iter().for_each(|e| add(&mut counts, e.clone(), 1)),
             Data::Set(set) => set.iter().for_each(|e| add(&mut counts, e.clone(), 1)),
             Data::Freq(freq) => {
@@ -285,7 +285,7 @@ fn read_file(path: &Path, birthmark: &Birthmark) -> FileData {
         stats: FileStats {
             path: path.to_path_buf(),
             file_name: birthmark.name().to_string(),
-            ir: birthmark.metadata.ir.to_string(),
+            ir: birthmark.ir().to_string(),
             birthmark_type: birthmark.birthmark_type().to_string(),
             functions: lengths.len(),
             empty: lengths.iter().filter(|&&n| n == 0).count(),
@@ -662,33 +662,33 @@ fn to_markdown(report: &Report, per_file: bool) -> String {
 mod tests {
     use super::*;
     use clap::Parser;
-    use oinkie::birthmarks::{Elements, Metadata};
     use oinkie::lift::Ir;
 
     fn s(v: &str) -> String {
         v.to_string()
     }
 
-    fn function(name: &str, data: Data) -> Elements {
-        Elements {
-            name: s(name),
-            data,
-        }
+    /// One function's birthmark, as the JSON a birthmark file holds for it.
+    fn function(name: &str, data: Data) -> serde_json::Value {
+        serde_json::json!({ "name": name, "data": data })
     }
 
-    fn birthmark(name: &str, bt: BirthmarkType, functions: Vec<Elements>) -> Birthmark {
-        Birthmark {
-            metadata: Metadata {
-                file_name: s(name),
-                path: PathBuf::from(name),
-                extracted_at: chrono::Utc::now(),
-                duration: Duration::from_nanos(1),
-                birthmark_type: bt,
-                ir: Ir::GhidraPcode,
+    /// A birthmark built the way a reader of birthmark files gets one: from
+    /// its JSON. Its fields are not public, and a file is what this command
+    /// reads anyway.
+    fn birthmark(name: &str, bt: BirthmarkType, functions: Vec<serde_json::Value>) -> Birthmark {
+        serde_json::from_value(serde_json::json!({
+            "metadata": {
+                "file_name": name,
+                "path": name,
+                "extracted_at": chrono::Utc::now(),
+                "duration": 1,
+                "birthmark_type": bt,
+                "ir": Ir::GhidraPcode,
             },
-            elements: functions,
-            json_path: None,
-        }
+            "elements": functions,
+        }))
+        .expect("a birthmark built for a test should read")
     }
 
     fn write(dir: &Path, file: &str, b: &Birthmark) -> PathBuf {

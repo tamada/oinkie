@@ -46,9 +46,9 @@ impl Side for Birthmark {
     }
 
     fn names(&self) -> Vec<String> {
-        self.elements()
+        self.functions()
             .iter()
-            .map(|e| e.name().to_string())
+            .map(|f| f.name().to_string())
             .collect()
     }
 }
@@ -208,9 +208,12 @@ mod tests {
             "dir/with\nline feed",
             "dir/with\rcarriage return",
         ] {
-            let mut b1 = birthmark(CLANG);
+            // The path is set through the file format, the way a birthmark
+            // with such a path would arrive: its fields are not public.
+            let mut json = serde_json::to_value(birthmark(CLANG)).unwrap();
+            json["metadata"]["path"] = serde_json::json!(path);
+            let b1: Birthmark = serde_json::from_value(json).unwrap();
             let b2 = birthmark(GCC);
-            b1.metadata.path = PathBuf::from(path);
             let c = Algorithm::Jaccard
                 .comparator()
                 .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)

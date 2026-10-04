@@ -1,0 +1,107 @@
+{
+  "metadata": {
+    "file_name": "udl",
+    "path": "testdata/bin/udl",
+    "extracted_at": "2026-10-04T23:52:49.941731Z",
+    "duration": 32458,
+    "birthmark_type": {
+      "OpKgramFreq": 3
+    },
+    "ir": "ghidra-pcode"
+  },
+  "elements": [
+    {
+      "name": "operator\"\"__km",
+      "data": {
+        "KgramFreq": [
+          [
+            [
+              "CAST",
+              "RETURN",
+              "PIECE"
+            ],
+            1
+          ],
+          [
+            [
+              "FLOAT_MULT",
+              "CAST",
+              "RETURN"
+            ],
+            1
+          ],
+          [
+            [
+              "RETURN",
+              "PIECE",
+              "COPY"
+            ],
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "name": "operator\"\"__bin",
+      "data": {
+        "KgramFreq": [
+          [
+            [
+              "LOAD",
+              "INT_SEXT",
+              "RETURN"
+            ],
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "name": "entry",
+      "data": {
+        "KgramFreq": [
+          [
+            [
+              "CALL",
+              "CALL",
+              "COPY"
+            ],
+            1
+          ],
+          [
+            [
+              "CALL",
+              "COPY",
+              "CALL"
+            ],
+            1
+          ],
+          [
+            [
+              "CALL",
+              "COPY",
+              "COPY"
+            ],
+            1
+          ],
+          [
+            [
+              "COPY",
+              "CALL",
+              "COPY"
+            ],
+            1
+          ],
+          [
+            [
+              "COPY",
+              "COPY",
+              "RETURN"
+            ],
+            1
+          ]
+        ]
+      }
+    }
+  ]
+}
