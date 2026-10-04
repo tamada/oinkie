@@ -9,7 +9,11 @@
 //! way `lifted/pcodes/` already is: a fresh lift records the absolute path it
 //! canonicalised, which is particular to the machine that ran it.
 
-use oinkie::prelude::*;
+use oinkie::Program;
+use oinkie::birthmarks::BirthmarkType;
+use oinkie::compare::{Aggregator, Algorithm, Comparator};
+use oinkie::extract::Extractor;
+use oinkie::lift::Ir;
 use std::path::{Path, PathBuf};
 
 const LEVELS: [(&str, Ir); 3] = [
@@ -27,7 +31,7 @@ fn fixture(level: &str, name: &str) -> PathBuf {
 #[test]
 fn test_each_level_reads_back_as_the_representation_it_names() {
     for (level, ir) in LEVELS {
-        let p = AnyProgram::load(&fixture(level, "hello_clang.json"))
+        let p = Program::load(&fixture(level, "hello_clang.json"))
             .unwrap_or_else(|e| panic!("{level}: {e}"));
         assert_eq!(p.ir(), ir, "{level} loaded as the wrong representation");
         assert_eq!(p.name(), "hello_clang");
@@ -45,11 +49,12 @@ fn test_each_level_reads_back_as_the_representation_it_names() {
 #[test]
 fn test_every_level_finds_the_call_that_is_there() {
     for (level, _) in LEVELS {
-        let p = AnyProgram::load(&fixture(level, "hello_clang.json")).unwrap();
+        let p = Program::load(&fixture(level, "hello_clang.json")).unwrap();
         let b = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
-            .extract_any(&p)
+            .extract(&p)
             .unwrap_or_else(|e| panic!("{level}: {e}"));
         let calls: Vec<String> = b
+            .elements()
             .iter()
             .flat_map(|e| e.ops().map(|s| s.to_string()))
             .collect();
@@ -65,9 +70,9 @@ fn test_every_level_finds_the_call_that_is_there() {
 /// be read, only one representation existed.
 #[test]
 fn test_two_levels_of_the_same_program_refuse_to_be_compared() {
-    let llil = AnyProgram::load(&fixture("llil", "hello_clang.json")).unwrap();
-    let hlil = AnyProgram::load(&fixture("hlil", "hello_clang.json")).unwrap();
-    let err = match Comparator::from(&Algorithm::Jaccard).compare_any(
+    let llil = Program::load(&fixture("llil", "hello_clang.json")).unwrap();
+    let hlil = Program::load(&fixture("hlil", "hello_clang.json")).unwrap();
+    let err = match Comparator::from(&Algorithm::Jaccard).compare_programs(
         &llil,
         &hlil,
         &Aggregator::default(),
@@ -84,10 +89,10 @@ fn test_two_levels_of_the_same_program_refuse_to_be_compared() {
 #[test]
 fn test_a_level_compares_with_itself() {
     for (level, _) in LEVELS {
-        let a = AnyProgram::load(&fixture(level, "hello_clang.json")).unwrap();
-        let b = AnyProgram::load(&fixture(level, "hello_gcc.json")).unwrap();
+        let a = Program::load(&fixture(level, "hello_clang.json")).unwrap();
+        let b = Program::load(&fixture(level, "hello_gcc.json")).unwrap();
         let c = Comparator::from(&Algorithm::Jaccard)
-            .compare_any(&a, &b, &Aggregator::default())
+            .compare_programs(&a, &b, &Aggregator::default())
             .unwrap_or_else(|e| panic!("{level}: {e}"));
         let s = c.similarity();
         assert!(

@@ -1,18 +1,30 @@
+//! Detects software theft by comparing birthmarks extracted from binaries.
+//!
+//! The root holds only what every use touches: [`Program`], [`Error`] and
+//! [`Result`]. Everything else is reached by the module it belongs to, and by
+//! that path alone:
+//!
+//! - [`lift`] -- turning a binary into a lifted program, through a tool;
+//! - [`extract`] -- extracting a birthmark from a lifted program;
+//! - [`compare`] -- comparing two birthmarks, or two programs;
+//! - [`birthmarks`] -- what a birthmark is, and what it holds.
+
 use std::path::PathBuf;
 
 use ndarray::ShapeError;
 
-use crate::prelude::BirthmarkType;
+use crate::birthmarks::BirthmarkType;
 
-pub mod binaryninja;
-mod birthmarks;
-mod compare;
-pub mod extractor;
-pub mod ghidra;
-pub mod ida;
+mod binaryninja;
+pub mod birthmarks;
+pub mod compare;
+pub mod extract;
+mod ghidra;
+mod ida;
 pub mod lift;
-pub mod prelude;
 mod program;
+
+pub use crate::program::Program;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -34,7 +46,7 @@ pub enum Error {
     Csv(#[source] csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
     #[error("{}", render_incompatible(.0, .1))]
-    IncompatibleAnalysis(BirthmarkType, crate::prelude::Algorithm),
+    IncompatibleAnalysis(BirthmarkType, crate::compare::Algorithm),
     /// Two birthmarks lifted to different intermediate representations.
     #[error(
         "cannot compare {0} against {1}: the two are lifted to different intermediate representations, whose operation vocabularies do not correspond"
@@ -51,7 +63,7 @@ pub enum Error {
     /// wrote.
     ///
     /// The output's path is not repeated here: every error
-    /// [`crate::prelude::AnyProgram::load`] can return carries it already, and
+    /// [`crate::Program::load`] can return carries it already, and
     /// naming it twice put the same long path in the message twice.
     #[error(
         "{binary}: the lifter reported success, but what it wrote cannot be read back: {cause}",
@@ -112,7 +124,7 @@ fn render_group(errs: &[Error]) -> String {
     s
 }
 
-fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::prelude::Algorithm) -> String {
+fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::compare::Algorithm) -> String {
     let name = algorithm.name();
     format!(
         "{bt}-{name}: {name} operates on {}; use {}-{name}",
@@ -134,7 +146,7 @@ impl Error {
         Self::error_or(results, errs)
     }
 
-    pub fn error_or<T>(result: T, errs: Vec<Self>) -> Result<T> {
+    pub(crate) fn error_or<T>(result: T, errs: Vec<Self>) -> Result<T> {
         if errs.is_empty() {
             Ok(result)
         } else if errs.len() == 1 {
@@ -145,11 +157,18 @@ impl Error {
     }
 }
 
-pub trait Op {
+pub(crate) trait Op {
     /// returns the mnemonic of the operation, e.g., "ADD", "SUB", etc.
     fn mnemonic(&self) -> &str;
 
     /// returns the inputs of the operation, e.g., the source registers or memory locations.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "no birthmark reads operands yet; each lifter's tests pin how its IR fills them"
+        )
+    )]
     fn inputs(&self) -> &[String];
 
     /// returns whether this operation transfers control to another function,
@@ -158,7 +177,7 @@ pub trait Op {
     /// Each intermediate representation spells its call differently — P-Code
     /// writes `CALL`, the Hex-Rays microcode `m_call`, Binary Ninja's LLIL
     /// `LLIL_CALL` — and some name more than one. Deciding here rather than in
-    /// [`crate::extractor`] keeps that vocabulary with the lifter that owns
+    /// [`crate::extract`] keeps that vocabulary with the lifter that owns
     /// it.
     ///
     /// This method deliberately has no default. A `false` default would let a
@@ -170,10 +189,17 @@ pub trait Op {
     fn is_call(&self) -> bool;
 
     /// returns the output of the operation, e.g., the destination register or memory location.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "no birthmark reads results yet; each lifter's tests pin how its IR fills them"
+        )
+    )]
     fn ret(&self) -> Option<&str>;
 
     /// returns this operation's first operand rendered as the program's symbol
-    /// table keys it, so that [`crate::program::Program::symbol`] can resolve
+    /// table keys it, so that [`crate::program::TypedProgram::symbol`] can resolve
     /// it, or `None` when that operand cannot name a symbol.
     ///
     /// Callers choose which operations to ask — the only caller today asks
@@ -194,7 +220,7 @@ pub trait Op {
     fn symbol_key(&self) -> Option<String>;
 }
 
-pub trait Iterable {
+pub(crate) trait Iterable {
     type Item;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_>;
 }
@@ -202,8 +228,8 @@ pub trait Iterable {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::compare::Algorithm;
     use crate::lift::Ir;
-    use crate::prelude::Algorithm;
 
     /// Adding a variant makes this stop compiling, which is the reminder to
     /// add it to `rendered_errors` below as well. There is no way to

@@ -16,7 +16,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::cli;
-use oinkie::prelude::*;
+use oinkie::birthmarks::{Birthmark, BirthmarkType, Data, Kgram};
+use oinkie::{Error, Result};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
@@ -661,6 +662,8 @@ fn to_markdown(report: &Report, per_file: bool) -> String {
 mod tests {
     use super::*;
     use clap::Parser;
+    use oinkie::birthmarks::{Elements, Metadata};
+    use oinkie::lift::Ir;
 
     fn s(v: &str) -> String {
         v.to_string()

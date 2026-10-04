@@ -10,7 +10,11 @@
 //! `lifted/pcodes/` already is: a fresh lift records the absolute path it
 //! canonicalised, which is particular to the machine that ran it.
 
-use oinkie::prelude::*;
+use oinkie::Program;
+use oinkie::birthmarks::BirthmarkType;
+use oinkie::compare::{Aggregator, Algorithm, Comparator};
+use oinkie::extract::Extractor;
+use oinkie::lift::Ir;
 use std::path::{Path, PathBuf};
 
 fn fixture(name: &str) -> PathBuf {
@@ -19,7 +23,7 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn test_the_fixture_reads_back_as_the_representation_it_names() {
-    let p = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
+    let p = Program::load(&fixture("hello_clang.json")).unwrap();
     assert_eq!(p.ir(), Ir::IdaMicrocode);
     assert_eq!(p.name(), "hello_clang");
 }
@@ -39,11 +43,12 @@ fn test_the_fixture_reads_back_as_the_representation_it_names() {
 /// present.
 #[test]
 fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
-    let p = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
+    let p = Program::load(&fixture("hello_clang.json")).unwrap();
     let b = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
-        .extract_any(&p)
+        .extract(&p)
         .unwrap();
     let calls: Vec<String> = b
+        .elements()
         .iter()
         .flat_map(|e| e.ops().map(|s| s.to_string()))
         .collect();
@@ -57,9 +62,9 @@ fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
 /// rather than the programs.
 #[test]
 fn test_the_microcode_refuses_to_be_compared_with_p_code() {
-    let mcode = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
-    let pcode = AnyProgram::load(Path::new("testdata/lifted/pcodes/hello_clang.json")).unwrap();
-    let err = match Comparator::from(&Algorithm::Jaccard).compare_any(
+    let mcode = Program::load(&fixture("hello_clang.json")).unwrap();
+    let pcode = Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json")).unwrap();
+    let err = match Comparator::from(&Algorithm::Jaccard).compare_programs(
         &mcode,
         &pcode,
         &Aggregator::default(),
@@ -75,10 +80,10 @@ fn test_the_microcode_refuses_to_be_compared_with_p_code() {
 
 #[test]
 fn test_two_programs_in_the_microcode_compare() {
-    let a = AnyProgram::load(&fixture("hello_clang.json")).unwrap();
-    let b = AnyProgram::load(&fixture("hello_gcc.json")).unwrap();
+    let a = Program::load(&fixture("hello_clang.json")).unwrap();
+    let b = Program::load(&fixture("hello_gcc.json")).unwrap();
     let c = Comparator::from(&Algorithm::Jaccard)
-        .compare_any(&a, &b, &Aggregator::default())
+        .compare_programs(&a, &b, &Aggregator::default())
         .unwrap();
     let s = c.similarity();
     assert!((0.0..=1.0).contains(&s), "scored outside [0, 1]: {s}");

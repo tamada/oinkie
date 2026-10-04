@@ -4,7 +4,8 @@ use std::time::Duration;
 
 use crate::{CompareResult, cli};
 use ndarray::Array2;
-use oinkie::prelude::*;
+use oinkie::compare::Aggregator;
+use oinkie::{Error, Result};
 
 pub(crate) fn perform(opts: cli::ReviewOpts) -> Result<Vec<Duration>> {
     let start = std::time::Instant::now();

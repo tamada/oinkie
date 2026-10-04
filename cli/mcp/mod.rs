@@ -12,7 +12,7 @@ mod server;
 
 use std::time::{Duration, Instant};
 
-use oinkie::prelude::{Error, Result};
+use oinkie::{Error, Result};
 use rmcp::ServiceExt;
 
 /// Starts the server, and returns only when the client goes away.
