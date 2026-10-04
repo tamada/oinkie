@@ -75,8 +75,20 @@ pub enum Error {
     /// A lifted file naming a representation this build cannot read.
     #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
+    /// An I/O failure on a path the caller gave: a file to read, a destination
+    /// to write, a script or a working directory they named. A path oinkie
+    /// chose itself is [`Error::ToolIo`] instead, and the difference is what
+    /// [`Error::is_caller_fault`] answers from.
     #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
     Io(PathBuf, #[source] std::io::Error),
+    /// An I/O failure on a path oinkie chose rather than one the caller gave:
+    /// starting a lifting tool it found, or the scratch files it runs it with.
+    ///
+    /// Reads exactly like [`Error::Io`], since to a person at a terminal the
+    /// path and the cause are what matter. It is a separate variant because
+    /// whose path it was decides whether asking differently could have helped.
+    #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
+    ToolIo(PathBuf, #[source] std::io::Error),
     #[error("{path}: JSON error: {cause}", path = .0.display(), cause = .1)]
     Json(PathBuf, #[source] serde_json::Error),
     #[error("LapJV error: {0}")]
@@ -160,7 +172,14 @@ impl Error {
             // produced; or in the machine it runs on, which no argument can
             // change. A missing tool was never the caller's fault either, back
             // when it arrived as a `Parse`.
+            //
+            // `ToolIo` is on a path oinkie chose: the tool it found, or a
+            // scratch file. The tool's path can come from a home the caller
+            // gave, but as often from the environment or a usual location,
+            // and nothing in the error says which -- so, as with `Parse`, it
+            // does not claim the caller is at fault.
             Error::ToolNotFound { .. }
+            | Error::ToolIo(_, _)
             | Error::Csv(_)
             | Error::InvalidPcode(_)
             | Error::LapJV(_)
@@ -299,6 +318,7 @@ mod tests {
             Error::UnreadableOutput(_, _) => "UnreadableOutput",
             Error::InvalidPcode(_) => "InvalidPcode",
             Error::Io(_, _) => "Io",
+            Error::ToolIo(_, _) => "ToolIo",
             Error::Json(_, _) => "Json",
             Error::LapJV(_) => "LapJV",
             Error::Mismatch(_, _) => "Mismatch",
@@ -335,6 +355,7 @@ mod tests {
         let int_err = "x".parse::<i32>().unwrap_err();
         let shape_err = ndarray::Array2::from_shape_vec((2, 2), vec![1.0]).unwrap_err();
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
+        let tool_io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
 
         let (csv_msg, lapjv_msg, json_msg) = (
             csv_err.to_string(),
@@ -393,6 +414,11 @@ mod tests {
                 format!("IO error for missing.json: {io_msg}"),
             ),
             (
+                // the same words as `Io`: whose path it was is not the reader's concern
+                Error::ToolIo(PathBuf::from("ghidra/support/analyzeHeadless"), tool_io_err),
+                format!("IO error for ghidra/support/analyzeHeadless: {io_msg}"),
+            ),
+            (
                 Error::Json(PathBuf::from("broken.json"), json_err),
                 format!("broken.json: JSON error: {json_msg}"),
             ),
@@ -444,6 +470,14 @@ mod tests {
             candidates: &[],
         };
         assert!(!missing.is_caller_fault(), "no argument installs a tool");
+        let not_started = Error::ToolIo(
+            PathBuf::from("ghidra/support/analyzeHeadless"),
+            std::io::Error::new(std::io::ErrorKind::NotFound, "no such file"),
+        );
+        assert!(
+            !not_started.is_caller_fault(),
+            "a path oinkie chose is not one the caller can name differently"
+        );
     }
 
     /// A file the caller named is theirs to name differently, whether it is
