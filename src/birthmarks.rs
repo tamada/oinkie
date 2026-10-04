@@ -3,7 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::prelude::*;
+use crate::compare::{Algorithm, Comparator, CsvInfo};
+use crate::{Error, Result};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
@@ -84,7 +85,7 @@ impl BirthmarkType {
 
     /// The same birthmark family in another shape, used to name the pairing a
     /// rejected analysis should have used.
-    pub fn with_shape(&self, shape: Shape) -> BirthmarkType {
+    pub(crate) fn with_shape(&self, shape: Shape) -> BirthmarkType {
         match (self, shape) {
             (BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq, s) => match s {
                 Shape::Seq => BirthmarkType::FcSeq,
@@ -169,7 +170,7 @@ pub struct Metadata {
     /// The representation the program was lifted to, carried over so that two
     /// birthmarks can be told apart by more than their type.
     ///
-    /// Defaulted as a fallback for the same reason the field on `Program` is:
+    /// Defaulted as a fallback for the same reason the field on `TypedProgram` is:
     /// every birthmark this crate wrote before the field existed came from
     /// Ghidra's P-Code, since no other lifter has existed. It is not a
     /// deduction — a file that simply omits the field reads the same way —
@@ -191,7 +192,11 @@ impl Metadata {
         )
     }
 
-    pub fn parse(line: &str) -> Result<Self> {
+    /// The inverse of [`Metadata::csv_info`], kept only to test it: the score
+    /// CSV is read back by the command line's own parser, and this goes when
+    /// that format moves there (#133).
+    #[cfg(test)]
+    pub(crate) fn parse(line: &str) -> Result<Self> {
         let r = csv::ReaderBuilder::new()
             .flexible(true)
             .has_headers(false)
@@ -304,7 +309,7 @@ impl Birthmark {
     /// (`_printf` against `printf`) and nothing normalises them yet. Relaxing
     /// this is worth doing once that normalisation exists and a second lifter
     /// can be used to measure whether the result is worth trusting.
-    pub fn check_comparable_with(&self, other: &Birthmark) -> Result<()> {
+    pub(crate) fn check_comparable_with(&self, other: &Birthmark) -> Result<()> {
         if self.metadata.ir != other.metadata.ir {
             return Err(Error::IrMismatch(self.metadata.ir, other.metadata.ir));
         }
@@ -315,10 +320,6 @@ impl Birthmark {
             ));
         }
         Ok(())
-    }
-
-    pub fn comparable_with(&self, other: &Birthmark) -> bool {
-        self.check_comparable_with(other).is_ok()
     }
 
     pub fn name(&self) -> &str {
@@ -339,6 +340,11 @@ impl Birthmark {
 
     pub fn birthmark_type(&self) -> &BirthmarkType {
         &self.metadata.birthmark_type
+    }
+
+    /// The birthmark of each function, in the order they were extracted.
+    pub fn elements(&self) -> &[Elements] {
+        &self.elements
     }
 
     pub fn len(&self) -> usize {
@@ -1200,9 +1206,9 @@ mod tests {
     fn test_birthmark_comparable_with() {
         let b1 = sample_birthmark();
         let mut b2 = sample_birthmark();
-        assert!(b1.comparable_with(&b2));
+        assert!(b1.check_comparable_with(&b2).is_ok());
         b2.metadata.birthmark_type = BirthmarkType::OpSet;
-        assert!(!b1.comparable_with(&b2));
+        assert!(!b1.check_comparable_with(&b2).is_ok());
     }
 
     /// A representation mismatch must be reported as such. Before this, the
@@ -1219,7 +1225,7 @@ mod tests {
             Err(e) => panic!("expected an IrMismatch, got: {e}"),
             Ok(()) => panic!("a comparison across representations must be refused"),
         }
-        assert!(!b1.comparable_with(&b2));
+        assert!(!b1.check_comparable_with(&b2).is_ok());
     }
 
     /// The type check still reports a type mismatch rather than being

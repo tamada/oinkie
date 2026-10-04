@@ -129,7 +129,8 @@ pub fn vocabulary() -> Vocabulary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oinkie::prelude::{Aggregator, AnalysisType};
+    use oinkie::birthmarks::AnalysisType;
+    use oinkie::compare::Aggregator;
     use std::str::FromStr;
 
     /// The whole point of this module: what it advertises is what the library

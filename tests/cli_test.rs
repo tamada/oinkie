@@ -504,8 +504,7 @@ fn test_lift_escapes_a_quote_in_a_function_name() {
     let out_file = dest.join("udl.json");
     // through oinkie's own reader rather than a parser of the test's
     // choosing: this is the operation that used to fail
-    oinkie::prelude::AnyProgram::load(&out_file)
-        .expect("oinkie cannot read the file it just wrote");
+    oinkie::Program::load(&out_file).expect("oinkie cannot read the file it just wrote");
 
     let body = fs::read_to_string(&out_file).unwrap();
     let json: serde_json::Value = serde_json::from_str(&body).unwrap();

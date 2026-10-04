@@ -9,7 +9,8 @@
 #![cfg(feature = "mcp")]
 
 use assert_cmd::Command;
-use oinkie::prelude::{Algorithm, BirthmarkType};
+use oinkie::birthmarks::BirthmarkType;
+use oinkie::compare::Algorithm;
 use serde_json::Value;
 
 /// One session: initialize, then whatever else is asked, then EOF -- which is

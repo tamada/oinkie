@@ -1,4 +1,7 @@
-use crate::{Iterable, prelude::*};
+use crate::Iterable;
+use crate::birthmarks::{Birthmark, Data, Elements, Shape};
+use crate::program::{Function, Program, TypedProgram};
+use crate::{Error, Result};
 use itertools::Itertools;
 use ndarray::Array2;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -92,6 +95,15 @@ impl PairingStrategy {
     }
 }
 
+/// What a comparison's two sides say about themselves in the score CSV.
+///
+/// Public only until the score-CSV format moves to the command line, which
+/// owns it (#133).
+pub trait CsvInfo {
+    fn csv_info(&self) -> String;
+    fn names(&self) -> Vec<String>;
+}
+
 pub struct Comparison<'a, S> {
     columns: &'a S,
     rows: &'a S,
@@ -111,7 +123,7 @@ pub fn escape_csv_string(s: &str) -> String {
 }
 
 impl<'a, S: CsvInfo> Comparison<'a, S> {
-    pub fn new(
+    pub(crate) fn new(
         columns: &'a S,
         rows: &'a S,
         matrix: Array2<f64>,
@@ -327,15 +339,15 @@ fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec
 ///
 /// The programs are held by reference in a [`Comparison`], so producing one
 /// fixes the type they are reported as. Returning the result on its own lets
-/// the same computation be reported against a `Program<T>` or against the
-/// [`AnyProgram`] a caller loaded without naming `T`.
+/// the same computation be reported against a `TypedProgram<T>` or against the
+/// [`Program`] a caller loaded without naming `T`.
 type Scored = (Array2<f64>, Vec<f64>, std::time::Duration);
 
 trait ProgramComparator<T: crate::Op> {
     fn score_programs(
         &self,
-        p1: &Program<T>,
-        p2: &Program<T>,
+        p1: &TypedProgram<T>,
+        p2: &TypedProgram<T>,
         aggregator: &Aggregator,
     ) -> Result<Scored> {
         let p1_len = p1.len();
@@ -527,8 +539,8 @@ impl From<&Algorithm> for Comparator {
 impl Comparator {
     fn score_programs<T: crate::Op>(
         &self,
-        p1: &Program<T>,
-        p2: &Program<T>,
+        p1: &TypedProgram<T>,
+        p2: &TypedProgram<T>,
         aggregator: &Aggregator,
     ) -> Result<Scored> {
         match &self.inner {
@@ -541,16 +553,6 @@ impl Comparator {
             ComparatorImpl::Simpson(s) => s.score_programs(p1, p2, aggregator),
             ComparatorImpl::WeightedJaccard(wj) => wj.score_programs(p1, p2, aggregator),
         }
-    }
-
-    pub fn compare_programs<'a, T: crate::Op>(
-        &self,
-        p1: &'a Program<T>,
-        p2: &'a Program<T>,
-        aggregator: &Aggregator,
-    ) -> Result<Comparison<'a, Program<T>>> {
-        let (matrix, similarities, duration) = self.score_programs(p1, p2, aggregator)?;
-        Ok(Comparison::new(p1, p2, matrix, similarities, duration))
     }
 
     /// Compares two programs read without naming their operation type.
@@ -567,31 +569,32 @@ impl Comparator {
     /// representation could be read and nothing could form a mixed pair.
     /// Ghidra's P-Code and Binary Ninja's LLIL of the same binary do not even
     /// agree on which functions it has, which is what the refusal is for.
-    pub fn compare_any<'a>(
+    pub fn compare_programs<'a>(
         &self,
-        p1: &'a AnyProgram,
-        p2: &'a AnyProgram,
+        p1: &'a Program,
+        p2: &'a Program,
         aggregator: &Aggregator,
-    ) -> Result<Comparison<'a, AnyProgram>> {
+    ) -> Result<Comparison<'a, Program>> {
         // The mismatch is the fall-through rather than a check before the
         // match, so that there is one place where a pair is either scored or
         // refused. Written as a guard first, the match would still need an
         // arm for every mixed pair -- arms nothing can reach, since equal
         // representations are the same variant.
-        let (matrix, similarities, duration) = match (p1, p2) {
-            (AnyProgram::GhidraPcode(a), AnyProgram::GhidraPcode(b)) => {
+        use crate::program::Lifted;
+        let (matrix, similarities, duration) = match (&p1.0, &p2.0) {
+            (Lifted::GhidraPcode(a), Lifted::GhidraPcode(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
-            (AnyProgram::BinaryNinjaLlil(a), AnyProgram::BinaryNinjaLlil(b)) => {
+            (Lifted::BinaryNinjaLlil(a), Lifted::BinaryNinjaLlil(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
-            (AnyProgram::BinaryNinjaMlil(a), AnyProgram::BinaryNinjaMlil(b)) => {
+            (Lifted::BinaryNinjaMlil(a), Lifted::BinaryNinjaMlil(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
-            (AnyProgram::BinaryNinjaHlil(a), AnyProgram::BinaryNinjaHlil(b)) => {
+            (Lifted::BinaryNinjaHlil(a), Lifted::BinaryNinjaHlil(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
-            (AnyProgram::IdaMicrocode(a), AnyProgram::IdaMicrocode(b)) => {
+            (Lifted::IdaMicrocode(a), Lifted::IdaMicrocode(b)) => {
                 self.score_programs(a, b, aggregator)?
             }
             _ => return Err(Error::IrMismatch(p1.ir(), p2.ir())),
@@ -1072,6 +1075,7 @@ fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::birthmarks::{BirthmarkType, Kgram};
 
     /// `Algorithm::ALL` is written by hand, so it is held to the enum: the
     /// `match` stops compiling when a variant is added, and the assertion
@@ -1135,28 +1139,32 @@ mod tests {
     /// Dispatching on the file's representation must change nothing about the
     /// answer -- only about who chose the operation type.
     #[test]
-    fn test_compare_any_agrees_with_the_typed_comparison() {
+    fn test_compare_programs_agrees_with_the_typed_comparison() {
         let paths = [
             "testdata/lifted/pcodes/hello_clang.json",
             "testdata/lifted/pcodes/hello_gcc.json",
         ];
-        let typed: Vec<Program<crate::ghidra::Op>> = paths
+        let typed: Vec<TypedProgram<crate::ghidra::Op>> = paths
             .iter()
             .map(|p| Path::new(p).try_into().unwrap())
             .collect();
-        let any: Vec<AnyProgram> = paths
+        let any: Vec<Program> = paths
             .iter()
-            .map(|p| AnyProgram::load(Path::new(p)).unwrap())
+            .map(|p| Program::load(Path::new(p)).unwrap())
             .collect();
 
         let comparator = Algorithm::Jaccard.comparator();
         let aggregator = &Aggregator::Hungarian;
-        let expected = comparator
-            .compare_programs(&typed[0], &typed[1], aggregator)
-            .unwrap()
-            .similarity();
+        // What the typed path scores, built the way `compare_programs` builds
+        // it once the representation is known: the agreement is that the
+        // dispatch picks that path, not some other one.
+        let (matrix, similarities, duration) = comparator
+            .score_programs(&typed[0], &typed[1], aggregator)
+            .unwrap();
+        let expected =
+            Comparison::new(&typed[0], &typed[1], matrix, similarities, duration).similarity();
         let actual = comparator
-            .compare_any(&any[0], &any[1], aggregator)
+            .compare_programs(&any[0], &any[1], aggregator)
             .unwrap()
             .similarity();
         assert_eq!(actual, expected);

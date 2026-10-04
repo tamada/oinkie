@@ -5,7 +5,11 @@ mod vocabulary;
 
 use clap::Parser;
 use indicatif::ProgressBar;
-use oinkie::prelude::*;
+use oinkie::birthmarks::Birthmark;
+use oinkie::compare::{Aggregator, Comparator, escape_csv_string};
+use oinkie::extract::Extractor;
+use oinkie::lift::{Lifter, LifterBuilder};
+use oinkie::{Error, Program, Result};
 use rayon::prelude::*;
 use std::io::Write;
 use std::path::PathBuf;
@@ -25,9 +29,9 @@ where
 
 /// Reads a lifted program, letting the file say which representation it holds
 /// rather than assuming Ghidra's.
-fn load_program(path: &Path) -> Result<AnyProgram> {
+fn load_program(path: &Path) -> Result<Program> {
     let s = Instant::now();
-    let program = AnyProgram::load(path)?;
+    let program = Program::load(path)?;
     log::info!("Loading {path:?} done in {} msec", s.elapsed().as_millis());
     Ok(program)
 }
@@ -69,7 +73,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                     i + 1,
                     comparing_count
                 ));
-                let result = atype.comparator().compare_any(&p1, &p2, aggregator)?;
+                let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
                 pbar.inc(1);
                 result.store(&dest_file)?;
                 Ok(CompareResult::new(
@@ -351,7 +355,7 @@ fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> 
         return Ok(());
     }
     let p = load_program(path)?;
-    let birthmarks = extractor.extract_any(&p)?;
+    let birthmarks = extractor.extract(&p)?;
     let json =
         serde_json::to_string_pretty(&birthmarks).map_err(|e| Error::Json(dest_path.clone(), e))?;
     std::fs::write(&dest_path, json).map_err(|e| Error::Io(dest_path.clone(), e))?;
@@ -712,6 +716,8 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oinkie::birthmarks::{AnalysisType, BirthmarkType};
+    use oinkie::lift::Ir;
 
     /// A tool that is nowhere is reported the way `lift` always reported it,
     /// with `--home` offered first; anything else passes through untouched.
@@ -742,29 +748,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_find_ghidra_home_from_opt() {
-        let opt = PathBuf::from("/custom/path");
-        let result = Ir::GhidraPcode.find_home(Some(&opt)).unwrap();
-        assert_eq!(result, opt);
-    }
-
-    /// The backends that are not implemented still have to say what to set,
-    /// since a message naming GHIDRA_HOME for Binary Ninja is worse than no
-    /// message at all.
-    #[test]
-    fn test_each_backend_names_its_own_environment_variable() {
-        for (ir, env) in [
-            (Ir::GhidraPcode, "GHIDRA_HOME"),
-            (Ir::IdaMicrocode, "IDA_HOME"),
-            (Ir::BinaryNinjaLlil, "BINARY_NINJA_HOME"),
-            (Ir::BinaryNinjaMlil, "BINARY_NINJA_HOME"),
-            (Ir::BinaryNinjaHlil, "BINARY_NINJA_HOME"),
-        ] {
-            assert_eq!(ir.home_spec().env, env, "{ir}");
-        }
-    }
-
     /// Every representation names its tool, which is what let the tool stop
     /// being a separate argument.
     ///
@@ -776,7 +759,7 @@ mod tests {
     /// about, and `src/lift.rs` asserts it over every variant.
     #[test]
     fn test_a_representation_that_is_not_binary_ninjas_has_no_level() {
-        assert_eq!(oinkie::prelude::Ir::GhidraPcode.tool(), "Ghidra");
+        assert_eq!(oinkie::lift::Ir::GhidraPcode.tool(), "Ghidra");
         assert_eq!(Ir::IdaMicrocode.tool(), "IDA Pro");
         assert_eq!(Ir::BinaryNinjaMlil.tool(), "Binary Ninja");
     }

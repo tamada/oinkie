@@ -1,8 +1,8 @@
 use rustc_hash::FxHashMap;
 
 use crate::birthmarks::{Birthmark, BirthmarkType, Data, Elements, Kgram, Metadata};
-use crate::program::{Function, Program};
-use crate::{Error, Iterable, Result};
+use crate::program::{Function, TypedProgram};
+use crate::{Iterable, Result};
 
 pub struct Extractor {
     bt: BirthmarkType,
@@ -13,15 +13,10 @@ impl Extractor {
         Self { bt }
     }
 
-    pub fn extract<T: crate::Op>(&self, args: Vec<&Program<T>>) -> Result<Vec<Birthmark>> {
-        let result = args
-            .iter()
-            .map(|p| extract_birthmark_op(p, &self.bt))
-            .collect::<Vec<_>>();
-        Error::vec_result_to_result_vec(result)
-    }
-
-    pub fn extract_each<T: crate::Op>(&self, p: &Program<T>) -> Result<Birthmark> {
+    pub(crate) fn extract_each_typed<T: crate::Op>(
+        &self,
+        p: &TypedProgram<T>,
+    ) -> Result<Birthmark> {
         extract_birthmark_op(p, &self.bt)
     }
 
@@ -29,19 +24,22 @@ impl Extractor {
     ///
     /// The birthmark is the same either way; this only spares the caller from
     /// deciding which lifter produced the file, which the file already says.
-    pub fn extract_any(&self, p: &crate::program::AnyProgram) -> Result<Birthmark> {
-        use crate::program::AnyProgram;
-        match p {
-            AnyProgram::GhidraPcode(p) => self.extract_each(p),
-            AnyProgram::BinaryNinjaLlil(p) => self.extract_each(p),
-            AnyProgram::BinaryNinjaMlil(p) => self.extract_each(p),
-            AnyProgram::BinaryNinjaHlil(p) => self.extract_each(p),
-            AnyProgram::IdaMicrocode(p) => self.extract_each(p),
+    pub fn extract(&self, p: &crate::program::Program) -> Result<Birthmark> {
+        use crate::program::Lifted;
+        match &p.0 {
+            Lifted::GhidraPcode(p) => self.extract_each_typed(p),
+            Lifted::BinaryNinjaLlil(p) => self.extract_each_typed(p),
+            Lifted::BinaryNinjaMlil(p) => self.extract_each_typed(p),
+            Lifted::BinaryNinjaHlil(p) => self.extract_each_typed(p),
+            Lifted::IdaMicrocode(p) => self.extract_each_typed(p),
         }
     }
 }
 
-fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Result<Birthmark> {
+fn extract_birthmark_op<T: crate::Op>(
+    p: &TypedProgram<T>,
+    bt: &BirthmarkType,
+) -> Result<Birthmark> {
     let now = std::time::Instant::now();
     // An empty fc-* birthmark is a measurement, not a failure: a program that
     // calls nothing is a program that calls nothing, and the family simply does
@@ -86,7 +84,7 @@ fn extract_birthmark_op<T: crate::Op>(p: &Program<T>, bt: &BirthmarkType) -> Res
 }
 
 fn build_metadata<T>(
-    p: &Program<T>,
+    p: &TypedProgram<T>,
     bt: BirthmarkType,
     start_time: std::time::Instant,
 ) -> Metadata {
@@ -178,7 +176,7 @@ impl EmptyFamily {
 /// when none did, and reaching that answer means the whole program was walked
 /// anyway -- so counting here costs an extraction that has calls nothing, where
 /// counting first cost it a full traversal for a number it threw away.
-fn empty_family<T: crate::Op>(p: &Program<T>) -> Option<EmptyFamily> {
+fn empty_family<T: crate::Op>(p: &TypedProgram<T>) -> Option<EmptyFamily> {
     let mut calls = 0usize;
     for function in p.iter() {
         for op in function.iter() {
@@ -198,7 +196,7 @@ fn empty_family<T: crate::Op>(p: &Program<T>) -> Option<EmptyFamily> {
     })
 }
 
-fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<String> {
+fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &TypedProgram<T>) -> Vec<String> {
     f.iter()
         .filter(|op| op.is_call())
         .filter_map(|op| op.symbol_key())
@@ -209,7 +207,7 @@ fn extract_function_calls<T: crate::Op>(f: &Function<T>, p: &Program<T>) -> Vec<
 
 fn extract_function_calls_freq<T: crate::Op>(
     f: &Function<T>,
-    p: &Program<T>,
+    p: &TypedProgram<T>,
 ) -> FxHashMap<String, usize> {
     extract_function_calls(f, p)
         .into_iter()
@@ -227,7 +225,7 @@ mod tests {
     /// A program whose calls resolve to nothing, written by hand rather than
     /// lifted: the reader does not care where the JSON came from, and no real
     /// binary is needed to describe a call through a register.
-    fn a_program_whose_calls_resolve_to_nothing() -> crate::program::AnyProgram {
+    fn a_program_whose_calls_resolve_to_nothing() -> crate::program::Program {
         let dir = tempdir().unwrap();
         let path = dir.path().join("indirect.json");
         // CALLIND is a call, and `symbol_key` yields nothing for one: its
@@ -241,7 +239,7 @@ mod tests {
                   {"op":"CALLIND","inputs":["(register, 0x28, 8)"]}]}]}"#,
         )
         .unwrap();
-        crate::program::AnyProgram::load(&path).unwrap()
+        crate::program::Program::load(&path).unwrap()
     }
 
     /// An empty family is returned rather than refused. A program that calls
@@ -252,7 +250,7 @@ mod tests {
         let p = a_program_whose_calls_resolve_to_nothing();
         for bt in ["fc-set", "fc-seq", "fc-freq"] {
             let b = Extractor::new(BirthmarkType::try_from(bt).unwrap())
-                .extract_any(&p)
+                .extract(&p)
                 .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
             assert_eq!(b.len(), 1, "{bt}: one function was expected");
             let calls: Vec<String> = b.iter().flat_map(|e| e.ops().map(String::from)).collect();
@@ -289,14 +287,14 @@ mod tests {
                 ),
             )
             .unwrap();
-            programs.push(crate::program::AnyProgram::load(&path).unwrap());
+            programs.push(crate::program::Program::load(&path).unwrap());
         }
         let extractor = Extractor::new(BirthmarkType::try_from("fc-set").unwrap());
         let sizes: Vec<usize> = programs
             .iter()
             .map(|p| {
                 extractor
-                    .extract_any(p)
+                    .extract(p)
                     .unwrap_or_else(|e| panic!("{e}"))
                     .iter()
                     .flat_map(|e| e.ops())
@@ -334,10 +332,10 @@ mod tests {
                   {"op":"COPY","out":"(register, 0x0, 8)","inputs":["(const, 0x1, 8)"]}]}]}"#,
         )
         .unwrap();
-        let callless = crate::program::AnyProgram::load(&path).unwrap();
+        let callless = crate::program::Program::load(&path).unwrap();
         assert_eq!(any_empty_family(&callless), Some(EmptyFamily::NoCalls));
 
-        let fine = crate::program::AnyProgram::load(std::path::Path::new(
+        let fine = crate::program::Program::load(std::path::Path::new(
             "testdata/lifted/pcodes/hello_clang.json",
         ))
         .unwrap();
@@ -369,10 +367,10 @@ mod tests {
     }
 
     /// `empty_family` is generic over the operation type, and the tests hold an
-    /// `AnyProgram`. This is the one place that has to know which it is.
-    fn any_empty_family(p: &crate::program::AnyProgram) -> Option<EmptyFamily> {
-        match p {
-            crate::program::AnyProgram::GhidraPcode(p) => empty_family(p),
+    /// `Program`. This is the one place that has to know which it is.
+    fn any_empty_family(p: &crate::program::Program) -> Option<EmptyFamily> {
+        match &p.0 {
+            crate::program::Lifted::GhidraPcode(p) => empty_family(p),
             _ => unreachable!("the fixtures here are all P-Code"),
         }
     }
@@ -383,7 +381,7 @@ mod tests {
     fn test_the_op_families_are_not_refused_for_unresolvable_calls() {
         let p = a_program_whose_calls_resolve_to_nothing();
         let b = Extractor::new(BirthmarkType::try_from("op-set").unwrap())
-            .extract_any(&p)
+            .extract(&p)
             .expect("op-set does not depend on symbols");
         assert_eq!(b.len(), 1);
     }
@@ -395,7 +393,7 @@ mod tests {
     /// comes out empty.
     #[test]
     fn test_extract_function_calls_resolves_the_symbol() {
-        let program: Program<crate::ghidra::Op> =
+        let program: TypedProgram<crate::ghidra::Op> =
             std::path::Path::new("testdata/lifted/pcodes/hello_clang.json")
                 .try_into()
                 .expect("failed to load the fixture");
@@ -418,11 +416,11 @@ mod tests {
             "testdata/lifted/pcodes/hello_clang.json",
             "testdata/lifted/pcodes/hello_gcc.json",
         ] {
-            let program: Program<crate::ghidra::Op> = std::path::Path::new(fixture)
+            let program: TypedProgram<crate::ghidra::Op> = std::path::Path::new(fixture)
                 .try_into()
                 .unwrap_or_else(|e| panic!("{fixture}: {e}"));
             let birthmark = Extractor::new(BirthmarkType::FcSet)
-                .extract_each(&program)
+                .extract_each_typed(&program)
                 .unwrap_or_else(|e| panic!("{fixture}: {e}"));
             assert!(
                 birthmark.elements.iter().any(|e| !e.is_empty()),
@@ -452,7 +450,7 @@ mod tests {
                 ]}
             ]
         }"#;
-        let program: Program<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
+        let program: TypedProgram<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
 
         for bt in [
             BirthmarkType::FcSeq,
@@ -460,7 +458,7 @@ mod tests {
             BirthmarkType::FcFreq,
         ] {
             let b = Extractor::new(bt.clone())
-                .extract_each(&program)
+                .extract_each_typed(&program)
                 .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
             assert!(
                 b.iter().flat_map(|e| e.ops()).next().is_none(),
@@ -483,23 +481,11 @@ mod tests {
                 ]}
             ]
         }"#;
-        let program: Program<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
+        let program: TypedProgram<crate::ghidra::Op> = serde_json::from_str(json).unwrap();
         assert!(
             Extractor::new(BirthmarkType::OpSeq)
-                .extract_each(&program)
+                .extract_each_typed(&program)
                 .is_ok()
         );
-    }
-
-    #[test]
-    fn test_extractor_extract_multiple() {
-        // We'll just test that Extractor::extract doesn't panic on empty input
-        let extractor = Extractor::new(BirthmarkType::OpSeq);
-        // Create dummy programs if possible, or just pass empty vec
-        // We cannot easily create a Program here without parsing JSON, but passing empty vec works to cover line 58.
-        let empty_args: Vec<&crate::program::Program<crate::ghidra::Op>> = vec![];
-        let result = extractor.extract(empty_args);
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_empty());
     }
 }

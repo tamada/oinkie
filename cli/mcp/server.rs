@@ -9,7 +9,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::vocabulary::{ALGORITHMS, STRATEGIES, by_name};
-use oinkie::prelude::{Aggregator, AnalysisType, BirthmarkType, PairingStrategy};
+use oinkie::birthmarks::{AnalysisType, BirthmarkType};
+use oinkie::compare::{Aggregator, PairingStrategy};
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{Implementation, InitializeResult, ServerCapabilities};
 use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};

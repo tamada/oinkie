@@ -61,7 +61,7 @@ impl<L: Lifter> Lifter for Verifying<L> {
         // Loaded rather than merely opened: reading it is the only way to know
         // the file is one oinkie can use, and the read is what `extract` would
         // have done later anyway.
-        let program = crate::program::AnyProgram::load(output)
+        let program = crate::program::Program::load(output)
             .map_err(|e| crate::Error::UnreadableOutput(input.to_path_buf(), Box::new(e)))?;
         if program.is_empty() {
             log::warn!("{}", no_functions_message(input, self.ir));
@@ -121,7 +121,7 @@ fn no_functions_message(input: &Path, ir: Ir) -> String {
 /// in later, and while one was unreadable there was a `readable()` list and an
 /// `UnsupportedIr` to report against it. Both went when IDA's maturities
 /// landed and nothing was left to refuse. The guard that remains is the
-/// exhaustive match in [`crate::program::AnyProgram::load`], which is what
+/// exhaustive match in [`crate::program::Program::load`], which is what
 /// stops a new variant being added without a decision about reading it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -206,7 +206,7 @@ impl Ir {
     /// there is no fixed path to offer even in principle. `find_in` leaves the
     /// list out of its message when it is empty, so a Windows user is told to
     /// set `GHIDRA_HOME` and not to install it in `/opt`.
-    pub fn home_spec(&self) -> HomeSpec {
+    pub(crate) fn home_spec(&self) -> HomeSpec {
         match self {
             Ir::GhidraPcode => HomeSpec {
                 tool: self.tool(),
@@ -256,7 +256,7 @@ impl Ir {
 
     /// Finds the tool's installation: what the user passed, then the
     /// environment variable, then the usual locations.
-    pub fn find_home(&self, home_opt: Option<&Path>) -> Result<PathBuf> {
+    pub(crate) fn find_home(&self, home_opt: Option<&Path>) -> Result<PathBuf> {
         if let Some(h) = home_opt {
             return Ok(h.to_path_buf());
         }
@@ -314,7 +314,7 @@ impl std::str::FromStr for Ir {
 /// an environment variable, then the places it is usually installed -- and
 /// only the names differ, so the names are the data and the search is written
 /// once.
-pub struct HomeSpec {
+pub(crate) struct HomeSpec {
     /// The tool's name, for messages.
     pub tool: &'static str,
     /// The environment variable oinkie reads.
@@ -516,6 +516,21 @@ mod tests {
         assert_eq!(seen, vec![0, 1, 2, 3, 4]);
     }
 
+    /// Every backend has to say what to set for itself, since a message naming GHIDRA_HOME for Binary Ninja is worse than no
+    /// message at all.
+    #[test]
+    fn test_each_backend_names_its_own_environment_variable() {
+        for (ir, env) in [
+            (Ir::GhidraPcode, "GHIDRA_HOME"),
+            (Ir::IdaMicrocode, "IDA_HOME"),
+            (Ir::BinaryNinjaLlil, "BINARY_NINJA_HOME"),
+            (Ir::BinaryNinjaMlil, "BINARY_NINJA_HOME"),
+            (Ir::BinaryNinjaHlil, "BINARY_NINJA_HOME"),
+        ] {
+            assert_eq!(ir.home_spec().env, env, "{ir}");
+        }
+    }
+
     /// Every representation resolves to a tool, which is the property that let
     /// the tool stop being a separate argument.
     #[test]
@@ -626,8 +641,7 @@ mod tests {
     /// platforms where a representation names somewhere to look it names
     /// several, and on Windows -- where none of them does -- this would be
     /// asserting the same thing as every other test in this module.
-    /// [`HomeSpec`] is public with public fields, so the empty case is
-    /// reachable anywhere, and it is what a backend added before anyone has
+    /// An empty list is what a backend added before anyone has
     /// checked where it installs looks like, which is how both IDA Pro and
     /// Binary Ninja began.
     #[test]

@@ -3,7 +3,7 @@
 //! `{original_file_stem}_{hash}.json`: a policy for where the command line puts
 //! its output, so it lives with the command line rather than in the library.
 
-use oinkie::prelude::*;
+use oinkie::{Error, Result};
 use std::path::Path;
 
 /// Number of hex characters kept from the SHA-256 digest. 16 characters

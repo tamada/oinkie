@@ -4,7 +4,11 @@ pub use crate::values::Analysis;
 use crate::values::{AnalysisParser, BirthmarkTypeParser};
 use crate::vocabulary::{algorithm_parser, ir_parser, strategy_parser};
 use clap::ValueEnum;
-use oinkie::prelude::*;
+use oinkie::Result;
+use oinkie::birthmarks::{AnalysisType, BirthmarkType};
+use oinkie::compare::{Aggregator, Algorithm, Comparator, PairingStrategy};
+use oinkie::extract::Extractor;
+use oinkie::lift::Ir;
 
 #[derive(Debug, clap::Parser)]
 #[command(version, about)]

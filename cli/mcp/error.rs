@@ -77,8 +77,8 @@ mod tests {
     #[test]
     fn test_the_library_message_is_carried_through_unchanged() {
         let e = Error::IncompatibleAnalysis(
-            oinkie::prelude::BirthmarkType::OpSeq,
-            oinkie::prelude::Algorithm::Euclidean,
+            oinkie::birthmarks::BirthmarkType::OpSeq,
+            oinkie::compare::Algorithm::Euclidean,
         );
         let expected = e.to_string();
         assert!(expected.contains("op-freq-euclidean"), "{expected}");

@@ -15,7 +15,7 @@
 use crate::vocabulary::{advertised_analyses, advertised_birthmarks, describe};
 use clap::builder::{PossibleValue, TypedValueParser};
 use clap::error::ErrorKind;
-use oinkie::prelude::{AnalysisType, BirthmarkType};
+use oinkie::birthmarks::{AnalysisType, BirthmarkType};
 use std::ffi::OsStr;
 
 /// The `--analysis` value, kept as the name it was given.

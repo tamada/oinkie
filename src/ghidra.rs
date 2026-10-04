@@ -147,7 +147,7 @@ impl Serialize for Value {
 
 #[cfg(test)]
 mod tests {
-    use crate::program::Program;
+    use crate::program::TypedProgram;
     use crate::{Iterable, Op};
 
     use super::*;
@@ -177,19 +177,19 @@ mod tests {
         // Through the loader rather than `from_reader` on a bare `File`, so
         // that the pattern #51 removed is not left here to be copied.
         let path = std::path::PathBuf::from("testdata/lifted/pcodes/hello_clang.json");
-        let r: Program<super::Op> = path.try_into().expect("Failed to parse JSON");
+        let r: TypedProgram<super::Op> = path.try_into().expect("Failed to parse JSON");
         assert_eq!(r.name(), "hello_clang");
         assert_eq!(r.path(), std::path::Path::new("testdata/bin/hello_clang"));
         assert_eq!(r.len(), 1);
 
         let f1 = r.iter().next().unwrap();
         assert_eq!(f1.name(), "entry");
-        let op1 = f1.get(0).unwrap();
+        let op1 = f1.iter().next().unwrap();
         assert_eq!(op1.mnemonic(), "CALL");
         assert_eq!(op1.inputs().len(), 2);
         assert_eq!(op1.ret(), None);
 
-        let op2 = f1.get(1).unwrap();
+        let op2 = f1.iter().nth(1).unwrap();
         assert_eq!(op2.mnemonic(), "COPY");
         assert_eq!(op2.inputs().len(), 1);
         assert_eq!(op2.ret(), Some("(unique, 0x10000009, 8)"));
@@ -233,6 +233,6 @@ mod tests {
         // Through the loader rather than `from_reader` on a bare `File`, so
         // that the pattern #51 removed is not left here to be copied.
         let path = std::path::PathBuf::from("testdata/lifted/pcodes/hello_gcc.json");
-        let _r: Program<super::Op> = path.try_into().expect("Failed to parse JSON");
+        let _r: TypedProgram<super::Op> = path.try_into().expect("Failed to parse JSON");
     }
 }

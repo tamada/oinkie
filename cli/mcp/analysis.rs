@@ -10,7 +10,10 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use oinkie::prelude::*;
+use oinkie::birthmarks::{AnalysisType, Birthmark, BirthmarkType};
+use oinkie::compare::{Aggregator, Comparator, PairingStrategy};
+use oinkie::extract::Extractor;
+use oinkie::{Error, Program, Result};
 use rayon::prelude::*;
 use rmcp::schemars;
 use serde::Serialize;
@@ -97,8 +100,8 @@ pub fn extract(
                     duration_ms: ms(start.elapsed()),
                 });
             }
-            let program = AnyProgram::load(input)?;
-            let birthmark = extractor.extract_any(&program)?;
+            let program = Program::load(input)?;
+            let birthmark = extractor.extract(&program)?;
             let json = serde_json::to_string_pretty(&birthmark)
                 .map_err(|e| Error::Json(out.clone(), e))?;
             std::fs::write(&out, json).map_err(|e| Error::Io(out.clone(), e))?;
@@ -128,11 +131,13 @@ pub fn run(
         .enumerate()
         .par_bridge()
         .map(|(i, (left, right))| {
-            let mut p1 = AnyProgram::load(left)?;
+            let mut p1 = Program::load(left)?;
             p1.set_json_path(left.clone());
-            let mut p2 = AnyProgram::load(right)?;
+            let mut p2 = Program::load(right)?;
             p2.set_json_path(right.clone());
-            let comparison = analysis.comparator().compare_any(&p1, &p2, aggregator)?;
+            let comparison = analysis
+                .comparator()
+                .compare_programs(&p1, &p2, aggregator)?;
             if let Some(d) = dest {
                 comparison.store(d.join(format!("{i:05}.csv")))?;
             }

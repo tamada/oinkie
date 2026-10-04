@@ -13,7 +13,9 @@
 //! tests hold each one to the library's `ALL`.
 
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
-use oinkie::prelude::{Algorithm, BirthmarkType, Ir, PairingStrategy};
+use oinkie::birthmarks::BirthmarkType;
+use oinkie::compare::{Algorithm, PairingStrategy};
+use oinkie::lift::Ir;
 
 /// How far the completion and help lists go for k-grams.
 ///
@@ -235,7 +237,7 @@ pub fn describe(birthmark: &BirthmarkType) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oinkie::prelude::AnalysisType;
+    use oinkie::birthmarks::AnalysisType;
 
     /// A table is written by hand, so it is held to the library's list: the
     /// same values, each once. Without this a variant added to the library

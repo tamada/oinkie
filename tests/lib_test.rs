@@ -1,10 +1,14 @@
-use oinkie::ghidra::Op;
-use oinkie::prelude::*;
-use std::path::PathBuf;
+//! The library used the way an outside crate uses it: through the public API
+//! alone, with no knowledge of which tool lifted a program.
 
-fn load_program(path: &str) -> Program<Op> {
-    let p_path = PathBuf::from(path);
-    p_path.try_into().unwrap()
+use oinkie::Program;
+use oinkie::birthmarks::BirthmarkType;
+use oinkie::compare::{Aggregator, Algorithm, PairingStrategy};
+use oinkie::extract::Extractor;
+use std::path::Path;
+
+fn load_program(path: &str) -> Program {
+    Program::load(Path::new(path)).unwrap()
 }
 
 #[test]
@@ -32,11 +36,8 @@ fn test_extractor_and_comparator() {
 
     for (bt, algo) in combinations {
         let extractor = Extractor::new(bt.clone());
-        let b1 = extractor.extract_each(&p1).unwrap();
-        let b2 = extractor.extract_each(&p2).unwrap();
-
-        let extracted = extractor.extract(vec![&p1, &p2]).unwrap();
-        assert_eq!(extracted.len(), 2);
+        let b1 = extractor.extract(&p1).unwrap();
+        let b2 = extractor.extract(&p2).unwrap();
 
         let comparator = algo.comparator();
 
@@ -107,8 +108,8 @@ fn test_empty_comparisons() {
     let ext1 = Extractor::new(BirthmarkType::OpSeq);
     let ext2 = Extractor::new(BirthmarkType::FcSeq);
 
-    let b1 = ext1.extract_each(&p1).unwrap();
-    let b2 = ext2.extract_each(&p1).unwrap();
+    let b1 = ext1.extract(&p1).unwrap();
+    let b2 = ext2.extract(&p1).unwrap();
 
     let comparator = Algorithm::Jaccard.comparator();
     let result = comparator.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian);
