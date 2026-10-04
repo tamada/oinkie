@@ -125,6 +125,7 @@ fn no_functions_message(input: &Path, ir: Ir) -> String {
 /// stops a new variant being added without a decision about reading it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
+#[non_exhaustive]
 pub enum Ir {
     /// Ghidra's P-Code, as refined by the decompiler — what `HighFunction`
     /// yields, rather than raw lifted P-Code.

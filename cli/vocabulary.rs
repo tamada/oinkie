@@ -215,7 +215,18 @@ pub fn advertised_analyses() -> Vec<String> {
 ///
 /// Phrased without a trailing full stop, as clap renders a short help.
 pub fn describe(birthmark: &BirthmarkType) -> String {
-    match birthmark {
+    own_description(birthmark).unwrap_or_else(|| format!("the {birthmark} birthmark of a program"))
+}
+
+/// The description written for a birthmark family, or `None` for one nobody
+/// has written yet.
+///
+/// `BirthmarkType` is `#[non_exhaustive]`, so this `match` needs a wildcard
+/// arm and the compiler no longer stops at a family added to the library.
+/// A test does instead: every family `BirthmarkType::all` lists must have its
+/// own description here, and the library holds `all` to the enum.
+fn own_description(birthmark: &BirthmarkType) -> Option<String> {
+    Some(match birthmark {
         BirthmarkType::FcSeq => "the sequence of method calls in a program".to_string(),
         BirthmarkType::FcFreq => "the frequency of method calls in a program".to_string(),
         BirthmarkType::FcSet => "the set of method calls in a program".to_string(),
@@ -231,7 +242,8 @@ pub fn describe(birthmark: &BirthmarkType) -> String {
         BirthmarkType::OpKgramSet(k) => {
             format!("the set of {k}-grams of operations in a program")
         }
-    }
+        _ => return None,
+    })
 }
 
 #[cfg(test)]
@@ -351,6 +363,19 @@ mod tests {
             assert!(
                 !offered.iter().any(|n| n == name),
                 "{name} is refused but still advertised"
+            );
+        }
+    }
+
+    /// The wildcard arm in `own_description` is for families nobody has
+    /// described yet, and this says there are none: every family the library
+    /// lists has words of its own, not the generic fallback.
+    #[test]
+    fn test_every_birthmark_family_has_its_own_description() {
+        for bt in BirthmarkType::all(MAX_ADVERTISED_K) {
+            assert!(
+                own_description(&bt).is_some(),
+                "{bt} is described only by the fallback; write it a description"
             );
         }
     }

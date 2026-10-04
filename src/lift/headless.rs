@@ -92,7 +92,7 @@ impl Headless<'_> {
         // unstable. A relative home therefore passes the caller's own
         // existence check and then fails to spawn.
         let program = std::fs::canonicalize(self.program)
-            .map_err(|e| Error::Io(self.program.to_path_buf(), e))?;
+            .map_err(|e| Error::ToolIo(self.program.to_path_buf(), e))?;
 
         let mut command = std::process::Command::new(&program);
         command
@@ -100,7 +100,7 @@ impl Headless<'_> {
             .current_dir(&invocation.work_dir);
 
         log::info!("Executing {}: {:?}", self.tool, command);
-        let result = command.output().map_err(|e| Error::Io(program, e))?;
+        let result = command.output().map_err(|e| Error::ToolIo(program, e))?;
         if !result.status.success() {
             return Err(Error::Parse(format!(
                 "{} failed with status {}.\nSTDOUT: {}\nSTDERR: {}",
@@ -126,7 +126,7 @@ impl Headless<'_> {
                 let dir = Self::temp_dir("oinkie_script")?;
                 let (name, text) = self.default_script;
                 let path = dir.path().join(name);
-                std::fs::write(&path, text).map_err(|e| Error::Io(path.clone(), e))?;
+                std::fs::write(&path, text).map_err(|e| Error::ToolIo(path.clone(), e))?;
                 Ok((path, Some(dir)))
             }
         }
@@ -158,7 +158,7 @@ impl Headless<'_> {
         tempfile::Builder::new()
             .prefix(prefix)
             .tempdir()
-            .map_err(|e| Error::Io(PathBuf::from(prefix), e))
+            .map_err(|e| Error::ToolIo(PathBuf::from(prefix), e))
     }
 
     fn resolve(input: &Path, work_dir: PathBuf, script: PathBuf) -> Result<Invocation> {
@@ -513,6 +513,31 @@ mod tests {
     /// the effect is that a relative home such as `ghidra_rel` passes the
     /// caller's own existence check and then fails to spawn with "No such file or
     /// directory" naming a path that does exist.
+    /// A tool that cannot be started is reported on the path oinkie chose for
+    /// it, as `ToolIo` rather than `Io`: the caller did not name that path,
+    /// so asking differently is not what would fix it.
+    #[test]
+    fn test_a_tool_that_cannot_be_started_is_not_blamed_on_the_caller() {
+        let dir = tempfile::Builder::new()
+            .prefix("oinkie_t")
+            .tempdir()
+            .unwrap();
+        let input = dir.path().join("sample.bin");
+        std::fs::write(&input, b"binary").unwrap();
+
+        let mut h = headless(None, None);
+        let nowhere = dir.path().join("no-such-tool");
+        h.program = &nowhere;
+        let err = h
+            .lift(&input, &dir.path().join("out.json"), |_| vec![])
+            .expect_err("there is no tool to run");
+        assert!(
+            matches!(&err, Error::ToolIo(p, _) if p == &nowhere),
+            "not reported on the tool's own path: {err:?}"
+        );
+        assert!(!err.is_caller_fault(), "{err}");
+    }
+
     #[cfg(unix)]
     #[test]
     fn test_a_relative_program_is_resolved_before_the_directory_changes() {

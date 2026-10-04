@@ -37,6 +37,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// `map_err(Error::Csv)` at the call site says more than a conversion hidden
 /// inside a `?`.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum Error {
     #[error("{}", render_group(.0))]
     Array(Vec<Self>),
@@ -74,8 +75,20 @@ pub enum Error {
     /// A lifted file naming a representation this build cannot read.
     #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
+    /// An I/O failure on a path the caller gave: a file to read, a destination
+    /// to write, a script or a working directory they named. A path oinkie
+    /// chose itself is [`Error::ToolIo`] instead, and the difference is what
+    /// [`Error::is_caller_fault`] answers from.
     #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
     Io(PathBuf, #[source] std::io::Error),
+    /// An I/O failure on a path oinkie chose rather than one the caller gave:
+    /// starting a lifting tool it found, or the scratch files it runs it with.
+    ///
+    /// Reads exactly like [`Error::Io`], since to a person at a terminal the
+    /// path and the cause are what matter. It is a separate variant because
+    /// whose path it was decides whether asking differently could have helped.
+    #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
+    ToolIo(PathBuf, #[source] std::io::Error),
     #[error("{path}: JSON error: {cause}", path = .0.display(), cause = .1)]
     Json(PathBuf, #[source] serde_json::Error),
     #[error("LapJV error: {0}")]
@@ -134,6 +147,66 @@ fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::compare::Algorithm
 }
 
 impl Error {
+    /// Whether the caller could have avoided this by asking differently: a
+    /// name, a pairing or a number they supplied, or a file they named.
+    ///
+    /// Decided here, by an exhaustive match, because this is the one place the
+    /// match can stay exhaustive. `Error` is `#[non_exhaustive]`, so a crate
+    /// that matches on it has to have a wildcard arm, and a new variant would
+    /// fall into that arm unclassified. Inside the crate that defines it, a
+    /// new variant stops the build here until someone decides which it is.
+    pub fn is_caller_fault(&self) -> bool {
+        match self {
+            // A name, a pairing or a number that the caller supplied.
+            Error::BirthmarkType(_)
+            | Error::IncompatibleAnalysis(_, _)
+            | Error::Mismatch(_, _)
+            | Error::IrMismatch(_, _)
+            | Error::ParseFloat(_, _)
+            | Error::ParseInt(_, _) => true,
+
+            // A file the caller named, which they can name differently.
+            Error::Io(_, _) | Error::Json(_, _) => true,
+
+            // Something went wrong inside, or in a file oinkie itself
+            // produced; or in the machine it runs on, which no argument can
+            // change. A missing tool was never the caller's fault either, back
+            // when it arrived as a `Parse`.
+            //
+            // `ToolIo` is on a path oinkie chose: the tool it found, or a
+            // scratch file. The tool's path can come from a home the caller
+            // gave, but as often from the environment or a usual location,
+            // and nothing in the error says which -- so, as with `Parse`, it
+            // does not claim the caller is at fault.
+            Error::ToolNotFound { .. }
+            | Error::ToolIo(_, _)
+            | Error::Csv(_)
+            | Error::InvalidPcode(_)
+            | Error::LapJV(_)
+            | Error::ShapeError(_)
+            | Error::UnreadableOutput(_, _) => false,
+
+            // `Parse` is a catch-all carrying a string, and the strings it
+            // carries come from both sides: "Invalid aggregator" is the
+            // caller's, while "could not start N lift jobs" is not. Nothing in
+            // the variant says which.
+            //
+            // So it does not claim the caller is at fault. Telling a caller it
+            // asked wrongly when it did not is the more expensive mistake --
+            // it will try different arguments, repeatedly, against something
+            // no argument can fix. A caller wanting a definite answer for a
+            // value it took (the aggregator is what reaches `Parse` that way)
+            // should validate that value itself rather than rely on this.
+            Error::Parse(_) => false,
+
+            // A group is the caller's fault only if all of it is. One internal
+            // failure in a batch makes the whole batch an internal failure,
+            // since saying "you asked wrongly" about it would be wrong for
+            // that one.
+            Error::Array(errs) => errs.iter().all(Error::is_caller_fault),
+        }
+    }
+
     pub fn vec_result_to_result_vec<T>(vec: Vec<Result<T>>) -> Result<Vec<T>> {
         let mut results = Vec::new();
         let mut errs = Vec::new();
@@ -245,6 +318,7 @@ mod tests {
             Error::UnreadableOutput(_, _) => "UnreadableOutput",
             Error::InvalidPcode(_) => "InvalidPcode",
             Error::Io(_, _) => "Io",
+            Error::ToolIo(_, _) => "ToolIo",
             Error::Json(_, _) => "Json",
             Error::LapJV(_) => "LapJV",
             Error::Mismatch(_, _) => "Mismatch",
@@ -281,6 +355,7 @@ mod tests {
         let int_err = "x".parse::<i32>().unwrap_err();
         let shape_err = ndarray::Array2::from_shape_vec((2, 2), vec![1.0]).unwrap_err();
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
+        let tool_io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
 
         let (csv_msg, lapjv_msg, json_msg) = (
             csv_err.to_string(),
@@ -339,6 +414,11 @@ mod tests {
                 format!("IO error for missing.json: {io_msg}"),
             ),
             (
+                // the same words as `Io`: whose path it was is not the reader's concern
+                Error::ToolIo(PathBuf::from("ghidra/support/analyzeHeadless"), tool_io_err),
+                format!("IO error for ghidra/support/analyzeHeadless: {io_msg}"),
+            ),
+            (
                 Error::Json(PathBuf::from("broken.json"), json_err),
                 format!("broken.json: JSON error: {json_msg}"),
             ),
@@ -369,6 +449,75 @@ mod tests {
                 "Ghidra not found. Give its home directory, set GHIDRA_HOME, or install it in one of: /opt/ghidra, /usr/local/ghidra".to_string(),
             ),
         ]
+    }
+
+    /// `Parse` carries a string and nothing else, and those strings come from
+    /// both sides. Since the variant cannot say which, it does not claim the
+    /// caller is at fault -- no argument would fix this one.
+    #[test]
+    fn test_the_catch_all_does_not_claim_the_caller_is_at_fault() {
+        let e = Error::Parse("could not start 4 lift jobs".to_string());
+        assert!(!e.is_caller_fault());
+    }
+
+    #[test]
+    fn test_a_bad_name_is_the_callers_fault_and_a_broken_file_of_ours_is_not() {
+        assert!(Error::BirthmarkType("nonsense".to_string()).is_caller_fault());
+        assert!(!Error::InvalidPcode(9999).is_caller_fault());
+        let missing = Error::ToolNotFound {
+            tool: "Ghidra",
+            env: "GHIDRA_HOME",
+            candidates: &[],
+        };
+        assert!(!missing.is_caller_fault(), "no argument installs a tool");
+        let not_started = Error::ToolIo(
+            PathBuf::from("ghidra/support/analyzeHeadless"),
+            std::io::Error::new(std::io::ErrorKind::NotFound, "no such file"),
+        );
+        assert!(
+            !not_started.is_caller_fault(),
+            "a path oinkie chose is not one the caller can name differently"
+        );
+    }
+
+    /// A file the caller named is theirs to name differently, whether it is
+    /// missing or is not the JSON it should be.
+    #[test]
+    fn test_a_file_the_caller_named_is_the_callers_fault() {
+        let missing = Error::Io(
+            PathBuf::from("no/such.json"),
+            std::io::Error::new(std::io::ErrorKind::NotFound, "no such file"),
+        );
+        assert!(missing.is_caller_fault());
+        let json = serde_json::from_str::<i32>("nope").unwrap_err();
+        assert!(Error::Json(PathBuf::from("bad.json"), json).is_caller_fault());
+    }
+
+    /// A group of nothing but the caller's own mistakes is still theirs.
+    /// Asserted in both directions, or `all` could be inverted and only one
+    /// of these would notice.
+    #[test]
+    fn test_a_group_of_the_callers_mistakes_is_the_callers_fault() {
+        let e = Error::Array(vec![
+            Error::BirthmarkType("nonsense".to_string()),
+            Error::BirthmarkType("also nonsense".to_string()),
+        ]);
+        assert!(e.is_caller_fault());
+    }
+
+    /// One internal failure makes the batch internal. Reporting "you asked
+    /// wrongly" for a group containing something the caller could not have
+    /// avoided would be wrong about that one.
+    #[test]
+    fn test_one_internal_failure_makes_the_whole_group_internal() {
+        let e = Error::Array(vec![
+            Error::BirthmarkType("the caller's".to_string()),
+            Error::UnreadableOutput(
+                PathBuf::from("bin/sample"),
+                Box::new(Error::Parse("ours".to_string())),
+            ),
+        ]);
+        assert!(!e.is_caller_fault());
     }
 
     #[test]
