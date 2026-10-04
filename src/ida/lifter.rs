@@ -1,6 +1,5 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 
 use crate::lift::Lifter;
 use crate::lift::headless::{Headless, Invocation};
@@ -8,9 +7,6 @@ use crate::{Error, Result};
 
 pub const DEFAULT_IDA_SCRIPT: &str =
     include_str!("../../assets/lifters/ida/scripts/MicrocodeLifter.py");
-
-/// Said at most once per process, however many files `-j` lifts at a time.
-static WARNED: Once = Once::new();
 
 /// Lifts with IDA Pro's headless `idat`, at one maturity of the microcode.
 pub struct IdaLifter {
@@ -30,6 +26,18 @@ impl IdaLifter {
 }
 
 impl Lifter for IdaLifter {
+    /// The cloud-upload disclosure, when this installation has a cloud
+    /// decompiler.
+    ///
+    /// Returned instead of printed, and meant to be shown *before* the first
+    /// lift: a warning that arrives once a function has left the machine is a
+    /// log entry rather than a warning. It is also meant to be shown where a
+    /// verbosity setting cannot hide it, since a privacy disclosure that can be
+    /// turned off is one the user never agreed to turn off.
+    fn notice(&self) -> Option<String> {
+        crate::ida::cloud::warning(&self.home)
+    }
+
     fn lift(&self, input: &Path, output: &Path) -> Result<()> {
         let idat = self.home.join("idat");
         if !idat.exists() {
@@ -37,18 +45,6 @@ impl Lifter for IdaLifter {
                 "IDA Pro's headless analyser not found at {:?}",
                 idat
             )));
-        }
-
-        // Straight to stderr, not through `log`. `--level error` and
-        // `--level off` are ordinary things to pass, and either would silence
-        // a disclosure about where someone's code is going. A privacy warning
-        // that a verbosity flag can turn off is one the user never agreed to
-        // turn off.
-        //
-        // Before the process starts, because a warning that arrives once the
-        // function has left the machine is a log entry rather than a warning.
-        if let Some(message) = crate::ida::cloud::warning(&self.home) {
-            WARNED.call_once(|| eprintln!("oinkie: {message}"));
         }
 
         Headless {
@@ -141,6 +137,31 @@ mod tests {
                 i.input.clone().into_os_string(),
             ]
         );
+    }
+
+    /// The notice is the cloud warning, and only when there is something to
+    /// warn about. An installation with only local decompilers owes nothing.
+    #[test]
+    fn test_the_notice_is_the_cloud_warning_and_only_then() {
+        let install = |plugins: &[&str]| {
+            let dir = tempfile::tempdir().unwrap();
+            std::fs::create_dir(dir.path().join("plugins")).unwrap();
+            for p in plugins {
+                std::fs::write(dir.path().join("plugins").join(p), b"").unwrap();
+            }
+            dir
+        };
+
+        let cloud = install(&["hexcx64.so"]);
+        let lifter = IdaLifter::new(cloud.path().to_path_buf(), None, None);
+        let notice = lifter
+            .notice()
+            .expect("a cloud decompiler is owed a notice");
+        assert!(notice.contains("hexcx64.so"), "{notice}");
+
+        let local = install(&["hex64.so"]);
+        let lifter = IdaLifter::new(local.path().to_path_buf(), None, None);
+        assert_eq!(lifter.notice(), None);
     }
 
     /// An installation with no `idat` is named, rather than reported as

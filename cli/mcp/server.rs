@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use clap::ValueEnum;
-use oinkie::prelude::{Aggregator, Algorithm, AnalysisType, BirthmarkType, PairingStrategy};
+use crate::vocabulary::{ALGORITHMS, STRATEGIES, by_name};
+use oinkie::prelude::{Aggregator, AnalysisType, BirthmarkType, PairingStrategy};
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::{Implementation, InitializeResult, ServerCapabilities};
 use rmcp::{ErrorData, ServerHandler, schemars, tool, tool_handler, tool_router};
@@ -78,7 +78,7 @@ impl Oinkie {
     }
 
     fn strategy(name: Option<&str>) -> Result<PairingStrategy, ErrorData> {
-        PairingStrategy::from_str(name.unwrap_or("all-and-self"), true).map_err(refuse)
+        by_name(STRATEGIES, name.unwrap_or("all-and-self")).map_err(refuse)
     }
 
     fn aggregator(name: Option<&str>) -> Result<Aggregator, ErrorData> {
@@ -311,7 +311,7 @@ impl Oinkie {
     ) -> Result<Json<Compared>, ErrorData> {
         let files = self.resolve_all(&params.files)?;
         let dest = self.dest(params.dest.as_deref())?;
-        let algorithm = Algorithm::from_str(params.algorithm.as_deref().unwrap_or("jaccard"), true)
+        let algorithm = by_name(ALGORITHMS, params.algorithm.as_deref().unwrap_or("jaccard"))
             .map_err(refuse)?;
         let strategy = Self::strategy(params.strategy.as_deref())?;
         let aggregator = Self::aggregator(params.aggregator.as_deref())?;

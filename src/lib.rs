@@ -30,10 +30,6 @@ pub enum Error {
     Array(Vec<Self>),
     #[error("{0}: unknown birthmark type")]
     BirthmarkType(String),
-    /// clap's own message already begins `error: `, so this adds no prefix of
-    /// its own. It used to read `Clap error: error: ...` (#62).
-    #[error("{0}")]
-    Clap(#[source] clap::Error),
     #[error("CSV error: {0}")]
     Csv(#[source] csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
@@ -82,6 +78,28 @@ pub enum Error {
     ParseInt(String, #[source] std::num::ParseIntError),
     #[error("Shape error: {0}")]
     ShapeError(#[source] ShapeError),
+    /// A lifting tool's installation could not be found: none was given, its
+    /// environment variable is unset, and it is in none of the usual places.
+    ///
+    /// Structured rather than a sentence, so that whoever shows it can say how
+    /// to supply one in their own terms -- a flag, a setting -- instead of the
+    /// library naming a way that only one caller has.
+    #[error("{}", render_tool_not_found(.tool, .env, .candidates))]
+    ToolNotFound {
+        tool: &'static str,
+        env: &'static str,
+        candidates: &'static [&'static str],
+    },
+}
+
+/// What a missing installation says without naming how a caller supplies one.
+fn render_tool_not_found(tool: &str, env: &str, candidates: &[&str]) -> String {
+    let looked_in = if candidates.is_empty() {
+        String::new()
+    } else {
+        format!(", or install it in one of: {}", candidates.join(", "))
+    };
+    format!("{tool} not found. Give its home directory, set {env}{looked_in}")
 }
 
 /// Numbered from one, because this is read by someone counting which of their
@@ -95,7 +113,7 @@ fn render_group(errs: &[Error]) -> String {
 }
 
 fn render_incompatible(bt: &BirthmarkType, algorithm: &crate::prelude::Algorithm) -> String {
-    let name = algorithm.cli_name();
+    let name = algorithm.name();
     format!(
         "{bt}-{name}: {name} operates on {}; use {}-{name}",
         algorithm.shape().description(),
@@ -195,7 +213,6 @@ mod tests {
         match e {
             Error::Array(_) => "Array",
             Error::BirthmarkType(_) => "BirthmarkType",
-            Error::Clap(_) => "Clap",
             Error::Csv(_) => "Csv",
             Error::IncompatibleAnalysis(_, _) => "IncompatibleAnalysis",
             Error::IrMismatch(_, _) => "IrMismatch",
@@ -209,6 +226,7 @@ mod tests {
             Error::ParseFloat(_, _) => "ParseFloat",
             Error::ParseInt(_, _) => "ParseInt",
             Error::ShapeError(_) => "ShapeError",
+            Error::ToolNotFound { .. } => "ToolNotFound",
         }
     }
 
@@ -237,7 +255,6 @@ mod tests {
         let int_err = "x".parse::<i32>().unwrap_err();
         let shape_err = ndarray::Array2::from_shape_vec((2, 2), vec![1.0]).unwrap_err();
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
-        let clap_err = clap::Error::raw(clap::error::ErrorKind::InvalidValue, "boom");
 
         let (csv_msg, lapjv_msg, json_msg) = (
             csv_err.to_string(),
@@ -249,7 +266,7 @@ mod tests {
             int_err.to_string(),
             shape_err.to_string(),
         );
-        let (io_msg, clap_msg) = (io_err.to_string(), clap_err.to_string());
+        let io_msg = io_err.to_string();
 
         vec![
             (
@@ -264,13 +281,6 @@ mod tests {
             (
                 Error::BirthmarkType("nonsense".to_string()),
                 "nonsense: unknown birthmark type".to_string(),
-            ),
-            (
-                // No prefix of its own: clap's message already begins
-                // "error: ", and this used to put "Clap error: " in front of
-                // that (#62).
-                Error::Clap(clap_err),
-                clap_msg.clone(),
             ),
             (Error::Csv(csv_err), format!("CSV error: {csv_msg}")),
             (
@@ -324,6 +334,14 @@ mod tests {
                 format!("x: Parse int error {int_msg}"),
             ),
             (Error::ShapeError(shape_err), format!("Shape error: {shape_msg}")),
+            (
+                Error::ToolNotFound {
+                    tool: "Ghidra",
+                    env: "GHIDRA_HOME",
+                    candidates: &["/opt/ghidra", "/usr/local/ghidra"],
+                },
+                "Ghidra not found. Give its home directory, set GHIDRA_HOME, or install it in one of: /opt/ghidra, /usr/local/ghidra".to_string(),
+            ),
         ]
     }
 

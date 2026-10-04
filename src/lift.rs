@@ -1,5 +1,4 @@
 use crate::Result;
-use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -7,6 +6,19 @@ pub(crate) mod headless;
 
 pub trait Lifter {
     fn lift(&self, input: &Path, output: &Path) -> Result<()>;
+
+    /// Something the user is owed before the first lift starts, or `None`.
+    ///
+    /// Returned rather than printed, because whether and how to show it is the
+    /// caller's to decide -- but a caller is expected to show it, and to show
+    /// it where a verbosity setting cannot hide it. A notice is for a fact the
+    /// user would want to know before the work begins, not a log entry about
+    /// work already done.
+    ///
+    /// None by default: most lifters have nothing to disclose.
+    fn notice(&self) -> Option<String> {
+        None
+    }
 }
 
 /// A lifter whose output is read back before the lift is called a success.
@@ -20,7 +32,7 @@ pub trait Lifter {
 /// A writer is exactly the kind of code that looks finished while producing
 /// something nothing can read. `analyzeHeadless` exits 0 whether or not its
 /// post-script threw; the built-in script wrote unescaped names for as long as
-/// it existed; and a replacement passed to `--script` is arbitrary Java that
+/// it existed; and a replacement script the caller supplies is arbitrary Java that
 /// oinkie never sees. Without this, all three end the same way: a directory of
 /// files that look lifted, and a failure at `extract` naming a line and column
 /// in a file the reader did not know existed.
@@ -40,6 +52,10 @@ struct Verifying<L> {
 }
 
 impl<L: Lifter> Lifter for Verifying<L> {
+    fn notice(&self) -> Option<String> {
+        self.inner.notice()
+    }
+
     fn lift(&self, input: &Path, output: &Path) -> Result<()> {
         self.inner.lift(input, output)?;
         // Loaded rather than merely opened: reading it is the only way to know
@@ -107,9 +123,8 @@ fn no_functions_message(input: &Path, ir: Ir) -> String {
 /// landed and nothing was left to refuse. The guard that remains is the
 /// exhaustive match in [`crate::program::AnyProgram::load`], which is what
 /// stops a new variant being added without a decision about reading it.
-#[derive(Debug, ValueEnum, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
-#[clap(rename_all = "kebab-case")]
 pub enum Ir {
     /// Ghidra's P-Code, as refined by the decompiler — what `HighFunction`
     /// yields, rather than raw lifted P-Code.
@@ -119,10 +134,10 @@ pub enum Ir {
     /// installation with a cloud decompiler each function is sent to Hex-Rays'
     /// servers.
     ///
-    /// clap renders only this first paragraph as the value's description in
-    /// `--help` and in the shell completions, so the disclosure belongs in it:
-    /// a reader choosing a representation should see it before choosing, not
-    /// after. What is left out of it is detail, not warning.
+    /// The disclosure is in the first paragraph because that is the paragraph a
+    /// reader sees first: someone choosing a representation should learn it
+    /// before choosing, not after. What is left out of it is detail, not
+    /// warning.
     ///
     /// Read at `MMAT_LVARS`, the last of the decompiler's maturities and the
     /// one the pseudocode is rendered from. The earlier maturities are not
@@ -150,6 +165,19 @@ pub enum Ir {
 }
 
 impl Ir {
+    /// Every representation, in the order they are declared.
+    ///
+    /// Written out because nothing derives it, so a test holds it to the enum
+    /// with an exhaustive `match`: a variant added without being listed here
+    /// stops the build instead of quietly going unlisted.
+    pub const ALL: &'static [Ir] = &[
+        Ir::GhidraPcode,
+        Ir::IdaMicrocode,
+        Ir::BinaryNinjaLlil,
+        Ir::BinaryNinjaMlil,
+        Ir::BinaryNinjaHlil,
+    ];
+
     /// The tool that produces this representation, as it should appear in
     /// messages.
     ///
@@ -334,15 +362,11 @@ impl HomeSpec {
                 return Ok(p);
             }
         }
-        let looked_in = if self.candidates.is_empty() {
-            String::new()
-        } else {
-            format!(", or install it in one of: {}", self.candidates.join(", "))
-        };
-        Err(crate::Error::Parse(format!(
-            "{} not found. Specify it with --home, set {}{looked_in}",
-            self.tool, self.env
-        )))
+        Err(crate::Error::ToolNotFound {
+            tool: self.tool,
+            env: self.env,
+            candidates: self.candidates,
+        })
     }
 }
 
@@ -449,28 +473,21 @@ mod tests {
 
     /// Every representation has one name, spelled three independent times.
     ///
-    /// `serde` derives it from `rename_all`, `clap` derives its own from
-    /// another `rename_all`, and [`Ir::as_str`] is a hand-written match. All
-    /// three are load-bearing and none of them consults the others: a lifted
-    /// program's `ir` field is written and read by `serde`, a birthmark's
-    /// metadata is parsed by `FromStr`, and `--ir` is parsed by `clap`.
+    /// `serde` derives it from `rename_all`, [`Ir::as_str`] is a hand-written
+    /// match, and [`std::str::FromStr`] is another. All three are load-bearing
+    /// and none of them consults the others: a lifted program's `ir` field is
+    /// written and read by `serde`, a birthmark's metadata is parsed by
+    /// `FromStr`, and the name a person types is whatever `Display` prints.
     ///
     /// A variant they disagreed about would not fail to compile. It would
-    /// accept `--ir binary-ninja-llil` and write something else into the file,
-    /// or extract a birthmark that no longer matches the program it came from.
+    /// accept a name and write something else into the file, or extract a
+    /// birthmark that no longer matches the program it came from.
     #[test]
     fn test_every_representation_spells_itself_the_same_way_three_times() {
-        for ir in Ir::value_variants() {
+        for ir in Ir::ALL {
             let json = serde_json::to_string(ir).unwrap();
             let via_serde = json.trim_matches('"');
             assert_eq!(via_serde, ir.to_string(), "serde and Display disagree");
-
-            let via_clap = ir.to_possible_value().unwrap();
-            assert_eq!(
-                via_clap.get_name(),
-                ir.to_string(),
-                "clap and Display disagree"
-            );
 
             assert_eq!(
                 &<Ir as FromStr>::from_str(via_serde).unwrap(),
@@ -480,18 +497,37 @@ mod tests {
         }
     }
 
+    /// `Ir::ALL` is written by hand, so it is held to the enum: the `match`
+    /// below stops compiling when a variant is added, and the assertion fails
+    /// when it is added there but not to the list.
+    #[test]
+    fn test_all_lists_every_representation_exactly_once() {
+        fn index(ir: Ir) -> usize {
+            match ir {
+                Ir::GhidraPcode => 0,
+                Ir::IdaMicrocode => 1,
+                Ir::BinaryNinjaLlil => 2,
+                Ir::BinaryNinjaMlil => 3,
+                Ir::BinaryNinjaHlil => 4,
+            }
+        }
+        let mut seen = Ir::ALL.iter().map(|ir| index(*ir)).collect::<Vec<_>>();
+        seen.sort_unstable();
+        assert_eq!(seen, vec![0, 1, 2, 3, 4]);
+    }
+
     /// Every representation resolves to a tool, which is the property that let
     /// the tool stop being a separate argument.
     #[test]
     fn test_every_representation_names_a_tool() {
-        for ir in Ir::value_variants() {
+        for ir in Ir::ALL {
             assert!(!ir.tool().is_empty(), "{ir} names no tool");
             assert!(!ir.home_spec().env.is_empty(), "{ir} names no variable");
         }
     }
 
-    /// The search never runs: `--home` is taken as given, without checking
-    /// that it exists, so that the error names the path the user actually
+    /// The search never runs: a home the caller gives is taken as given,
+    /// without checking that it exists, so that the error names the path the user actually
     /// passed rather than a guess.
     #[test]
     fn test_the_home_the_user_passed_wins() {
@@ -565,7 +601,12 @@ mod tests {
     fn test_a_ghidra_that_is_nowhere_says_what_to_set_and_where_it_looked() {
         let spec = Ir::GhidraPcode.home_spec();
         let err = spec.find_in(|_| None, |_| false).unwrap_err().to_string();
-        assert!(err.contains("--home"), "does not offer --home: {err}");
+        // The library says what to set and where it looked, and nothing about
+        // how a particular caller passes a home: that is the caller's to add.
+        assert!(
+            !err.contains("--"),
+            "names a command-line option the library has no business knowing: {err}"
+        );
         assert!(
             err.contains("GHIDRA_HOME"),
             "does not name the variable: {err}"
@@ -619,7 +660,7 @@ mod tests {
     #[cfg(not(windows))]
     #[test]
     fn test_every_representation_names_somewhere_to_look() {
-        for ir in Ir::value_variants() {
+        for ir in Ir::ALL {
             assert!(
                 !ir.home_spec().candidates.is_empty(),
                 "{ir} offers no install locations"
@@ -629,13 +670,13 @@ mod tests {
 
     /// And on Windows every list is empty, deliberately. A candidate that
     /// happens to exist is found silently and fails somewhere less obvious,
-    /// which is worse than being asked for `--home`; a candidate spelled for
+    /// which is worse than being asked for the home; a candidate spelled for
     /// another operating system cannot even be found, and only makes the
     /// message advise something impossible.
     #[cfg(windows)]
     #[test]
     fn test_no_representation_guesses_where_windows_keeps_things() {
-        for ir in Ir::value_variants() {
+        for ir in Ir::ALL {
             assert!(
                 ir.home_spec().candidates.is_empty(),
                 "{ir} offers an install location this platform does not have"

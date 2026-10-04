@@ -28,29 +28,32 @@ exclude = [
 [features]
 default = [ "cli" ]
 # What the `oinkie` binary needs and the library does not. Measured rather than
-# assumed: nothing under `src/` mentions env_logger, indicatif or rayon -- the
-# parallelism lives in `cli/main.rs`, which owns its own thread pool.
+# assumed: nothing under `src/` mentions clap, sha2, env_logger, indicatif or
+# rayon -- argument parsing, the output file naming and the parallelism live in
+# `cli/`, which owns them.
+#
+# The library does not know the command line. `cargo tree --no-default-features
+# -e normal` therefore lists none of these, nor rmcp, tokio or clap_complete,
+# and that is checked rather than hoped for.
 #
 # On by default, so `cargo install oinkie` and every build here are unchanged.
 # `cargo add oinkie --no-default-features` is what it buys: a library that does
-# not drag in a logger, a progress bar and a thread pool to read a JSON file.
-#
-# clap is not here. `Ir` and `Algorithm` derive `ValueEnum`, so the library
-# needs it too, and it is the largest of them -- which is why splitting the
-# crate in two would not have bought much more than this does.
-cli = [ "dep:env_logger", "dep:indicatif", "dep:rayon" ]
-gencomp = [ "dep:clap_complete" ]
+# not drag in an argument parser, a logger, a progress bar and a thread pool to
+# read a JSON file.
+cli = [ "dep:clap", "dep:sha2", "dep:env_logger", "dep:indicatif", "dep:rayon" ]
+# Both of these are built into the command line, so both need what it needs.
+gencomp = [ "cli", "dep:clap_complete" ]
 # The MCP server. Behind a feature the way `gencomp` is, so that a build that
 # does not want it does not carry tokio and rmcp; the release workflows pass
 # `--features mcp`, so the published binary has it.
-mcp = [ "dep:rmcp", "dep:tokio" ]
+mcp = [ "cli", "dep:rmcp", "dep:tokio" ]
 
 [dependencies]
 chrono = { version = "0.4.44", features = [ "serde" ] }
 # "string" lets the builder take runtime-generated values, which is what the
 # completion lists for --birthmark-type and --analysis are: they are computed
 # from the birthmark vocabulary rather than written out (#25).
-clap = { version = "4.6.1", features = [ "derive", "string" ] }
+clap = { version = "4.6.1", optional = true, features = [ "derive", "string" ] }
 clap_complete = { version = "4.6.5", optional = true }
 csv = "1.4.0"
 env_logger = { version = "0.11.10", optional = true }
@@ -70,7 +73,7 @@ rmcp = { version = "3.2", optional = true, features = [ "macros", "server", "tra
 rustc-hash = "2.1.2"
 serde = { version = "1.0.228", features = [ "derive" ] }
 serde_json = "1.0.150"
-sha2 = "0.11.0"
+sha2 = { version = "0.11.0", optional = true }
 tempfile = "3.10.1"
 thiserror = "2.0.20"
 tokio = { version = "1", optional = true, features = [ "rt-multi-thread", "macros", "io-std" ] }

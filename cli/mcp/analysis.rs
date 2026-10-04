@@ -84,7 +84,7 @@ pub fn extract(
         .par_iter()
         .map(|input| {
             let start = Instant::now();
-            let out = dest.join(oinkie::extractor::dest_file_name(input)?);
+            let out = dest.join(crate::dest_name::dest_file_name(input)?);
             if out.exists() && skip {
                 // Read back rather than reported blindly: the count is part of
                 // the answer, and a file left by an earlier run is the only

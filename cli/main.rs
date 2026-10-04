@@ -1,7 +1,9 @@
 mod cli;
+mod dest_name;
 mod values;
+mod vocabulary;
 
-use clap::{Parser, ValueEnum};
+use clap::Parser;
 use indicatif::ProgressBar;
 use oinkie::prelude::*;
 use rayon::prelude::*;
@@ -339,7 +341,7 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
 }
 
 fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> Result<()> {
-    let file_name = oinkie::extractor::dest_file_name(path)?;
+    let file_name = dest_name::dest_file_name(path)?;
     let dest_path = dest.join(file_name);
     if dest_path.exists() && skip {
         log::info!(
@@ -374,13 +376,12 @@ The birthmark is a unique characteristic of a program that can be used to identi
 Oinkie extracts birthmarks from given codes and compares them to calculate the similarities."
     );
     println!("============ Birthmarks =============");
-    BirthmarkType::advertised().for_each(|b| {
-        println!("- {:<20}  {}", b.to_string(), b.description());
+    vocabulary::advertised_birthmarks().iter().for_each(|b| {
+        println!("- {:<20}  {}", b.to_string(), vocabulary::describe(b));
     });
     println!("======== Compare Algorithms ========");
-    Algorithm::value_variants().iter().for_each(|c| {
-        let pv = c.to_possible_value().unwrap();
-        println!("- {:<20}  {}", pv.get_name(), pv.get_help().unwrap());
+    vocabulary::ALGORITHMS.iter().for_each(|(_, name, help)| {
+        println!("- {:<20}  {}", name, help);
     });
     Ok(vec![now.elapsed()])
 }
@@ -408,10 +409,7 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Compare(opts) => perform_compare(opts),
         Extract(opts) => validate_extract_opts(opts).and_then(perform_extract),
         Review(opts) => review::perform(opts),
-        Reaggregate { .. } => Err(Error::Clap(clap::Error::raw(
-            clap::error::ErrorKind::InvalidSubcommand,
-            "reaggregate was renamed: use review.\n",
-        ))),
+        Reaggregate { .. } => unreachable!("rs_main refuses the old name before perform"),
         Stats(opts) => stats::perform(opts),
         Lift(opts) => perform_lift(opts),
         Info => perform_info(),
@@ -455,6 +453,31 @@ fn parallel_lift_notice(jobs: usize) -> Option<String> {
     })
 }
 
+/// The library says a tool was not found and what to set; this is where the
+/// way to give its home on the command line is added.
+///
+/// The wording is what `lift` has always said, so the library's change of
+/// shape is not something a person at a terminal sees.
+fn with_home_hint(e: Error) -> Error {
+    match e {
+        Error::ToolNotFound {
+            tool,
+            env,
+            candidates,
+        } => {
+            let looked_in = if candidates.is_empty() {
+                String::new()
+            } else {
+                format!(", or install it in one of: {}", candidates.join(", "))
+            };
+            Error::Parse(format!(
+                "{tool} not found. Specify it with --home, set {env}{looked_in}"
+            ))
+        }
+        other => other,
+    }
+}
+
 fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
     let dest = opts.dest();
     let pb = ProgressBar::new(opts.len() as u64)
@@ -471,8 +494,13 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
         .home(opts.home().map(|p| p.to_path_buf()))
         .script(opts.script().map(|p| p.to_path_buf()))
         .intermediate_dir(opts.intermediate_dir().map(|p| p.to_path_buf()))
-        .build()?;
+        .build()
+        .map_err(with_home_hint)?;
 
+    // Said at most once per process, however many files `-j` lifts at a time,
+    // and only when something is about to be lifted: a `--skip` run that finds
+    // every file done sends nothing anywhere, so there is nothing to disclose.
+    let noticed = std::sync::Once::new();
     let lift_one = |path: &PathBuf| {
         let e1 = Instant::now();
         let dest_file = dest.join(format!(
@@ -485,6 +513,17 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
                 path
             );
         } else {
+            // Before the first function can leave the machine, and straight to
+            // stderr rather than through `log`: `--level error` and `--level
+            // off` are ordinary things to pass, and either would silence a
+            // disclosure about where someone's code is going. A privacy
+            // warning that a verbosity flag can turn off is one the user never
+            // agreed to turn off.
+            noticed.call_once(|| {
+                if let Some(notice) = lifter.notice() {
+                    eprintln!("oinkie: {notice}");
+                }
+            });
             lifter.lift(path, &dest_file)?;
         }
         // Counted whether it was lifted or skipped: the bar measures inputs
@@ -611,16 +650,39 @@ impl CompareResult {
     }
 }
 
-fn rs_main(args: Vec<String>) -> Result<Vec<Duration>> {
-    cli::OinkieOpts::try_parse_from(args)
-        .map_err(Error::Clap)
-        .and_then(perform)
+/// What a run of the command line can end in, besides success.
+///
+/// A usage error is clap's, and is reported the way clap reports it. Anything
+/// else is the library's. The two used to share one type because the library's
+/// `Error` had a variant for clap's; the library does not know about the
+/// command line, so the command line keeps the distinction itself.
+enum CliError {
+    Usage(clap::Error),
+    Failed(Error),
+}
+
+/// What `reaggregate` says now: it was renamed, not removed, so it names the
+/// new spelling and exits non-zero rather than doing the work under the old
+/// name (#132).
+fn renamed_to_review() -> clap::Error {
+    clap::Error::raw(
+        clap::error::ErrorKind::InvalidSubcommand,
+        "reaggregate was renamed: use review.\n",
+    )
+}
+
+fn rs_main(args: Vec<String>) -> std::result::Result<Vec<Duration>, CliError> {
+    let opts = cli::OinkieOpts::try_parse_from(args).map_err(CliError::Usage)?;
+    if let cli::OinkieCommand::Reaggregate { .. } = opts.command {
+        return Err(CliError::Usage(renamed_to_review()));
+    }
+    perform(opts).map_err(CliError::Failed)
 }
 
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
     let status_code = match rs_main(args) {
-        Err(Error::Clap(e)) => {
+        Err(CliError::Usage(e)) => {
             if e.kind() == clap::error::ErrorKind::DisplayHelp
                 || e.kind() == clap::error::ErrorKind::DisplayVersion
             {
@@ -638,7 +700,7 @@ fn main() {
                 1
             }
         }
-        Err(e) => {
+        Err(CliError::Failed(e)) => {
             eprintln!("Error: {}", e);
             2
         }
@@ -650,6 +712,35 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A tool that is nowhere is reported the way `lift` always reported it,
+    /// with `--home` offered first; anything else passes through untouched.
+    #[test]
+    fn test_a_missing_tool_is_reported_with_the_flag_that_supplies_it() {
+        let missing = Error::ToolNotFound {
+            tool: "Ghidra",
+            env: "GHIDRA_HOME",
+            candidates: &["/opt/ghidra", "/usr/local/ghidra"],
+        };
+        assert_eq!(
+            with_home_hint(missing).to_string(),
+            "Parse error: Ghidra not found. Specify it with --home, set GHIDRA_HOME, or install it in one of: /opt/ghidra, /usr/local/ghidra"
+        );
+        let nowhere = Error::ToolNotFound {
+            tool: "Nowhere",
+            env: "NOWHERE_HOME",
+            candidates: &[],
+        };
+        assert_eq!(
+            with_home_hint(nowhere).to_string(),
+            "Parse error: Nowhere not found. Specify it with --home, set NOWHERE_HOME"
+        );
+        let other = Error::Parse("something else".to_string());
+        assert_eq!(
+            with_home_hint(other).to_string(),
+            "Parse error: something else"
+        );
+    }
 
     #[test]
     fn test_find_ghidra_home_from_opt() {
@@ -777,9 +868,9 @@ mod tests {
         assert!(e.to_string().starts_with("IO error for"), "{e}");
     }
 
-    /// `oinkie info` prints each algorithm's clap help with two `unwrap()`s,
-    /// so an algorithm added without a doc comment panics the command rather
-    /// than printing a blank line. Calling it is the guard.
+    /// `oinkie info` prints from the tables in `vocabulary`, so it cannot
+    /// panic on an algorithm without a description; calling it is the guard
+    /// that it still runs.
     #[test]
     fn test_info_prints_every_algorithm_without_panicking() {
         assert!(perform_info().is_ok());
@@ -787,7 +878,7 @@ mod tests {
 
     fn run_analysis(name: &str) -> Result<AnalysisType> {
         let opts = cli::OinkieOpts::try_parse_from(vec!["oinkie", "run", "-a", name, "x.json"])
-            .map_err(Error::Clap)?;
+            .map_err(|e| Error::Parse(e.to_string()))?;
         let cli::OinkieCommand::Run(run_opts) = opts.command else {
             panic!("Expected Run command");
         };
@@ -796,7 +887,7 @@ mod tests {
 
     fn extract_birthmark(name: &str) -> Result<()> {
         cli::OinkieOpts::try_parse_from(vec!["oinkie", "extract", "-b", name, "x.json"])
-            .map_err(Error::Clap)?;
+            .map_err(|e| Error::Parse(e.to_string()))?;
         Ok(())
     }
 
@@ -829,7 +920,7 @@ mod tests {
     /// option does not.
     #[test]
     fn test_a_k_past_the_advertised_list_is_still_accepted() {
-        let beyond = MAX_ADVERTISED_K + 1;
+        let beyond = vocabulary::MAX_ADVERTISED_K + 1;
         let at = run_analysis(&format!("op-{beyond}gram-freq-cosine")).unwrap();
         assert_eq!(at.birthmark, BirthmarkType::OpKgramFreq(beyond));
         assert!(extract_birthmark(&format!("op-{beyond}gram-freq")).is_ok());

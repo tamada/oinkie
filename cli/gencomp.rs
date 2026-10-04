@@ -5,6 +5,7 @@
 
 mod cli;
 mod values;
+mod vocabulary;
 
 use clap::{Command, CommandFactory};
 use clap_complete::Shell;
