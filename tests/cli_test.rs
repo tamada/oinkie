@@ -444,6 +444,101 @@ fn test_a_zero_gram_analysis_is_refused_not_a_panic() {
         .stderr(predicates::str::contains("panicked").not());
 }
 
+/// The birthmark named on a side of a pair's CSV: the last field of its
+/// `left` or `right` line.
+fn side_birthmark(pair_csv: &std::path::Path, side: &str) -> std::path::PathBuf {
+    let content = fs::read_to_string(pair_csv).unwrap();
+    let line = content
+        .lines()
+        .find(|l| l.starts_with(&format!("{side},birthmark,")))
+        .unwrap_or_else(|| panic!("no {side} birthmark in {}", pair_csv.display()));
+    std::path::PathBuf::from(line.rsplit(',').next().unwrap())
+}
+
+/// `run` writes the birthmarks it compares into the score directory, one per
+/// input, and each pair's CSV names the two it used -- so the directory holds
+/// everything `review` needs to re-read the comparison, as `compare`'s does
+/// (#128).
+#[test]
+fn test_run_writes_the_birthmarks_it_compares() {
+    let dir = tempdir().unwrap();
+    let dest = dir.path().join("out");
+    let inputs = [
+        "testdata/lifted/pcodes/hello_clang.json",
+        "testdata/lifted/pcodes/hello_gcc.json",
+        "testdata/lifted/pcodes/udl.json",
+    ];
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-a", "fc-set-jaccard", "-s", "all", "-d"])
+        .arg(&dest)
+        .args(inputs)
+        .assert()
+        .success();
+
+    let written = fs::read_dir(dest.join("birthmarks"))
+        .expect("no birthmarks directory")
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        written.len(),
+        inputs.len(),
+        "one birthmark per input: {written:?}"
+    );
+
+    for pair in ["00000.csv", "00001.csv", "00002.csv"] {
+        for side in ["left", "right"] {
+            let named = side_birthmark(&dest.join(pair), side);
+            assert!(
+                written.contains(&named),
+                "{pair} {side}: {} was not written",
+                named.display()
+            );
+            let b: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(&named).unwrap()).unwrap();
+            assert_eq!(
+                b["metadata"]["birthmark_type"],
+                "FcSet",
+                "{}",
+                named.display()
+            );
+        }
+    }
+}
+
+/// `--skip` reuses a birthmark already written -- but only one of the type the
+/// analysis asks for. The file name does not say which type a birthmark is, so
+/// a directory run before with another analysis would otherwise hand the old
+/// birthmarks to the new comparison.
+#[test]
+fn test_run_skip_does_not_reuse_a_birthmark_of_another_type() {
+    let dir = tempdir().unwrap();
+    let dest = dir.path().join("out");
+    let inputs = [
+        "testdata/lifted/pcodes/hello_clang.json",
+        "testdata/lifted/pcodes/udl.json",
+    ];
+    let run = |analysis: &str, scores: &str| {
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(["run", "-S", "-a", analysis, "-s", "all", "-d"])
+            .arg(dest.join(scores))
+            .args(inputs)
+            .assert()
+            .success();
+    };
+    // the same birthmark directory, reached from two score directories
+    run("fc-set-jaccard", "");
+    fs::remove_file(dest.join("00000.csv")).unwrap();
+    run("op-set-jaccard", "");
+    let named = side_birthmark(&dest.join("00000.csv"), "left");
+    let b: serde_json::Value = serde_json::from_str(&fs::read_to_string(&named).unwrap()).unwrap();
+    assert_eq!(
+        b["metadata"]["birthmark_type"], "OpSet",
+        "the fc-set birthmark was reused"
+    );
+}
+
 /// The old name is refused, not aliased, and the refusal names the new one --
 /// including when it is handed the arguments the old command took.
 #[test]

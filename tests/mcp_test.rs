@@ -425,6 +425,39 @@ fn test_extract_then_compare_agrees_with_run() {
     }
 }
 
+/// Given somewhere to write, `oinkie_run` writes the birthmarks it compared
+/// beside the scores, and each pair's CSV names them, as `run` does (#128).
+#[test]
+fn test_run_writes_the_birthmarks_it_compares_when_given_a_dest() {
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("scores");
+    let result = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_run",
+        serde_json::json!({
+            "files": [A, B],
+            "analysis": "fc-set-jaccard",
+            "strategy": "all",
+            "dest": dest.to_str().unwrap()
+        }),
+    );
+    assert!(result["error"].is_null(), "{result}");
+    let written = std::fs::read_dir(dest.join("birthmarks"))
+        .unwrap_or_else(|e| panic!("no birthmarks directory: {e}"))
+        .count();
+    assert_eq!(written, 2);
+    let pair = std::fs::read_to_string(dest.join("00000.csv")).unwrap();
+    let left = pair
+        .lines()
+        .find(|l| l.starts_with("left,birthmark,"))
+        .unwrap();
+    let named = left.rsplit(',').next().unwrap();
+    assert!(
+        std::path::Path::new(named).exists(),
+        "{named} does not exist"
+    );
+}
+
 /// A directory `oinkie_run` wrote has to be one `oinkie_review` can read,
 /// or the tools do not compose and the caller has to leave for the CLI.
 #[test]

@@ -12,6 +12,7 @@ use oinkie::extract::Extractor;
 use oinkie::lift::{Lifter, LifterBuilder};
 use oinkie::{Error, Program, Result};
 use rayon::prelude::*;
+use rustc_hash::FxHashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -42,7 +43,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let atype = opts.analysis_type()?;
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
-    let pbar = new_progress_bar(comparing_count * 3);
+    let pbar = new_progress_bar(opts.files.len() + comparing_count);
     let aggregator = opts.aggregator();
     // The analysis names a birthmark and an algorithm, and both are used: each
     // program's birthmark is extracted and the birthmarks are compared, which is
@@ -50,6 +51,28 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     // would score their operations whatever birthmark was named (#150).
     let extractor = Extractor::new(atype.birthmark().clone());
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
+
+    // Each input once, rather than once per pair it is in, and written down:
+    // the score directory then holds the birthmarks its scores came from, which
+    // is what `review` re-reads a comparison from (#128).
+    let birthmarks_dir = dest.join("birthmarks");
+    std::fs::create_dir_all(&birthmarks_dir).map_err(|e| Error::Io(birthmarks_dir.clone(), e))?;
+    pbar.set_message("Extracting birthmarks");
+    let birthmarks = opts
+        .files
+        .par_iter()
+        .map(|path| {
+            let b = extract_into(path, &birthmarks_dir, &extractor, opts.is_skip());
+            pbar.inc(1);
+            b
+        })
+        .collect::<Vec<_>>();
+    let birthmarks = Error::vec_result_to_result_vec(birthmarks)?;
+    let by_input = opts
+        .files
+        .iter()
+        .zip(&birthmarks)
+        .collect::<FxHashMap<_, _>>();
 
     let results = opts
         .iter()
@@ -63,23 +86,16 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                     path1,
                     path2
                 );
-                pbar.inc(3);
+                pbar.inc(1);
                 read_result_file(&dest_file, i, path1, path2)
             } else {
-                pbar.set_message(format!("Extracting from {:?}", path1.display()));
-                let b1 = extractor.extract(&load_program(path1)?)?;
-                pbar.inc(1);
-                pbar.set_message(format!("Extracting from {:?}", path2.display()));
-                let b2 = extractor.extract(&load_program(path2)?)?;
-                pbar.inc(1);
+                let (b1, b2) = (by_input[path1], by_input[path2]);
                 pbar.set_message(format!(
                     "Comparing two birthmarks ({}/{})",
                     i + 1,
                     comparing_count
                 ));
-                let result = atype
-                    .comparator()
-                    .compare_birthmarks(&b1, &b2, aggregator)?;
+                let result = atype.comparator().compare_birthmarks(b1, b2, aggregator)?;
                 pbar.inc(1);
                 score_csv::store(&result, &dest_file)?;
                 Ok(CompareResult::new(
@@ -357,6 +373,37 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
         );
     }
     r
+}
+
+/// The birthmark `extractor` makes of the program at `path`, written into
+/// `dir` under the name `extract` would give it, and returned with that path
+/// recorded.
+///
+/// With `skip`, a birthmark already there is read instead -- but only one of
+/// the type asked for. The file name does not say which type a birthmark is,
+/// so a directory run before under another analysis would otherwise hand its
+/// birthmarks to this one.
+pub(crate) fn extract_into(
+    path: &Path,
+    dir: &Path,
+    extractor: &Extractor,
+    skip: bool,
+) -> Result<Birthmark> {
+    let dest_path = dir.join(dest_name::dest_file_name(path)?);
+    if skip && dest_path.exists() {
+        let existing: Birthmark = load(dest_path.clone())?;
+        if existing.birthmark_type() == extractor.birthmark_type() {
+            log::info!("Birthmark for {path:?} already exists. Skipping extraction.");
+            let mut existing = existing;
+            existing.set_json_path(dest_path);
+            return Ok(existing);
+        }
+    }
+    let mut b = extractor.extract(&load_program(path)?)?;
+    let json = serde_json::to_string_pretty(&b).map_err(|e| Error::Json(dest_path.clone(), e))?;
+    std::fs::write(&dest_path, json).map_err(|e| Error::Io(dest_path.clone(), e))?;
+    b.set_json_path(dest_path);
+    Ok(b)
 }
 
 fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> Result<()> {

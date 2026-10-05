@@ -116,11 +116,15 @@ pub fn extract(
     Error::vec_result_to_result_vec(done)
 }
 
-/// Extracts the analysis's birthmark from each lifted program and compares the
-/// birthmarks, without writing them down first.
+/// Extracts the analysis's birthmark from each lifted program once and
+/// compares the birthmarks.
 ///
 /// Both halves of the analysis are used. Comparing the programs directly
 /// scored their operations whatever birthmark the analysis named (#150).
+///
+/// Given `dest`, the birthmarks are written into its `birthmarks/` and the
+/// scores' CSVs name them, as `run` does, so the directory can be reviewed on
+/// its own (#128). Without it they are held in memory only.
 pub fn run(
     inputs: &[PathBuf],
     analysis: &AnalysisType,
@@ -130,17 +134,32 @@ pub fn run(
 ) -> Result<Vec<Score>> {
     let start = Instant::now();
     prepare(dest)?;
+    let extractor = Extractor::new(analysis.birthmark().clone());
+    let birthmarks_dir = dest.map(|d| d.join("birthmarks"));
+    if let Some(d) = &birthmarks_dir {
+        std::fs::create_dir_all(d).map_err(|e| Error::Io(d.clone(), e))?;
+    }
+    let birthmarks = inputs
+        .par_iter()
+        .map(|input| match &birthmarks_dir {
+            Some(d) => crate::extract_into(input, d, &extractor, false),
+            None => extractor.extract(&Program::load(input)?),
+        })
+        .collect::<Vec<_>>();
+    let birthmarks = Error::vec_result_to_result_vec(birthmarks)?;
+    let by_input = inputs
+        .iter()
+        .zip(&birthmarks)
+        .collect::<rustc_hash::FxHashMap<_, _>>();
     let results = strategy
         .pairs(inputs)
         .enumerate()
         .par_bridge()
         .map(|(i, (left, right))| {
-            let extractor = Extractor::new(analysis.birthmark().clone());
-            let b1 = extractor.extract(&Program::load(left)?)?;
-            let b2 = extractor.extract(&Program::load(right)?)?;
+            let (b1, b2) = (by_input[left], by_input[right]);
             let comparison = analysis
                 .comparator()
-                .compare_birthmarks(&b1, &b2, aggregator)?;
+                .compare_birthmarks(b1, b2, aggregator)?;
             if let Some(d) = dest {
                 crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
             }
