@@ -1,0 +1,303 @@
+pub mod oinkie
+pub mod oinkie::birthmarks
+#[non_exhaustive] pub enum oinkie::birthmarks::BirthmarkType
+pub oinkie::birthmarks::BirthmarkType::FcFreq
+pub oinkie::birthmarks::BirthmarkType::FcSeq
+pub oinkie::birthmarks::BirthmarkType::FcSet
+pub oinkie::birthmarks::BirthmarkType::OpFreq
+pub oinkie::birthmarks::BirthmarkType::OpKgramFreq(usize)
+pub oinkie::birthmarks::BirthmarkType::OpKgramSeq(usize)
+pub oinkie::birthmarks::BirthmarkType::OpKgramSet(usize)
+pub oinkie::birthmarks::BirthmarkType::OpSeq
+pub oinkie::birthmarks::BirthmarkType::OpSet
+impl oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::all(usize) -> alloc::vec::Vec<oinkie::birthmarks::BirthmarkType>
+pub fn oinkie::birthmarks::BirthmarkType::pairs_with(&self, &oinkie::compare::Algorithm) -> bool
+pub fn oinkie::birthmarks::BirthmarkType::shape(&self) -> oinkie::birthmarks::Shape
+impl core::clone::Clone for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::birthmarks::BirthmarkType
+impl core::cmp::PartialEq for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::eq(&self, &Self) -> bool
+impl core::convert::TryFrom<&str> for oinkie::birthmarks::BirthmarkType
+pub type oinkie::birthmarks::BirthmarkType::Error = oinkie::Error
+pub fn oinkie::birthmarks::BirthmarkType::try_from(&str) -> oinkie::Result<Self>
+impl core::fmt::Debug for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for oinkie::birthmarks::BirthmarkType
+impl serde_core::ser::Serialize for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum oinkie::birthmarks::Data
+pub oinkie::birthmarks::Data::Freq(rustc_hash::FxHashMap<alloc::string::String, usize>)
+pub oinkie::birthmarks::Data::KgramFreq(rustc_hash::FxHashMap<oinkie::birthmarks::Kgram, usize>)
+pub oinkie::birthmarks::Data::KgramSeq(alloc::vec::Vec<oinkie::birthmarks::Kgram>)
+pub oinkie::birthmarks::Data::KgramSet(rustc_hash::FxHashSet<oinkie::birthmarks::Kgram>)
+pub oinkie::birthmarks::Data::Seq(alloc::vec::Vec<alloc::string::String>)
+pub oinkie::birthmarks::Data::Set(rustc_hash::FxHashSet<alloc::string::String>)
+impl core::clone::Clone for oinkie::birthmarks::Data
+pub fn oinkie::birthmarks::Data::clone(&self) -> Self
+impl core::fmt::Debug for oinkie::birthmarks::Data
+pub fn oinkie::birthmarks::Data::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for oinkie::birthmarks::Data
+pub fn oinkie::birthmarks::Data::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::Data
+pub fn oinkie::birthmarks::Data::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub enum oinkie::birthmarks::Shape
+pub oinkie::birthmarks::Shape::Freq
+pub oinkie::birthmarks::Shape::Seq
+pub oinkie::birthmarks::Shape::Set
+impl oinkie::birthmarks::Shape
+pub fn oinkie::birthmarks::Shape::description(&self) -> &'static str
+impl core::clone::Clone for oinkie::birthmarks::Shape
+pub fn oinkie::birthmarks::Shape::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::birthmarks::Shape
+impl core::cmp::PartialEq for oinkie::birthmarks::Shape
+pub fn oinkie::birthmarks::Shape::eq(&self, &Self) -> bool
+impl core::fmt::Debug for oinkie::birthmarks::Shape
+pub fn oinkie::birthmarks::Shape::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for oinkie::birthmarks::Shape
+impl core::marker::StructuralPartialEq for oinkie::birthmarks::Shape
+pub struct oinkie::birthmarks::AnalysisType
+impl oinkie::birthmarks::AnalysisType
+pub fn oinkie::birthmarks::AnalysisType::birthmark(&self) -> &oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::AnalysisType::comparator(&self) -> &oinkie::compare::Comparator
+pub fn oinkie::birthmarks::AnalysisType::new(oinkie::birthmarks::BirthmarkType, oinkie::compare::Algorithm) -> oinkie::Result<Self>
+impl core::convert::TryFrom<&str> for oinkie::birthmarks::AnalysisType
+pub type oinkie::birthmarks::AnalysisType::Error = oinkie::Error
+pub fn oinkie::birthmarks::AnalysisType::try_from(&str) -> oinkie::Result<Self>
+impl core::convert::TryFrom<alloc::string::String> for oinkie::birthmarks::AnalysisType
+pub type oinkie::birthmarks::AnalysisType::Error = oinkie::Error
+pub fn oinkie::birthmarks::AnalysisType::try_from(alloc::string::String) -> oinkie::Result<Self>
+pub struct oinkie::birthmarks::Birthmark
+impl oinkie::birthmarks::Birthmark
+pub fn oinkie::birthmarks::Birthmark::birthmark_type(&self) -> &oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::Birthmark::duration(&self) -> core::time::Duration
+pub fn oinkie::birthmarks::Birthmark::extracted_at(&self) -> chrono::datetime::DateTime<chrono::offset::utc::Utc>
+pub fn oinkie::birthmarks::Birthmark::functions(&self) -> &[oinkie::birthmarks::Function]
+pub fn oinkie::birthmarks::Birthmark::ir(&self) -> oinkie::lift::Ir
+pub fn oinkie::birthmarks::Birthmark::is_empty(&self) -> bool
+pub fn oinkie::birthmarks::Birthmark::json_path(&self) -> core::option::Option<&std::path::Path>
+pub fn oinkie::birthmarks::Birthmark::len(&self) -> usize
+pub fn oinkie::birthmarks::Birthmark::name(&self) -> &str
+pub fn oinkie::birthmarks::Birthmark::path(&self) -> &std::path::Path
+pub fn oinkie::birthmarks::Birthmark::set_json_path(&mut self, std::path::PathBuf)
+impl core::convert::TryFrom<&std::path::Path> for oinkie::birthmarks::Birthmark
+pub type oinkie::birthmarks::Birthmark::Error = oinkie::Error
+pub fn oinkie::birthmarks::Birthmark::try_from(&std::path::Path) -> oinkie::Result<Self>
+impl core::convert::TryFrom<std::path::PathBuf> for oinkie::birthmarks::Birthmark
+pub type oinkie::birthmarks::Birthmark::Error = oinkie::Error
+pub fn oinkie::birthmarks::Birthmark::try_from(std::path::PathBuf) -> oinkie::Result<Self>
+impl core::fmt::Debug for oinkie::birthmarks::Birthmark
+pub fn oinkie::birthmarks::Birthmark::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for oinkie::birthmarks::Birthmark
+pub fn oinkie::birthmarks::Birthmark::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::Birthmark
+pub fn oinkie::birthmarks::Birthmark::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct oinkie::birthmarks::Function
+impl oinkie::birthmarks::Function
+pub fn oinkie::birthmarks::Function::data(&self) -> &oinkie::birthmarks::Data
+pub fn oinkie::birthmarks::Function::is_empty(&self) -> bool
+pub fn oinkie::birthmarks::Function::len(&self) -> usize
+pub fn oinkie::birthmarks::Function::name(&self) -> &str
+pub fn oinkie::birthmarks::Function::ops(&self) -> impl core::iter::traits::iterator::Iterator<Item = &str>
+impl core::fmt::Debug for oinkie::birthmarks::Function
+pub fn oinkie::birthmarks::Function::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl serde_core::ser::Serialize for oinkie::birthmarks::Function
+pub fn oinkie::birthmarks::Function::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::Function
+pub fn oinkie::birthmarks::Function::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct oinkie::birthmarks::Kgram(_)
+impl oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::new(alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn oinkie::birthmarks::Kgram::ops(&self) -> &[alloc::string::String]
+impl core::clone::Clone for oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::birthmarks::Kgram
+impl core::cmp::PartialEq for oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::eq(&self, &Self) -> bool
+impl core::fmt::Debug for oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::hash::Hash for oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::hash<__H: core::hash::Hasher>(&self, &mut __H)
+impl core::marker::StructuralPartialEq for oinkie::birthmarks::Kgram
+impl serde_core::ser::Serialize for oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::Kgram
+pub fn oinkie::birthmarks::Kgram::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub mod oinkie::compare
+#[non_exhaustive] pub enum oinkie::compare::Aggregator
+pub oinkie::compare::Aggregator::Hungarian
+pub oinkie::compare::Aggregator::TopN(oinkie::compare::Size)
+impl oinkie::compare::Aggregator
+pub fn oinkie::compare::Aggregator::aggregate(&self, &ndarray::aliases::Array2<f64>) -> oinkie::Result<alloc::vec::Vec<f64>>
+impl core::clone::Clone for oinkie::compare::Aggregator
+pub fn oinkie::compare::Aggregator::clone(&self) -> Self
+impl core::default::Default for oinkie::compare::Aggregator
+pub fn oinkie::compare::Aggregator::default() -> Self
+impl core::fmt::Debug for oinkie::compare::Aggregator
+pub fn oinkie::compare::Aggregator::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::str::traits::FromStr for oinkie::compare::Aggregator
+pub type oinkie::compare::Aggregator::Err = oinkie::Error
+pub fn oinkie::compare::Aggregator::from_str(&str) -> oinkie::Result<Self>
+#[non_exhaustive] pub enum oinkie::compare::Algorithm
+pub oinkie::compare::Algorithm::Cosine
+pub oinkie::compare::Algorithm::Dice
+pub oinkie::compare::Algorithm::Euclidean
+pub oinkie::compare::Algorithm::Jaccard
+pub oinkie::compare::Algorithm::Lcs
+pub oinkie::compare::Algorithm::Levenshtein
+pub oinkie::compare::Algorithm::Simpson
+pub oinkie::compare::Algorithm::WeightedJaccard
+impl oinkie::compare::Algorithm
+pub const oinkie::compare::Algorithm::ALL: &'static [oinkie::compare::Algorithm]
+pub fn oinkie::compare::Algorithm::comparator(&self) -> oinkie::compare::Comparator
+pub fn oinkie::compare::Algorithm::name(&self) -> &'static str
+pub fn oinkie::compare::Algorithm::shape(&self) -> oinkie::birthmarks::Shape
+impl core::clone::Clone for oinkie::compare::Algorithm
+pub fn oinkie::compare::Algorithm::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::compare::Algorithm
+impl core::cmp::PartialEq for oinkie::compare::Algorithm
+pub fn oinkie::compare::Algorithm::eq(&self, &Self) -> bool
+impl core::convert::From<&oinkie::compare::Algorithm> for oinkie::compare::Comparator
+pub fn oinkie::compare::Comparator::from(&oinkie::compare::Algorithm) -> Self
+impl core::fmt::Debug for oinkie::compare::Algorithm
+pub fn oinkie::compare::Algorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for oinkie::compare::Algorithm
+pub fn oinkie::compare::Algorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for oinkie::compare::Algorithm
+impl core::str::traits::FromStr for oinkie::compare::Algorithm
+pub type oinkie::compare::Algorithm::Err = oinkie::Error
+pub fn oinkie::compare::Algorithm::from_str(&str) -> oinkie::Result<Self>
+#[non_exhaustive] pub enum oinkie::compare::PairingStrategy
+pub oinkie::compare::PairingStrategy::Adjacent
+pub oinkie::compare::PairingStrategy::All
+pub oinkie::compare::PairingStrategy::AllAndSelf
+pub oinkie::compare::PairingStrategy::FirstVsOthers
+pub oinkie::compare::PairingStrategy::LastVsOthers
+pub oinkie::compare::PairingStrategy::SelfCoverage
+impl oinkie::compare::PairingStrategy
+pub const oinkie::compare::PairingStrategy::ALL: &'static [oinkie::compare::PairingStrategy]
+pub fn oinkie::compare::PairingStrategy::compare_count<T>(&self, &[T]) -> usize
+pub fn oinkie::compare::PairingStrategy::pairs<'a, T: core::marker::Sync>(&'a self, &'a [T]) -> alloc::boxed::Box<(dyn core::iter::traits::iterator::Iterator<Item = (&'a T, &'a T)> + core::marker::Send + 'a)>
+impl core::clone::Clone for oinkie::compare::PairingStrategy
+pub fn oinkie::compare::PairingStrategy::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::compare::PairingStrategy
+impl core::cmp::PartialEq for oinkie::compare::PairingStrategy
+pub fn oinkie::compare::PairingStrategy::eq(&self, &Self) -> bool
+impl core::fmt::Debug for oinkie::compare::PairingStrategy
+pub fn oinkie::compare::PairingStrategy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for oinkie::compare::PairingStrategy
+pub enum oinkie::compare::Size
+pub oinkie::compare::Size::All
+pub oinkie::compare::Size::Num(usize)
+impl core::clone::Clone for oinkie::compare::Size
+pub fn oinkie::compare::Size::clone(&self) -> Self
+impl core::fmt::Debug for oinkie::compare::Size
+pub fn oinkie::compare::Size::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct oinkie::compare::Comparator
+impl oinkie::compare::Comparator
+pub fn oinkie::compare::Comparator::compare_birthmarks<'a>(&self, &'a oinkie::birthmarks::Birthmark, &'a oinkie::birthmarks::Birthmark, &oinkie::compare::Aggregator) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::birthmarks::Birthmark>>
+pub fn oinkie::compare::Comparator::compare_programs<'a>(&self, &'a oinkie::Program, &'a oinkie::Program, &oinkie::compare::Aggregator) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::Program>>
+impl core::convert::From<&oinkie::compare::Algorithm> for oinkie::compare::Comparator
+pub fn oinkie::compare::Comparator::from(&oinkie::compare::Algorithm) -> Self
+pub struct oinkie::compare::Comparison<'a, S>
+impl<'a, S> oinkie::compare::Comparison<'a, S>
+pub fn oinkie::compare::Comparison<'a, S>::columns(&self) -> &S
+pub fn oinkie::compare::Comparison<'a, S>::duration(&self) -> core::time::Duration
+pub fn oinkie::compare::Comparison<'a, S>::matrix(&self) -> &ndarray::aliases::Array2<f64>
+pub fn oinkie::compare::Comparison<'a, S>::rows(&self) -> &S
+pub fn oinkie::compare::Comparison<'a, S>::similarity(&self) -> f64
+pub mod oinkie::extract
+pub struct oinkie::extract::Extractor
+impl oinkie::extract::Extractor
+pub fn oinkie::extract::Extractor::extract(&self, &oinkie::Program) -> oinkie::Result<oinkie::birthmarks::Birthmark>
+pub fn oinkie::extract::Extractor::new(oinkie::birthmarks::BirthmarkType) -> Self
+pub mod oinkie::lift
+#[non_exhaustive] pub enum oinkie::lift::Ir
+pub oinkie::lift::Ir::BinaryNinjaHlil
+pub oinkie::lift::Ir::BinaryNinjaLlil
+pub oinkie::lift::Ir::BinaryNinjaMlil
+pub oinkie::lift::Ir::GhidraPcode
+pub oinkie::lift::Ir::IdaMicrocode
+impl oinkie::lift::Ir
+pub const oinkie::lift::Ir::ALL: &'static [oinkie::lift::Ir]
+pub fn oinkie::lift::Ir::tool(&self) -> &'static str
+impl core::clone::Clone for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::lift::Ir
+impl core::cmp::PartialEq for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::eq(&self, &Self) -> bool
+impl core::default::Default for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::default() -> Self
+impl core::fmt::Debug for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for oinkie::lift::Ir
+impl core::marker::StructuralPartialEq for oinkie::lift::Ir
+impl core::str::traits::FromStr for oinkie::lift::Ir
+pub type oinkie::lift::Ir::Err = oinkie::Error
+pub fn oinkie::lift::Ir::from_str(&str) -> oinkie::Result<Self>
+impl serde_core::ser::Serialize for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::serialize<__S>(&self, __S) -> core::result::Result<<__S as serde_core::ser::Serializer>::Ok, <__S as serde_core::ser::Serializer>::Error> where __S: serde_core::ser::Serializer
+impl<'de> serde_core::de::Deserialize<'de> for oinkie::lift::Ir
+pub fn oinkie::lift::Ir::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
+pub struct oinkie::lift::LifterBuilder
+impl oinkie::lift::LifterBuilder
+pub fn oinkie::lift::LifterBuilder::build(self) -> oinkie::Result<alloc::boxed::Box<(dyn oinkie::lift::Lifter + core::marker::Sync)>>
+pub fn oinkie::lift::LifterBuilder::home(self, core::option::Option<std::path::PathBuf>) -> Self
+pub fn oinkie::lift::LifterBuilder::intermediate_dir(self, core::option::Option<std::path::PathBuf>) -> Self
+pub fn oinkie::lift::LifterBuilder::new(oinkie::lift::Ir) -> Self
+pub fn oinkie::lift::LifterBuilder::script(self, core::option::Option<std::path::PathBuf>) -> Self
+pub trait oinkie::lift::Lifter
+pub fn oinkie::lift::Lifter::lift(&self, &std::path::Path, &std::path::Path) -> oinkie::Result<()>
+pub fn oinkie::lift::Lifter::notice(&self) -> core::option::Option<alloc::string::String>
+#[non_exhaustive] pub enum oinkie::Error
+pub oinkie::Error::Array(alloc::vec::Vec<Self>)
+pub oinkie::Error::BirthmarkType(alloc::string::String)
+pub oinkie::Error::Csv(csv::error::Error)
+pub oinkie::Error::IncompatibleAnalysis(oinkie::birthmarks::BirthmarkType, oinkie::compare::Algorithm)
+pub oinkie::Error::InvalidPcode(u32)
+pub oinkie::Error::Io(std::path::PathBuf, core::io::error::Error)
+pub oinkie::Error::IrMismatch(oinkie::lift::Ir, oinkie::lift::Ir)
+pub oinkie::Error::Json(std::path::PathBuf, serde_json::error::Error)
+pub oinkie::Error::LapJV(lapjv::LapJVError)
+pub oinkie::Error::Mismatch(oinkie::birthmarks::BirthmarkType, oinkie::birthmarks::BirthmarkType)
+pub oinkie::Error::Parse(alloc::string::String)
+pub oinkie::Error::ParseFloat(alloc::string::String, core::num::float_parse::ParseFloatError)
+pub oinkie::Error::ParseInt(alloc::string::String, core::num::error::ParseIntError)
+pub oinkie::Error::ShapeError(ndarray::error::ShapeError)
+pub oinkie::Error::ToolIo(std::path::PathBuf, core::io::error::Error)
+pub oinkie::Error::ToolNotFound
+pub oinkie::Error::ToolNotFound::candidates: &'static [&'static str]
+pub oinkie::Error::ToolNotFound::env: &'static str
+pub oinkie::Error::ToolNotFound::tool: &'static str
+pub oinkie::Error::UnreadableOutput(std::path::PathBuf, alloc::boxed::Box<oinkie::Error>)
+impl oinkie::Error
+pub fn oinkie::Error::is_caller_fault(&self) -> bool
+pub fn oinkie::Error::vec_result_to_result_vec<T>(alloc::vec::Vec<oinkie::Result<T>>) -> oinkie::Result<alloc::vec::Vec<T>>
+impl core::error::Error for oinkie::Error
+pub fn oinkie::Error::source(&self) -> core::option::Option<&(dyn core::error::Error + 'static)>
+impl core::fmt::Debug for oinkie::Error
+pub fn oinkie::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::fmt::Display for oinkie::Error
+pub fn oinkie::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct oinkie::Program(_)
+impl oinkie::Program
+pub fn oinkie::Program::function_names(&self) -> alloc::vec::Vec<&str>
+pub fn oinkie::Program::ir(&self) -> oinkie::lift::Ir
+pub fn oinkie::Program::is_empty(&self) -> bool
+pub fn oinkie::Program::json_path(&self) -> core::option::Option<&std::path::Path>
+pub fn oinkie::Program::len(&self) -> usize
+pub fn oinkie::Program::load(&std::path::Path) -> oinkie::Result<Self>
+pub fn oinkie::Program::name(&self) -> &str
+pub fn oinkie::Program::path(&self) -> &std::path::Path
+pub fn oinkie::Program::set_json_path(&mut self, std::path::PathBuf)
+pub fn oinkie::Program::symbol_count(&self) -> usize
+impl core::fmt::Debug for oinkie::Program
+pub fn oinkie::Program::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub type oinkie::Result<T> = core::result::Result<T, oinkie::Error>
