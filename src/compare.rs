@@ -1,6 +1,5 @@
 use crate::Iterable;
 use crate::birthmarks::{Birthmark, Data, Function, Shape};
-use crate::program::{Program, TypedFunction, TypedProgram};
 use crate::{Error, Result};
 use itertools::Itertools;
 use ndarray::Array2;
@@ -304,41 +303,6 @@ fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec
     }
 }
 
-/// A finished comparison before it is attached to the two things compared.
-///
-/// The programs are held by reference in a [`Comparison`], so producing one
-/// fixes the type they are reported as. Returning the result on its own lets
-/// the same computation be reported against a `TypedProgram<T>` or against the
-/// [`Program`] a caller loaded without naming `T`.
-type Scored = (Array2<f64>, Vec<f64>, std::time::Duration);
-
-trait ProgramComparator<T: crate::Op> {
-    fn score_programs(
-        &self,
-        p1: &TypedProgram<T>,
-        p2: &TypedProgram<T>,
-        aggregator: &Aggregator,
-    ) -> Result<Scored> {
-        let p1_len = p1.len();
-        let p2_len = p2.len();
-        let size = std::cmp::max(p1_len, p2_len);
-        let zero = std::time::Duration::from_millis(0);
-        if p1_len == 0 && p2_len == 0 {
-            Ok((Array2::<f64>::zeros((0, 0)), vec![1.0], zero))
-        } else if p1_len == 0 || p2_len == 0 {
-            Ok((Array2::<f64>::zeros((0, 0)), vec![0.0], zero))
-        } else {
-            let start = Instant::now();
-            let r = build_matrix(p1, p2, size, |f1, f2| self.compare_func(f1, f2))?;
-            aggregator
-                .aggregate(&r)
-                .map(|sim| (r, sim, start.elapsed()))
-        }
-    }
-
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64;
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Algorithm {
@@ -507,71 +471,6 @@ impl From<&Algorithm> for Comparator {
 }
 
 impl Comparator {
-    fn score_programs<T: crate::Op>(
-        &self,
-        p1: &TypedProgram<T>,
-        p2: &TypedProgram<T>,
-        aggregator: &Aggregator,
-    ) -> Result<Scored> {
-        match &self.inner {
-            ComparatorImpl::Cosine(c) => c.score_programs(p1, p2, aggregator),
-            ComparatorImpl::Dice(d) => d.score_programs(p1, p2, aggregator),
-            ComparatorImpl::Euclidean(e) => e.score_programs(p1, p2, aggregator),
-            ComparatorImpl::Jaccard(j) => j.score_programs(p1, p2, aggregator),
-            ComparatorImpl::Levenshtein(l) => l.score_programs(p1, p2, aggregator),
-            ComparatorImpl::Lcs(lcs) => lcs.score_programs(p1, p2, aggregator),
-            ComparatorImpl::Simpson(s) => s.score_programs(p1, p2, aggregator),
-            ComparatorImpl::WeightedJaccard(wj) => wj.score_programs(p1, p2, aggregator),
-        }
-    }
-
-    /// Compares two programs read without naming their operation type.
-    ///
-    /// Two representations describe the same instruction with different
-    /// operations, so a comparison across them would measure the disagreement
-    /// between the lifters rather than anything about the programs. That is
-    /// refused here for the same reason it is refused for birthmarks in
-    /// [`Self::compare_birthmarks`].
-    ///
-    /// The refusal is the match's fall-through rather than a guard before it,
-    /// so a pair is either scored by an arm that names both representations or
-    /// refused. It became reachable with Binary Ninja: until then one
-    /// representation could be read and nothing could form a mixed pair.
-    /// Ghidra's P-Code and Binary Ninja's LLIL of the same binary do not even
-    /// agree on which functions it has, which is what the refusal is for.
-    pub fn compare_programs<'a>(
-        &self,
-        p1: &'a Program,
-        p2: &'a Program,
-        aggregator: &Aggregator,
-    ) -> Result<Comparison<'a, Program>> {
-        // The mismatch is the fall-through rather than a check before the
-        // match, so that there is one place where a pair is either scored or
-        // refused. Written as a guard first, the match would still need an
-        // arm for every mixed pair -- arms nothing can reach, since equal
-        // representations are the same variant.
-        use crate::program::Lifted;
-        let (matrix, similarities, duration) = match (&p1.0, &p2.0) {
-            (Lifted::GhidraPcode(a), Lifted::GhidraPcode(b)) => {
-                self.score_programs(a, b, aggregator)?
-            }
-            (Lifted::BinaryNinjaLlil(a), Lifted::BinaryNinjaLlil(b)) => {
-                self.score_programs(a, b, aggregator)?
-            }
-            (Lifted::BinaryNinjaMlil(a), Lifted::BinaryNinjaMlil(b)) => {
-                self.score_programs(a, b, aggregator)?
-            }
-            (Lifted::BinaryNinjaHlil(a), Lifted::BinaryNinjaHlil(b)) => {
-                self.score_programs(a, b, aggregator)?
-            }
-            (Lifted::IdaMicrocode(a), Lifted::IdaMicrocode(b)) => {
-                self.score_programs(a, b, aggregator)?
-            }
-            _ => return Err(Error::IrMismatch(p1.ir(), p2.ir())),
-        };
-        Ok(Comparison::new(p1, p2, matrix, similarities, duration))
-    }
-
     pub fn compare_birthmarks<'a>(
         &self,
         b1: &'a Birthmark,
@@ -729,72 +628,6 @@ impl BirthmarkComparator for Lcs {
         } else {
             0.0
         }
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Jaccard {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
-        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
-        jaccard_index(&set1, &set2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Dice {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
-        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
-        dice_index(&set1, &set2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Simpson {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
-        let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
-        simpson_index(&set1, &set2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Levenshtein {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let ops1: Vec<&str> = f1.ops().collect();
-        let ops2: Vec<&str> = f2.ops().collect();
-        levenshtein_distance(&ops1, &ops2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Lcs {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let ops1: Vec<&str> = f1.ops().collect();
-        let ops2: Vec<&str> = f2.ops().collect();
-        longest_common_subsequence(&ops1, &ops2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Cosine {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let map1 = f1.ops_freq();
-        let map2 = f2.ops_freq();
-        cosine_similarity(&map1, &map2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for Euclidean {
-    /// Computes the Euclidean distance between two functions and converts it to a similarity score.
-    /// The similarity is calculated as `exp(-distance)`, which maps a distance of 0 to a similarity of 1, and larger distances to values approaching 0.
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let map1 = f1.ops_freq();
-        let map2 = f2.ops_freq();
-        euclidean_distance(&map1, &map2)
-    }
-}
-
-impl<T: crate::Op> ProgramComparator<T> for WeightedJaccard {
-    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
-        let map1 = f1.ops_freq();
-        let map2 = f2.ops_freq();
-        weighted_jaccard(&map1, &map2)
     }
 }
 
@@ -1046,7 +879,6 @@ fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f
 mod tests {
     use super::*;
     use crate::birthmarks::{BirthmarkType, Kgram};
-    use std::path::Path;
 
     /// `Algorithm::ALL` is written by hand, so it is held to the enum: the
     /// `match` stops compiling when a variant is added, and the assertion
@@ -1106,40 +938,6 @@ mod tests {
     }
     use crate::birthmarks::Metadata;
     use std::path::PathBuf;
-
-    /// Dispatching on the file's representation must change nothing about the
-    /// answer -- only about who chose the operation type.
-    #[test]
-    fn test_compare_programs_agrees_with_the_typed_comparison() {
-        let paths = [
-            "testdata/lifted/pcodes/hello_clang.json",
-            "testdata/lifted/pcodes/hello_gcc.json",
-        ];
-        let typed: Vec<TypedProgram<crate::ghidra::Op>> = paths
-            .iter()
-            .map(|p| Path::new(p).try_into().unwrap())
-            .collect();
-        let any: Vec<Program> = paths
-            .iter()
-            .map(|p| Program::load(Path::new(p)).unwrap())
-            .collect();
-
-        let comparator = Algorithm::Jaccard.comparator();
-        let aggregator = &Aggregator::Hungarian;
-        // What the typed path scores, built the way `compare_programs` builds
-        // it once the representation is known: the agreement is that the
-        // dispatch picks that path, not some other one.
-        let (matrix, similarities, duration) = comparator
-            .score_programs(&typed[0], &typed[1], aggregator)
-            .unwrap();
-        let expected =
-            Comparison::new(&typed[0], &typed[1], matrix, similarities, duration).similarity();
-        let actual = comparator
-            .compare_programs(&any[0], &any[1], aggregator)
-            .unwrap()
-            .similarity();
-        assert_eq!(actual, expected);
-    }
 
     #[test]
     fn compare_count_does_not_panic_on_empty_targets() {

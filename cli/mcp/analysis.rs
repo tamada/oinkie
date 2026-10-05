@@ -116,7 +116,11 @@ pub fn extract(
     Error::vec_result_to_result_vec(done)
 }
 
-/// Compares lifted programs directly, without writing birthmarks first.
+/// Extracts the analysis's birthmark from each lifted program and compares the
+/// birthmarks, without writing them down first.
+///
+/// Both halves of the analysis are used. Comparing the programs directly
+/// scored their operations whatever birthmark the analysis named (#150).
 pub fn run(
     inputs: &[PathBuf],
     analysis: &AnalysisType,
@@ -131,21 +135,20 @@ pub fn run(
         .enumerate()
         .par_bridge()
         .map(|(i, (left, right))| {
-            let mut p1 = Program::load(left)?;
-            p1.set_json_path(left.clone());
-            let mut p2 = Program::load(right)?;
-            p2.set_json_path(right.clone());
+            let extractor = Extractor::new(analysis.birthmark().clone());
+            let b1 = extractor.extract(&Program::load(left)?)?;
+            let b2 = extractor.extract(&Program::load(right)?)?;
             let comparison = analysis
                 .comparator()
-                .compare_programs(&p1, &p2, aggregator)?;
+                .compare_birthmarks(&b1, &b2, aggregator)?;
             if let Some(d) = dest {
                 crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
             }
             Ok(CompareResult::new(
                 i,
                 comparison.similarity(),
-                p1.path().to_path_buf(),
-                p2.path().to_path_buf(),
+                b1.path().to_path_buf(),
+                b2.path().to_path_buf(),
                 comparison.duration(),
             ))
         })

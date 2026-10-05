@@ -16,6 +16,17 @@ use oinkie::extract::Extractor;
 use oinkie::lift::Ir;
 use std::path::{Path, PathBuf};
 
+/// Compares two programs the way the command line does: the `op-set`
+/// birthmark of each, by Jaccard. There is no comparing of programs as such --
+/// a comparison is of birthmarks, which say what is compared (#150).
+fn compare(a: &Program, b: &Program) -> oinkie::Result<f64> {
+    let extractor = Extractor::new(BirthmarkType::OpSet);
+    let (ba, bb) = (extractor.extract(a)?, extractor.extract(b)?);
+    Comparator::from(&Algorithm::Jaccard)
+        .compare_birthmarks(&ba, &bb, &Aggregator::default())
+        .map(|c| c.similarity())
+}
+
 const LEVELS: [(&str, Ir); 3] = [
     ("llil", Ir::BinaryNinjaLlil),
     ("mlil", Ir::BinaryNinjaMlil),
@@ -72,11 +83,7 @@ fn test_every_level_finds_the_call_that_is_there() {
 fn test_two_levels_of_the_same_program_refuse_to_be_compared() {
     let llil = Program::load(&fixture("llil", "hello_clang.json")).unwrap();
     let hlil = Program::load(&fixture("hlil", "hello_clang.json")).unwrap();
-    let err = match Comparator::from(&Algorithm::Jaccard).compare_programs(
-        &llil,
-        &hlil,
-        &Aggregator::default(),
-    ) {
+    let err = match compare(&llil, &hlil) {
         Err(e) => e.to_string(),
         Ok(_) => panic!("LLIL and HLIL were compared"),
     };
@@ -91,10 +98,7 @@ fn test_a_level_compares_with_itself() {
     for (level, _) in LEVELS {
         let a = Program::load(&fixture(level, "hello_clang.json")).unwrap();
         let b = Program::load(&fixture(level, "hello_gcc.json")).unwrap();
-        let c = Comparator::from(&Algorithm::Jaccard)
-            .compare_programs(&a, &b, &Aggregator::default())
-            .unwrap_or_else(|e| panic!("{level}: {e}"));
-        let s = c.similarity();
+        let s = compare(&a, &b).unwrap_or_else(|e| panic!("{level}: {e}"));
         assert!(
             (0.0..=1.0).contains(&s),
             "{level} scored outside [0, 1]: {s}"

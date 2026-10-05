@@ -17,6 +17,17 @@ use oinkie::extract::Extractor;
 use oinkie::lift::Ir;
 use std::path::{Path, PathBuf};
 
+/// Compares two programs the way the command line does: the `op-set`
+/// birthmark of each, by Jaccard. There is no comparing of programs as such --
+/// a comparison is of birthmarks, which say what is compared (#150).
+fn compare(a: &Program, b: &Program) -> oinkie::Result<f64> {
+    let extractor = Extractor::new(BirthmarkType::OpSet);
+    let (ba, bb) = (extractor.extract(a)?, extractor.extract(b)?);
+    Comparator::from(&Algorithm::Jaccard)
+        .compare_birthmarks(&ba, &bb, &Aggregator::default())
+        .map(|c| c.similarity())
+}
+
 fn fixture(name: &str) -> PathBuf {
     Path::new("testdata/lifted/mcode").join(name)
 }
@@ -64,11 +75,7 @@ fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
 fn test_the_microcode_refuses_to_be_compared_with_p_code() {
     let mcode = Program::load(&fixture("hello_clang.json")).unwrap();
     let pcode = Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json")).unwrap();
-    let err = match Comparator::from(&Algorithm::Jaccard).compare_programs(
-        &mcode,
-        &pcode,
-        &Aggregator::default(),
-    ) {
+    let err = match compare(&mcode, &pcode) {
         Err(e) => e.to_string(),
         Ok(_) => panic!("microcode and P-Code were compared"),
     };
@@ -82,9 +89,6 @@ fn test_the_microcode_refuses_to_be_compared_with_p_code() {
 fn test_two_programs_in_the_microcode_compare() {
     let a = Program::load(&fixture("hello_clang.json")).unwrap();
     let b = Program::load(&fixture("hello_gcc.json")).unwrap();
-    let c = Comparator::from(&Algorithm::Jaccard)
-        .compare_programs(&a, &b, &Aggregator::default())
-        .unwrap();
-    let s = c.similarity();
+    let s = compare(&a, &b).unwrap();
     assert!((0.0..=1.0).contains(&s), "scored outside [0, 1]: {s}");
 }

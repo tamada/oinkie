@@ -201,7 +201,6 @@ pub fn oinkie::compare::Size::fmt(&self, &mut core::fmt::Formatter<'_>) -> core:
 pub struct oinkie::compare::Comparator
 impl oinkie::compare::Comparator
 pub fn oinkie::compare::Comparator::compare_birthmarks<'a>(&self, &'a oinkie::birthmarks::Birthmark, &'a oinkie::birthmarks::Birthmark, &oinkie::compare::Aggregator) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::birthmarks::Birthmark>>
-pub fn oinkie::compare::Comparator::compare_programs<'a>(&self, &'a oinkie::Program, &'a oinkie::Program, &oinkie::compare::Aggregator) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::Program>>
 impl core::convert::From<&oinkie::compare::Algorithm> for oinkie::compare::Comparator
 pub fn oinkie::compare::Comparator::from(&oinkie::compare::Algorithm) -> Self
 pub struct oinkie::compare::Comparison<'a, S>

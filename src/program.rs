@@ -223,13 +223,6 @@ impl<T> TypedProgram<T> {
     }
 }
 
-impl<T> Iterable for &TypedProgram<T> {
-    type Item = TypedFunction<T>;
-    fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(self.functions.iter())
-    }
-}
-
 impl<T> Iterable for TypedProgram<T> {
     type Item = TypedFunction<T>;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {

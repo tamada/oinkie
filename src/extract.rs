@@ -40,6 +40,14 @@ fn extract_birthmark_op<T: crate::Op>(
     p: &TypedProgram<T>,
     bt: &BirthmarkType,
 ) -> Result<Birthmark> {
+    // A name with k = 0 does not parse, but the variant can be built by hand,
+    // and a window of size zero panics. Refused as the unknown birthmark it is.
+    if let BirthmarkType::OpKgramSeq(0)
+    | BirthmarkType::OpKgramSet(0)
+    | BirthmarkType::OpKgramFreq(0) = bt
+    {
+        return Err(crate::Error::BirthmarkType(bt.to_string()));
+    }
     let now = std::time::Instant::now();
     // An empty fc-* birthmark is a measurement, not a failure: a program that
     // calls nothing is a program that calls nothing, and the family simply does
@@ -220,6 +228,26 @@ fn extract_function_calls_freq<T: crate::Op>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A zero k-gram cannot be parsed, but the variant can be built by hand,
+    /// and extracting it is refused rather than panicking on a window of size
+    /// zero.
+    #[test]
+    fn test_a_zero_gram_is_refused_rather_than_panicking() {
+        let p =
+            crate::Program::load(std::path::Path::new("testdata/lifted/pcodes/udl.json")).unwrap();
+        for bt in [
+            BirthmarkType::OpKgramSeq(0),
+            BirthmarkType::OpKgramSet(0),
+            BirthmarkType::OpKgramFreq(0),
+        ] {
+            let err = Extractor::new(bt.clone())
+                .extract(&p)
+                .err()
+                .unwrap_or_else(|| panic!("{bt} was extracted"));
+            assert!(err.to_string().contains(&bt.to_string()), "{err}");
+        }
+    }
     use tempfile::tempdir;
 
     /// A program whose calls resolve to nothing, written by hand rather than

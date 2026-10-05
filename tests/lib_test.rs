@@ -65,12 +65,6 @@ fn test_extractor_and_comparator() {
             algo,
             result_topn.similarity()
         );
-
-        // Test comparing programs directly
-        let result_prog = comparator
-            .compare_programs(&p1, &p2, &Aggregator::Hungarian)
-            .unwrap();
-        assert!(result_prog.similarity() >= -0.01 && result_prog.similarity() <= 1.01);
     }
 }
 
