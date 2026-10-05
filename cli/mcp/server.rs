@@ -227,6 +227,37 @@ pub struct ExtractedAll {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct StatsParams {
+    /// Birthmark files, or directories holding them -- what oinkie_extract
+    /// writes. A directory contributes the *.json directly inside it. A file
+    /// that does not read as a birthmark is skipped, and listed as skipped.
+    pub paths: Vec<String>,
+    /// Descend into the subdirectories of the given directories. Default false.
+    #[serde(default)]
+    pub recursive: Option<bool>,
+    /// Report each birthmark file as well as each group. Default false.
+    #[serde(default)]
+    pub per_file: Option<bool>,
+    /// Report this many of the most frequent elements of each group.
+    #[serde(default)]
+    pub top: Option<usize>,
+}
+
+/// What `oinkie stats -f json` writes, with the per-file rows only when they
+/// were asked for: a model pays for every row it is handed.
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub(crate) struct Statistics {
+    /// One per intermediate representation and birthmark type: the
+    /// birthmarks that can be compared with each other.
+    pub groups: Vec<crate::stats::GroupStats>,
+    /// One per birthmark file, when per_file was given.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<crate::stats::FileStats>>,
+    /// The files that were given or found and are not birthmarks.
+    pub skipped: Vec<crate::stats::Skipped>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ReviewParams {
     /// Directory holding the element-wise similarity CSVs that `compare` or
     /// `run` wrote -- the one they were given as their destination.
@@ -398,6 +429,40 @@ impl Oinkie {
         Ok(Json(Compared {
             scores,
             dest: dest.map(|d| d.display().to_string()),
+        }))
+    }
+
+    #[tool(
+        name = "oinkie_stats",
+        description = "Summarise a set of birthmarks before comparing them: per group of \
+                       comparable birthmarks, how many files, how many functions each holds, \
+                       how many elements each function's birthmark has, how many are empty, \
+                       and optionally the most frequent elements. Use it to describe a \
+                       dataset, or to choose min_elements for oinkie_review."
+    )]
+    async fn oinkie_stats(
+        &self,
+        Parameters(params): Parameters<StatsParams>,
+    ) -> Result<Json<Statistics>, ErrorData> {
+        let inputs = self.resolve_all(&params.paths)?;
+        let recursive = params.recursive.unwrap_or(false);
+        let found =
+            tokio::task::spawn_blocking(move || crate::stats::collect_paths(&inputs, recursive))
+                .await
+                .map_err(joined)?
+                .map_err(super::error::to_mcp)?;
+        // The directories were confined, but not what is in them: a file
+        // found there can be a symlink out of every root.
+        self.confine(found.iter().cloned())?;
+
+        let top = params.top;
+        let report = tokio::task::spawn_blocking(move || crate::stats::compute(&found, top))
+            .await
+            .map_err(joined)?;
+        Ok(Json(Statistics {
+            groups: report.groups,
+            files: params.per_file.unwrap_or(false).then_some(report.files),
+            skipped: report.skipped,
         }))
     }
 

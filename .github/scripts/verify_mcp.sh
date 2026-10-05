@@ -39,7 +39,7 @@ else
     run() { "$1" mcp; }
 fi
 
-readonly EXPECTED="oinkie_compare oinkie_extract oinkie_info oinkie_review oinkie_run"
+readonly EXPECTED="oinkie_compare oinkie_extract oinkie_info oinkie_review oinkie_run oinkie_stats"
 
 session() {
     printf '%s\n' \

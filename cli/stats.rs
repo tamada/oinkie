@@ -17,6 +17,8 @@ use crate::cli;
 use oinkie::birthmarks::{Birthmark, BirthmarkType, Data, Kgram};
 use oinkie::{Error, Result};
 use rayon::prelude::*;
+#[cfg(feature = "mcp")]
+use rmcp::schemars;
 use rustc_hash::FxHashMap;
 use serde::Serialize;
 
@@ -97,6 +99,7 @@ pub(crate) struct Report {
 ///
 /// Reported rather than only logged, so that a summary never silently covers
 /// fewer files than it was handed.
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[derive(Debug, Serialize)]
 pub(crate) struct Skipped {
     pub path: PathBuf,
@@ -105,6 +108,7 @@ pub(crate) struct Skipped {
 
 /// One `(ir, birthmark_type)`: the birthmarks that could be compared with each
 /// other.
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[derive(Debug, Serialize)]
 pub(crate) struct GroupStats {
     pub ir: String,
@@ -133,12 +137,14 @@ pub(crate) struct GroupStats {
 ///
 /// "How often" is what the shape records: occurrences for `seq` and `freq`,
 /// and for `set`, the number of functions that contain it.
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[derive(Debug, Serialize, PartialEq)]
 pub(crate) struct TopElement {
     pub element: String,
     pub count: usize,
 }
 
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[derive(Debug, Serialize)]
 pub(crate) struct FileStats {
     pub path: PathBuf,
@@ -156,6 +162,7 @@ pub(crate) struct FileStats {
 /// The standard deviation is the population one: the input is every function
 /// in the set that was given, not a sample drawn from some larger one.
 /// Quartiles interpolate linearly between ranks, as R's default and NumPy's do.
+#[cfg_attr(feature = "mcp", derive(schemars::JsonSchema))]
 #[derive(Debug, Serialize, PartialEq)]
 pub(crate) struct Summary {
     pub min: usize,
