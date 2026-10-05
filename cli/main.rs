@@ -58,21 +58,15 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let birthmarks_dir = dest.join("birthmarks");
     std::fs::create_dir_all(&birthmarks_dir).map_err(|e| Error::Io(birthmarks_dir.clone(), e))?;
     pbar.set_message("Extracting birthmarks");
-    let birthmarks = opts
-        .files
-        .par_iter()
-        .map(|path| {
-            let b = extract_into(path, &birthmarks_dir, &extractor, opts.is_skip());
-            pbar.inc(1);
-            b
-        })
-        .collect::<Vec<_>>();
-    let birthmarks = Error::vec_result_to_result_vec(birthmarks)?;
-    let by_input = opts
-        .files
-        .iter()
-        .zip(&birthmarks)
-        .collect::<FxHashMap<_, _>>();
+    let by_input = extract_all(
+        &opts.files,
+        &birthmarks_dir,
+        &extractor,
+        opts.is_skip(),
+        || pbar.inc(1),
+    )?;
+    // Duplicates were extracted once, so they never reach the bar.
+    pbar.inc((opts.files.len() - by_input.len()) as u64);
 
     let results = opts
         .iter()
@@ -80,7 +74,13 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
         .par_bridge()
         .map(|(i, (path1, path2))| {
             let dest_file = dest.join(format!("{i:05}.csv"));
-            if dest_file.exists() && opts.is_skip() {
+            let (e1, e2) = (&by_input[path1], &by_input[path2]);
+            // A score is kept only if both birthmarks it came from are still
+            // the ones there. One extracted now replaced whatever the score
+            // was computed from -- a birthmark of another type, or none, in a
+            // directory an earlier release wrote -- and keeping the score
+            // would leave it naming a birthmark it did not compare.
+            if dest_file.exists() && opts.is_skip() && !e1.fresh && !e2.fresh {
                 log::info!(
                     "Similarity file for {:?} and {:?} already exists. Skipping comparison.",
                     path1,
@@ -89,7 +89,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                 pbar.inc(1);
                 read_result_file(&dest_file, i, path1, path2)
             } else {
-                let (b1, b2) = (by_input[path1], by_input[path2]);
+                let (b1, b2) = (&e1.birthmark, &e2.birthmark);
                 pbar.set_message(format!(
                     "Comparing two birthmarks ({}/{})",
                     i + 1,
@@ -375,35 +375,96 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
     r
 }
 
-/// The birthmark `extractor` makes of the program at `path`, written into
+/// A birthmark `extract_all` returned, and whether this call made it.
+pub(crate) struct Extracted {
+    pub(crate) birthmark: Birthmark,
+    /// False for one read back from the directory under `skip`. A score
+    /// computed from an older birthmark at the same path is only worth
+    /// keeping if this is false for both its sides.
+    pub(crate) fresh: bool,
+}
+
+/// The birthmark `extractor` makes of each program in `inputs`, written into
 /// `dir` under the name `extract` would give it, and returned with that path
-/// recorded.
+/// recorded, keyed by the input.
 ///
 /// With `skip`, a birthmark already there is read instead -- but only one of
 /// the type asked for. The file name does not say which type a birthmark is,
 /// so a directory run before under another analysis would otherwise hand its
 /// birthmarks to this one.
-pub(crate) fn extract_into(
-    path: &Path,
+///
+/// Every input is read or extracted before anything is written, and each file
+/// is written once. Two inputs can name the same file -- the same path given
+/// twice, or two copies of one program under one stem -- and writing it from
+/// both workers at once could interleave the two into invalid JSON, or let a
+/// `skip` read it half written.
+pub(crate) fn extract_all(
+    inputs: &[PathBuf],
     dir: &Path,
     extractor: &Extractor,
     skip: bool,
-) -> Result<Birthmark> {
-    let dest_path = dir.join(dest_name::dest_file_name(path)?);
+    on_each: impl Fn() + Sync,
+) -> Result<FxHashMap<PathBuf, Extracted>> {
+    let mut unique = inputs.iter().collect::<Vec<_>>();
+    unique.sort();
+    unique.dedup();
+    let done = unique
+        .par_iter()
+        .map(|path| {
+            let dest_path = dir.join(dest_name::dest_file_name(path)?);
+            let r = read_or_extract(path, &dest_path, extractor, skip);
+            on_each();
+            r.map(|e| ((*path).clone(), dest_path, e))
+        })
+        .collect::<Vec<_>>();
+    let done = Error::vec_result_to_result_vec(done)?;
+
+    let mut writes = done
+        .iter()
+        .filter(|(_, _, e)| e.fresh)
+        .map(|(_, dest_path, e)| (dest_path, &e.birthmark))
+        .collect::<Vec<_>>();
+    writes.sort_by(|a, b| a.0.cmp(b.0));
+    writes.dedup_by(|a, b| a.0 == b.0);
+    let written = writes
+        .par_iter()
+        .map(|(dest_path, b)| {
+            let json = serde_json::to_string_pretty(b)
+                .map_err(|e| Error::Json((*dest_path).clone(), e))?;
+            std::fs::write(dest_path, json).map_err(|e| Error::Io((*dest_path).clone(), e))
+        })
+        .collect::<Vec<_>>();
+    Error::vec_result_to_result_vec(written)?;
+
+    Ok(done
+        .into_iter()
+        .map(|(path, dest_path, mut e)| {
+            e.birthmark.set_json_path(dest_path);
+            (path, e)
+        })
+        .collect())
+}
+
+fn read_or_extract(
+    path: &Path,
+    dest_path: &Path,
+    extractor: &Extractor,
+    skip: bool,
+) -> Result<Extracted> {
     if skip && dest_path.exists() {
-        let existing: Birthmark = load(dest_path.clone())?;
+        let existing: Birthmark = load(dest_path.to_path_buf())?;
         if existing.birthmark_type() == extractor.birthmark_type() {
             log::info!("Birthmark for {path:?} already exists. Skipping extraction.");
-            let mut existing = existing;
-            existing.set_json_path(dest_path);
-            return Ok(existing);
+            return Ok(Extracted {
+                birthmark: existing,
+                fresh: false,
+            });
         }
     }
-    let mut b = extractor.extract(&load_program(path)?)?;
-    let json = serde_json::to_string_pretty(&b).map_err(|e| Error::Json(dest_path.clone(), e))?;
-    std::fs::write(&dest_path, json).map_err(|e| Error::Io(dest_path.clone(), e))?;
-    b.set_json_path(dest_path);
-    Ok(b)
+    Ok(Extracted {
+        birthmark: extractor.extract(&load_program(path)?)?,
+        fresh: true,
+    })
 }
 
 fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> Result<()> {
@@ -780,6 +841,32 @@ mod tests {
     use super::*;
     use oinkie::birthmarks::{AnalysisType, BirthmarkType};
     use oinkie::lift::Ir;
+
+    /// An input given twice is extracted once, so no two workers hold the
+    /// same file. A test of the files alone cannot show this: the race it
+    /// prevents seldom loses.
+    #[test]
+    fn test_an_input_given_twice_is_extracted_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = PathBuf::from("testdata/lifted/pcodes/hello_clang.json");
+        let b = PathBuf::from("testdata/lifted/pcodes/udl.json");
+        let seen = std::sync::atomic::AtomicUsize::new(0);
+        let extractor = Extractor::new(BirthmarkType::OpSet);
+        let by_input = extract_all(
+            &[a.clone(), b.clone(), a.clone()],
+            dir.path(),
+            &extractor,
+            false,
+            || {
+                seen.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            },
+        )
+        .unwrap();
+        assert_eq!(seen.into_inner(), 2);
+        assert_eq!(by_input.len(), 2);
+        assert!(by_input[&a].fresh && by_input[&b].fresh);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
 
     /// A tool that is nowhere is reported the way `lift` always reported it,
     /// with `--home` offered first; anything else passes through untouched.

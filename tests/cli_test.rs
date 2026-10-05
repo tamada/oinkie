@@ -527,9 +527,7 @@ fn test_run_skip_does_not_reuse_a_birthmark_of_another_type() {
             .assert()
             .success();
     };
-    // the same birthmark directory, reached from two score directories
     run("fc-set-jaccard", "");
-    fs::remove_file(dest.join("00000.csv")).unwrap();
     run("op-set-jaccard", "");
     let named = side_birthmark(&dest.join("00000.csv"), "left");
     let b: serde_json::Value = serde_json::from_str(&fs::read_to_string(&named).unwrap()).unwrap();
@@ -537,6 +535,54 @@ fn test_run_skip_does_not_reuse_a_birthmark_of_another_type() {
         b["metadata"]["birthmark_type"], "OpSet",
         "the fc-set birthmark was reused"
     );
+    // and the score was recomputed with it: one kept from the fc-set run
+    // would name the op-set birthmark that replaced the one it compared
+    let fresh = dir.path().join("fresh");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-a", "op-set-jaccard", "-s", "all", "-d"])
+        .arg(&fresh)
+        .args(inputs)
+        .assert()
+        .success();
+    let similarity = |pair: &std::path::Path| -> String {
+        let content = fs::read_to_string(pair).unwrap();
+        let line = content.lines().find(|l| l.starts_with("result,")).unwrap();
+        line.split(',').nth(2).unwrap().to_string()
+    };
+    assert_eq!(
+        similarity(&dest.join("00000.csv")),
+        similarity(&fresh.join("00000.csv")),
+        "the fc-set score was kept"
+    );
+}
+
+/// The same input twice is extracted once and written once, rather than by
+/// two workers into one file at the same time.
+#[test]
+fn test_run_given_an_input_twice_writes_its_birthmark_once() {
+    let dir = tempdir().unwrap();
+    let dest = dir.path().join("out");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-s", "all", "-d"])
+        .arg(&dest)
+        .args([
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/udl.json",
+        ])
+        .assert()
+        .success();
+    let written = fs::read_dir(dest.join("birthmarks"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(written.len(), 2, "{written:?}");
+    for w in written {
+        serde_json::from_str::<serde_json::Value>(&fs::read_to_string(&w).unwrap())
+            .unwrap_or_else(|e| panic!("{}: {e}", w.display()));
+    }
 }
 
 /// The old name is refused, not aliased, and the refusal names the new one --

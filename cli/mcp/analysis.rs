@@ -116,6 +116,21 @@ pub fn extract(
     Error::vec_result_to_result_vec(done)
 }
 
+/// Where `run` writes the birthmarks of a destination.
+pub fn birthmarks_dir(dest: &Path) -> PathBuf {
+    dest.join("birthmarks")
+}
+
+/// The files `run` writes the birthmarks of `inputs` to under `dest`, so the
+/// server can confine them as it confines `dest` itself.
+pub fn birthmark_files(inputs: &[PathBuf], dest: &Path) -> Result<Vec<PathBuf>> {
+    let dir = birthmarks_dir(dest);
+    inputs
+        .iter()
+        .map(|i| Ok(dir.join(crate::dest_name::dest_file_name(i)?)))
+        .collect()
+}
+
 /// Extracts the analysis's birthmark from each lifted program once and
 /// compares the birthmarks.
 ///
@@ -135,28 +150,34 @@ pub fn run(
     let start = Instant::now();
     prepare(dest)?;
     let extractor = Extractor::new(analysis.birthmark().clone());
-    let birthmarks_dir = dest.map(|d| d.join("birthmarks"));
-    if let Some(d) = &birthmarks_dir {
-        std::fs::create_dir_all(d).map_err(|e| Error::Io(d.clone(), e))?;
-    }
-    let birthmarks = inputs
-        .par_iter()
-        .map(|input| match &birthmarks_dir {
-            Some(d) => crate::extract_into(input, d, &extractor, false),
-            None => extractor.extract(&Program::load(input)?),
-        })
-        .collect::<Vec<_>>();
-    let birthmarks = Error::vec_result_to_result_vec(birthmarks)?;
-    let by_input = inputs
-        .iter()
-        .zip(&birthmarks)
-        .collect::<rustc_hash::FxHashMap<_, _>>();
+    let by_input = match dest {
+        Some(d) => {
+            let dir = birthmarks_dir(d);
+            std::fs::create_dir_all(&dir).map_err(|e| Error::Io(dir.clone(), e))?;
+            crate::extract_all(inputs, &dir, &extractor, false, || ())?
+                .into_iter()
+                .map(|(input, e)| (input, e.birthmark))
+                .collect::<rustc_hash::FxHashMap<_, _>>()
+        }
+        None => {
+            let mut unique = inputs.iter().collect::<Vec<_>>();
+            unique.sort();
+            unique.dedup();
+            let done = unique
+                .par_iter()
+                .map(|input| Ok(((*input).clone(), extractor.extract(&Program::load(input)?)?)))
+                .collect::<Vec<_>>();
+            Error::vec_result_to_result_vec(done)?
+                .into_iter()
+                .collect::<rustc_hash::FxHashMap<_, _>>()
+        }
+    };
     let results = strategy
         .pairs(inputs)
         .enumerate()
         .par_bridge()
         .map(|(i, (left, right))| {
-            let (b1, b2) = (by_input[left], by_input[right]);
+            let (b1, b2) = (&by_input[left], &by_input[right]);
             let comparison = analysis
                 .comparator()
                 .compare_birthmarks(b1, b2, aggregator)?;
