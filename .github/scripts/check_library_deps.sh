@@ -20,8 +20,13 @@ readonly CLI_ONLY="clap clap_complete env_logger indicatif rayon rmcp sha2 tokio
 # Prints the crates of $CLI_ONLY that `cargo tree` lists, one per line.
 # `--prefix none` puts each crate's name first on its line, so the name is
 # compared whole rather than searched for inside other names.
+#
+# `--target all`, because this runs on one platform and the policy holds on
+# every one: without it cargo resolves for the host alone, and a dependency
+# declared only for Windows or macOS would pass here while every user on that
+# platform pulled it in.
 listed() {
-    tree=$(cargo tree -p oinkie -e normal --prefix none "$@") || {
+    tree=$(cargo tree -p oinkie -e normal --target all --prefix none "$@") || {
         echo "$0: cargo tree $* failed" >&2
         exit 2
     }

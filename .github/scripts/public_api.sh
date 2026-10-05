@@ -39,12 +39,28 @@ esac
 #
 # -ss leaves out blanket and auto-trait impls (`impl<T> From<T> for T`,
 # `impl Send for ...`), which change with the compiler rather than with this
-# crate. --no-default-features because the library has no API behind a
-# feature, and building without the command line's dependencies is faster.
-now=$(cargo +"$NIGHTLY" public-api -ss --no-default-features --color never) || {
-    echo "$0: cargo-public-api failed; is it installed? $0 --install" >&2
-    exit 2
+# crate.
+api() {
+    cargo +"$NIGHTLY" public-api -ss --color never "$@" || {
+        echo "$0: cargo-public-api $* failed; is it installed? $0 --install" >&2
+        exit 2
+    }
 }
+
+# The library has no API behind a feature: the features are the command
+# line's, and nothing in the library may depend on them (#133). So the API is
+# taken with no features and with all of them, and the two must be the same --
+# otherwise a `pub` item gated on a feature would be invisible to the file
+# below while every default build exposed it.
+now=$(api --no-default-features)
+all=$(api --all-features)
+if [ "$now" != "$all" ]; then
+    echo "$0: the public API changes with the crate's features:" >&2
+    printf '%s\n' "$now" >"${TMPDIR:-/tmp}/oinkie-api-none.txt"
+    printf '%s\n' "$all" | diff -u "${TMPDIR:-/tmp}/oinkie-api-none.txt" - >&2 || true
+    echo "  The library's API must not depend on a feature." >&2
+    exit 1
+fi
 
 if [ "${1:-}" = "--update" ]; then
     printf '%s\n' "$now" >"$FILE"
