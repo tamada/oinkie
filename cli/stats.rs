@@ -4,11 +4,9 @@
 //! program and holds one entry per **function**; each function's birthmark is
 //! made of **elements** -- operations, calls or k-grams. "Birthmark length" is
 //! the number of elements in one function's birthmark, which is the sense
-//! #128's `--min-elements` uses.
-//!
-//! The library's types do not follow these terms yet -- `Birthmark::elements`
-//! holds one entry per *function* -- so this module translates at the point it
-//! reads them (#131).
+//! #128's `--min-elements` uses. The library's types follow the same terms:
+//! `Birthmark::functions()` holds the functions, and each `Function`'s `Data`
+//! holds its elements.
 
 use std::collections::BTreeMap;
 use std::io::Write;
