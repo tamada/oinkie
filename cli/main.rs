@@ -12,7 +12,7 @@ use oinkie::extract::Extractor;
 use oinkie::lift::{Lifter, LifterBuilder};
 use oinkie::{Error, Program, Result};
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -347,25 +347,17 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
     let extractor = opts.extractor();
     let start = Instant::now();
-    let r = opts
-        .iter()
-        .par_bridge()
-        .map(|path| {
-            let e1 = Instant::now();
-            let r = match extract_impl(path, dest, &extractor, opts.is_skip()) {
-                Ok(_) => Ok(e1.elapsed()),
-                Err(e) => Err(e),
-            };
-            pb.inc(1);
-            r
-        })
-        .collect::<Result<Vec<_>>>();
+    let inputs = opts.iter().collect::<Vec<_>>();
+    let r = extract_each(&inputs, dest, &extractor, opts.is_skip(), || pb.inc(1));
     let duration = start.elapsed();
     // Only on success. This used to print unconditionally and then return the
     // error, so a failed run announced that it had completed and the failure
     // came immediately below it -- which is the same thing #83 is about, one
     // layer up.
     if r.is_ok() {
+        // The inputs that named a file another had already claimed were not
+        // extracted, and still count as done.
+        pb.set_position(opts.len() as u64);
         println!(
             "Extraction completed in {} nsec ({})",
             duration.as_nanos(),
@@ -467,9 +459,49 @@ fn read_or_extract(
     })
 }
 
-fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> Result<()> {
-    let file_name = dest_name::dest_file_name(path)?;
-    let dest_path = dest.join(file_name);
+/// Each input with the file `extract` writes its birthmark to in `dir`,
+/// keeping only the first input to name each file, in the order given.
+///
+/// Two inputs name one file when they are the same path given twice, or two
+/// copies of one program under one stem, since the name is the stem and a
+/// hash of the content. Extracting both would have two workers write one file
+/// at once, which can interleave them into invalid JSON.
+pub(crate) fn unique_destinations<'a>(
+    inputs: &[&'a PathBuf],
+    dir: &Path,
+) -> Result<Vec<(&'a PathBuf, PathBuf)>> {
+    let mut seen = FxHashSet::default();
+    let mut unique = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let dest_path = dir.join(dest_name::dest_file_name(input)?);
+        if seen.insert(dest_path.clone()) {
+            unique.push((*input, dest_path));
+        }
+    }
+    Ok(unique)
+}
+
+/// Extracts each input into `dir`, once per file written, and returns how
+/// long each took. `on_each` is called once per extraction.
+fn extract_each(
+    inputs: &[&PathBuf],
+    dir: &Path,
+    extractor: &Extractor,
+    skip: bool,
+    on_each: impl Fn() + Sync,
+) -> Result<Vec<Duration>> {
+    unique_destinations(inputs, dir)?
+        .par_iter()
+        .map(|(path, dest_path)| {
+            let e1 = Instant::now();
+            let r = extract_impl(path, dest_path, extractor, skip).map(|_| e1.elapsed());
+            on_each();
+            r
+        })
+        .collect()
+}
+
+fn extract_impl(path: &Path, dest_path: &Path, extractor: &Extractor, skip: bool) -> Result<()> {
     if dest_path.exists() && skip {
         log::info!(
             "Birthmark for {:?} already exists. Skipping extraction.",
@@ -479,9 +511,9 @@ fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> 
     }
     let p = load_program(path)?;
     let birthmarks = extractor.extract(&p)?;
-    let json =
-        serde_json::to_string_pretty(&birthmarks).map_err(|e| Error::Json(dest_path.clone(), e))?;
-    std::fs::write(&dest_path, json).map_err(|e| Error::Io(dest_path.clone(), e))?;
+    let json = serde_json::to_string_pretty(&birthmarks)
+        .map_err(|e| Error::Json(dest_path.to_path_buf(), e))?;
+    std::fs::write(dest_path, json).map_err(|e| Error::Io(dest_path.to_path_buf(), e))?;
     Ok(())
 }
 
@@ -841,6 +873,47 @@ mod tests {
     use super::*;
     use oinkie::birthmarks::{AnalysisType, BirthmarkType};
     use oinkie::lift::Ir;
+
+    /// `extract` given one file twice, or two copies of one program under one
+    /// stem, extracts each birthmark file once, so no two workers write the
+    /// same file. Counted rather than read back: the race this prevents
+    /// seldom loses, so the files alone would pass without the fix.
+    #[test]
+    fn test_extract_writes_each_destination_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = PathBuf::from("testdata/lifted/pcodes/hello_clang.json");
+        let b = PathBuf::from("testdata/lifted/pcodes/udl.json");
+        let copy = dir.path().join("elsewhere/hello_clang.json");
+        std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+        std::fs::copy(&a, &copy).unwrap();
+        let out = dir.path().join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        let seen = std::sync::atomic::AtomicUsize::new(0);
+        let durations = extract_each(
+            &[&a, &b, &a, &copy],
+            &out,
+            &Extractor::new(BirthmarkType::OpSet),
+            false,
+            || {
+                seen.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            },
+        )
+        .unwrap();
+        assert_eq!(seen.into_inner(), 2);
+        assert_eq!(durations.len(), 2);
+        assert_eq!(std::fs::read_dir(&out).unwrap().count(), 2);
+    }
+
+    /// The first input to name a file is the one kept, in the order given.
+    #[test]
+    fn test_unique_destinations_keeps_the_first_input_to_name_each_file() {
+        let a = PathBuf::from("testdata/lifted/pcodes/hello_clang.json");
+        let b = PathBuf::from("testdata/lifted/pcodes/udl.json");
+        let unique = unique_destinations(&[&b, &a, &b], Path::new("d")).unwrap();
+        let inputs = unique.iter().map(|(i, _)| *i).collect::<Vec<_>>();
+        assert_eq!(inputs, vec![&b, &a]);
+        assert!(unique.iter().all(|(_, d)| d.starts_with("d")));
+    }
 
     /// An input given twice is extracted once, so no two workers hold the
     /// same file. A test of the files alone cannot show this: the race it

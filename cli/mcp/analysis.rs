@@ -64,7 +64,35 @@ fn scores(results: &[CompareResult]) -> Vec<Score> {
 /// can be handed straight to `oinkie_review` -- or to `oinkie
 /// review` -- afterwards.
 fn store(results: Vec<CompareResult>, dest: &Path, start: Instant) -> Result<()> {
-    crate::store_and_get_durations(results, &dest.join("results.csv"), start).map(|_| ())
+    crate::store_and_get_durations(results, &results_file(dest), start).map(|_| ())
+}
+
+/// Where `run` and `compare` write the element-wise scores of pair `index`.
+pub fn pair_file(dest: &Path, index: usize) -> PathBuf {
+    dest.join(format!("{index:05}.csv"))
+}
+
+/// Where `run` and `compare` write the index of the pairs' scores.
+pub fn results_file(dest: &Path) -> PathBuf {
+    dest.join("results.csv")
+}
+
+/// Every file `run` or `compare` writes into `dest` for `pairs` pairs, so the
+/// server can confine them as it confines `dest` itself.
+pub fn score_files(dest: &Path, pairs: usize) -> impl Iterator<Item = PathBuf> + '_ {
+    (0..pairs)
+        .map(move |i| pair_file(dest, i))
+        .chain(std::iter::once(results_file(dest)))
+}
+
+/// The files `extract` writes the birthmarks of `inputs` to in `dir`, one per
+/// distinct file.
+pub fn extracted_files(inputs: &[PathBuf], dir: &Path) -> Result<Vec<PathBuf>> {
+    let inputs = inputs.iter().collect::<Vec<_>>();
+    Ok(crate::unique_destinations(&inputs, dir)?
+        .into_iter()
+        .map(|(_, out)| out)
+        .collect())
 }
 
 fn prepare(dest: Option<&Path>) -> Result<()> {
@@ -74,7 +102,12 @@ fn prepare(dest: Option<&Path>) -> Result<()> {
     }
 }
 
-/// Extracts a birthmark from each lifted program.
+/// Extracts a birthmark from each lifted program, once per file written.
+///
+/// Two inputs that name one file -- the same path given twice, or two copies
+/// of one program under one stem -- are extracted once and reported once,
+/// under the first of them. Extracting both would have two workers write one
+/// file at once, which can interleave them into invalid JSON.
 pub fn extract(
     inputs: &[PathBuf],
     birthmark_type: &BirthmarkType,
@@ -83,11 +116,11 @@ pub fn extract(
 ) -> Result<Vec<Extracted>> {
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
     let extractor = Extractor::new(birthmark_type.clone());
-    let done = inputs
+    let inputs = inputs.iter().collect::<Vec<_>>();
+    let done = crate::unique_destinations(&inputs, dest)?
         .par_iter()
-        .map(|input| {
+        .map(|(input, out)| {
             let start = Instant::now();
-            let out = dest.join(crate::dest_name::dest_file_name(input)?);
             if out.exists() && skip {
                 // Read back rather than reported blindly: the count is part of
                 // the answer, and a file left by an earlier run is the only
@@ -104,7 +137,7 @@ pub fn extract(
             let birthmark = extractor.extract(&program)?;
             let json = serde_json::to_string_pretty(&birthmark)
                 .map_err(|e| Error::Json(out.clone(), e))?;
-            std::fs::write(&out, json).map_err(|e| Error::Io(out.clone(), e))?;
+            std::fs::write(out, json).map_err(|e| Error::Io(out.clone(), e))?;
             Ok(Extracted {
                 input: input.display().to_string(),
                 output: out.display().to_string(),
@@ -124,11 +157,7 @@ pub fn birthmarks_dir(dest: &Path) -> PathBuf {
 /// The files `run` writes the birthmarks of `inputs` to under `dest`, so the
 /// server can confine them as it confines `dest` itself.
 pub fn birthmark_files(inputs: &[PathBuf], dest: &Path) -> Result<Vec<PathBuf>> {
-    let dir = birthmarks_dir(dest);
-    inputs
-        .iter()
-        .map(|i| Ok(dir.join(crate::dest_name::dest_file_name(i)?)))
-        .collect()
+    extracted_files(inputs, &birthmarks_dir(dest))
 }
 
 /// Extracts the analysis's birthmark from each lifted program once and
@@ -182,7 +211,7 @@ pub fn run(
                 .comparator()
                 .compare_birthmarks(b1, b2, aggregator)?;
             if let Some(d) = dest {
-                crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
+                crate::score_csv::store(&comparison, pair_file(d, i))?;
             }
             Ok(CompareResult::new(
                 i,
@@ -217,7 +246,7 @@ pub fn compare(
             b2.set_json_path(right.clone());
             let comparison = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
             if let Some(d) = dest {
-                crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
+                crate::score_csv::store(&comparison, pair_file(d, i))?;
             }
             Ok(CompareResult::new(
                 i,

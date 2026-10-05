@@ -78,23 +78,37 @@ impl Oinkie {
         dest.map(|d| self.roots.resolve(d)).transpose()
     }
 
-    /// `dest` was confined, but `run` writes below it, into a directory and
-    /// files the caller never named. One that is already there can be a
-    /// symlink out of every root, which resolving `dest` does not look
-    /// through -- so they are resolved too, before anything is written.
-    fn confine_birthmarks(&self, files: &[PathBuf], dest: &Path) -> Result<(), ErrorData> {
-        let derived = analysis::birthmark_files(files, dest).map_err(super::error::to_mcp)?;
-        std::iter::once(analysis::birthmarks_dir(dest))
-            .chain(derived)
-            .try_for_each(|p| {
-                let text = p.to_str().ok_or_else(|| {
-                    ErrorData::invalid_params(
-                        format!("{}: not a path the server can confine", p.display()),
-                        None,
-                    )
-                })?;
-                self.roots.resolve(text).map(|_| ())
-            })
+    /// Resolves each of the files a tool writes below a destination it was
+    /// given. `dest` was confined, but the files in it are named by the tool,
+    /// not the caller, and one already there can be a symlink out of every
+    /// root, which resolving `dest` does not look through. So they are
+    /// resolved too, before anything is written.
+    fn confine(&self, written: impl IntoIterator<Item = PathBuf>) -> Result<(), ErrorData> {
+        written.into_iter().try_for_each(|p| {
+            let text = p.to_str().ok_or_else(|| {
+                ErrorData::invalid_params(
+                    format!("{}: not a path the server can confine", p.display()),
+                    None,
+                )
+            })?;
+            self.roots.resolve(text).map(|_| ())
+        })
+    }
+
+    /// What `run` writes below `dest`: its birthmarks, the pairs' CSVs and
+    /// their index.
+    fn confine_run(
+        &self,
+        files: &[PathBuf],
+        dest: &Path,
+        strategy: &PairingStrategy,
+    ) -> Result<(), ErrorData> {
+        let birthmarks = analysis::birthmark_files(files, dest).map_err(super::error::to_mcp)?;
+        self.confine(
+            std::iter::once(analysis::birthmarks_dir(dest))
+                .chain(birthmarks)
+                .chain(analysis::score_files(dest, strategy.compare_count(files))),
+        )
     }
 
     fn strategy(name: Option<&str>) -> Result<PairingStrategy, ErrorData> {
@@ -206,6 +220,9 @@ pub struct Compared {
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 pub struct ExtractedAll {
     pub birthmark_type: String,
+    /// One per file written. Inputs that name the same file -- one path given
+    /// twice, or two copies of a program under one stem -- are extracted once
+    /// and listed under the first of them.
     pub birthmarks: Vec<Extracted>,
 }
 
@@ -265,6 +282,7 @@ impl Oinkie {
             .unwrap_or_else(|| "op-seq".to_string());
         let birthmark_type = BirthmarkType::try_from(name.as_str()).map_err(refuse)?;
         let skip = params.skip.unwrap_or(false);
+        self.confine(analysis::extracted_files(&files, &dest).map_err(super::error::to_mcp)?)?;
 
         let birthmarks = tokio::task::spawn_blocking(move || {
             analysis::extract(&files, &birthmark_type, &dest, skip)
@@ -299,7 +317,7 @@ impl Oinkie {
         let aggregator = Self::aggregator(params.aggregator.as_deref())?;
         Self::bound(&strategy, &files, params.max_pairs)?;
         if let Some(d) = &dest {
-            self.confine_birthmarks(&files, d)?;
+            self.confine_run(&files, d, &strategy)?;
         }
 
         let written = dest.clone();
@@ -340,6 +358,9 @@ impl Oinkie {
         let strategy = Self::strategy(params.strategy.as_deref())?;
         let aggregator = Self::aggregator(params.aggregator.as_deref())?;
         Self::bound(&strategy, &files, params.max_pairs)?;
+        if let Some(d) = &dest {
+            self.confine(analysis::score_files(d, strategy.compare_count(&files)))?;
+        }
 
         let written = dest.clone();
         let scores = tokio::task::spawn_blocking(move || {
