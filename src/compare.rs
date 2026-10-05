@@ -1,6 +1,6 @@
 use crate::Iterable;
-use crate::birthmarks::{Birthmark, Data, Elements, Shape};
-use crate::program::{Function, Program, TypedProgram};
+use crate::birthmarks::{Birthmark, Data, Function, Shape};
+use crate::program::{Program, TypedFunction, TypedProgram};
 use crate::{Error, Result};
 use itertools::Itertools;
 use ndarray::Array2;
@@ -214,8 +214,8 @@ trait BirthmarkComparator {
         // keeps the reason in the error: a mismatch of representation reads
         // differently from a mismatch of type.
         b1.check_comparable_with(b2)?;
-        let p1_len = b1.elements.len();
-        let p2_len = b2.elements.len();
+        let p1_len = b1.functions.len();
+        let p2_len = b2.functions.len();
         let size = std::cmp::max(p1_len, p2_len);
         if p1_len == 0 && p2_len == 0 {
             Ok(Comparison::new(
@@ -235,14 +235,14 @@ trait BirthmarkComparator {
             ))
         } else {
             let start = Instant::now();
-            let r = build_matrix(b1, b2, size, |e1, e2| self.compare_elements(e1, e2))?;
+            let r = build_matrix(b1, b2, size, |e1, e2| self.compare_functions(e1, e2))?;
             aggregator
                 .aggregate(&r)
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
         }
     }
 
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64;
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64;
 }
 
 fn build_matrix<F, T>(
@@ -336,7 +336,7 @@ trait ProgramComparator<T: crate::Op> {
         }
     }
 
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64;
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -601,7 +601,7 @@ struct WeightedJaccard;
 struct Lcs;
 
 impl BirthmarkComparator for Jaccard {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
             jaccard_index(s1, s2)
         } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
@@ -621,7 +621,7 @@ impl BirthmarkComparator for Jaccard {
 }
 
 impl BirthmarkComparator for Dice {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
             dice_index(s1, s2)
         } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
@@ -641,7 +641,7 @@ impl BirthmarkComparator for Dice {
 }
 
 impl BirthmarkComparator for Simpson {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
             simpson_index(s1, s2)
         } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
@@ -661,7 +661,7 @@ impl BirthmarkComparator for Simpson {
 }
 
 impl BirthmarkComparator for Levenshtein {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
             levenshtein_distance(s1, s2)
         } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
@@ -673,7 +673,7 @@ impl BirthmarkComparator for Levenshtein {
 }
 
 impl BirthmarkComparator for Cosine {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
             cosine_similarity(f1, f2)
         } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
@@ -689,7 +689,7 @@ impl BirthmarkComparator for Cosine {
 }
 
 impl BirthmarkComparator for Euclidean {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
             euclidean_distance(f1, f2)
         } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
@@ -705,7 +705,7 @@ impl BirthmarkComparator for Euclidean {
 }
 
 impl BirthmarkComparator for WeightedJaccard {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
             weighted_jaccard(f1, f2)
         } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
@@ -721,7 +721,7 @@ impl BirthmarkComparator for WeightedJaccard {
 }
 
 impl BirthmarkComparator for Lcs {
-    fn compare_elements(&self, e1: &Elements, e2: &Elements) -> f64 {
+    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
         if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
             longest_common_subsequence(s1, s2)
         } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
@@ -733,7 +733,7 @@ impl BirthmarkComparator for Lcs {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for Jaccard {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
         let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
         jaccard_index(&set1, &set2)
@@ -741,7 +741,7 @@ impl<T: crate::Op> ProgramComparator<T> for Jaccard {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for Dice {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
         let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
         dice_index(&set1, &set2)
@@ -749,7 +749,7 @@ impl<T: crate::Op> ProgramComparator<T> for Dice {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for Simpson {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let set1: rustc_hash::FxHashSet<&str> = f1.ops().collect();
         let set2: rustc_hash::FxHashSet<&str> = f2.ops().collect();
         simpson_index(&set1, &set2)
@@ -757,7 +757,7 @@ impl<T: crate::Op> ProgramComparator<T> for Simpson {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for Levenshtein {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let ops1: Vec<&str> = f1.ops().collect();
         let ops2: Vec<&str> = f2.ops().collect();
         levenshtein_distance(&ops1, &ops2)
@@ -765,7 +765,7 @@ impl<T: crate::Op> ProgramComparator<T> for Levenshtein {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for Lcs {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let ops1: Vec<&str> = f1.ops().collect();
         let ops2: Vec<&str> = f2.ops().collect();
         longest_common_subsequence(&ops1, &ops2)
@@ -773,7 +773,7 @@ impl<T: crate::Op> ProgramComparator<T> for Lcs {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for Cosine {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let map1 = f1.ops_freq();
         let map2 = f2.ops_freq();
         cosine_similarity(&map1, &map2)
@@ -783,7 +783,7 @@ impl<T: crate::Op> ProgramComparator<T> for Cosine {
 impl<T: crate::Op> ProgramComparator<T> for Euclidean {
     /// Computes the Euclidean distance between two functions and converts it to a similarity score.
     /// The similarity is calculated as `exp(-distance)`, which maps a distance of 0 to a similarity of 1, and larger distances to values approaching 0.
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let map1 = f1.ops_freq();
         let map2 = f2.ops_freq();
         euclidean_distance(&map1, &map2)
@@ -791,7 +791,7 @@ impl<T: crate::Op> ProgramComparator<T> for Euclidean {
 }
 
 impl<T: crate::Op> ProgramComparator<T> for WeightedJaccard {
-    fn compare_func(&self, f1: &Function<T>, f2: &Function<T>) -> f64 {
+    fn compare_func(&self, f1: &TypedFunction<T>, f2: &TypedFunction<T>) -> f64 {
         let map1 = f1.ops_freq();
         let map2 = f2.ops_freq();
         weighted_jaccard(&map1, &map2)
@@ -1242,8 +1242,8 @@ mod tests {
         }
     }
 
-    fn elements(name: &str, data: Data) -> Elements {
-        Elements {
+    fn function(name: &str, data: Data) -> Function {
+        Function {
             name: name.to_string(),
             data,
         }
@@ -1296,11 +1296,11 @@ mod tests {
     fn set_like_comparators_accept_every_supported_representation() {
         let builders: [fn(&[&str]) -> Data; 6] = [seq, set, freq, kgram_seq, kgram_set, kgram_freq];
         for build in builders {
-            let e1 = elements("f", build(&["A", "B", "C"]));
-            let e2 = elements("g", build(&["A", "B", "C"]));
-            assert!((Jaccard.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
-            assert!((Dice.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
-            assert!((Simpson.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            let e1 = function("f", build(&["A", "B", "C"]));
+            let e2 = function("g", build(&["A", "B", "C"]));
+            assert!((Jaccard.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Dice.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Simpson.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
         }
     }
 
@@ -1308,10 +1308,10 @@ mod tests {
     fn sequence_comparators_accept_seq_representations() {
         let builders: [fn(&[&str]) -> Data; 2] = [seq, kgram_seq];
         for build in builders {
-            let e1 = elements("f", build(&["A", "B", "C"]));
-            let e2 = elements("g", build(&["A", "B", "C"]));
-            assert!((Levenshtein.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
-            assert!((Lcs.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            let e1 = function("f", build(&["A", "B", "C"]));
+            let e2 = function("g", build(&["A", "B", "C"]));
+            assert!((Levenshtein.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Lcs.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
         }
     }
 
@@ -1319,11 +1319,11 @@ mod tests {
     fn frequency_comparators_accept_every_supported_representation() {
         let builders: [fn(&[&str]) -> Data; 4] = [seq, freq, kgram_seq, kgram_freq];
         for build in builders {
-            let e1 = elements("f", build(&["A", "B", "C"]));
-            let e2 = elements("g", build(&["A", "B", "C"]));
-            assert!((Cosine.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
-            assert!((WeightedJaccard.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
-            assert!((Euclidean.compare_elements(&e1, &e2) - 1.0).abs() < 1e-9);
+            let e1 = function("f", build(&["A", "B", "C"]));
+            let e2 = function("g", build(&["A", "B", "C"]));
+            assert!((Cosine.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((WeightedJaccard.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert!((Euclidean.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
         }
     }
 
@@ -1331,18 +1331,18 @@ mod tests {
     /// than panicking.
     #[test]
     fn comparators_return_zero_for_unsupported_representations() {
-        let s = elements("f", seq(&["A"]));
-        let st = elements("g", set(&["A"]));
+        let s = function("f", seq(&["A"]));
+        let st = function("g", set(&["A"]));
         // Data variants that do not pair up
-        assert_eq!(Jaccard.compare_elements(&s, &st), 0.0);
-        assert_eq!(Dice.compare_elements(&s, &st), 0.0);
-        assert_eq!(Simpson.compare_elements(&s, &st), 0.0);
-        assert_eq!(Cosine.compare_elements(&s, &st), 0.0);
-        assert_eq!(Euclidean.compare_elements(&s, &st), 0.0);
-        assert_eq!(WeightedJaccard.compare_elements(&s, &st), 0.0);
+        assert_eq!(Jaccard.compare_functions(&s, &st), 0.0);
+        assert_eq!(Dice.compare_functions(&s, &st), 0.0);
+        assert_eq!(Simpson.compare_functions(&s, &st), 0.0);
+        assert_eq!(Cosine.compare_functions(&s, &st), 0.0);
+        assert_eq!(Euclidean.compare_functions(&s, &st), 0.0);
+        assert_eq!(WeightedJaccard.compare_functions(&s, &st), 0.0);
         // Levenshtein and LCS only support sequences at all
-        assert_eq!(Levenshtein.compare_elements(&st, &st), 0.0);
-        assert_eq!(Lcs.compare_elements(&st, &st), 0.0);
+        assert_eq!(Levenshtein.compare_functions(&st, &st), 0.0);
+        assert_eq!(Lcs.compare_functions(&st, &st), 0.0);
     }
 
     fn birthmark(name: &str, funcs: &[(&str, &[&str])]) -> Birthmark {
@@ -1355,7 +1355,7 @@ mod tests {
                 birthmark_type: BirthmarkType::OpSeq,
                 ir: crate::lift::Ir::GhidraPcode,
             },
-            elements: funcs.iter().map(|(n, ops)| elements(n, seq(ops))).collect(),
+            functions: funcs.iter().map(|(n, ops)| function(n, seq(ops))).collect(),
             json_path: None,
         }
     }

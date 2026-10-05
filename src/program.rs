@@ -26,7 +26,7 @@ pub(crate) struct TypedProgram<T> {
     #[serde(default)]
     ir: crate::lift::Ir,
     symbols: FxHashMap<String, String>,
-    functions: Vec<Function<T>>,
+    functions: Vec<TypedFunction<T>>,
     #[serde(skip)]
     pub(crate) json_path: Option<PathBuf>,
 }
@@ -224,26 +224,26 @@ impl<T> TypedProgram<T> {
 }
 
 impl<T> Iterable for &TypedProgram<T> {
-    type Item = Function<T>;
+    type Item = TypedFunction<T>;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
         Box::new(self.functions.iter())
     }
 }
 
 impl<T> Iterable for TypedProgram<T> {
-    type Item = Function<T>;
+    type Item = TypedFunction<T>;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
         Box::new(self.functions.iter())
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct Function<T> {
+pub(crate) struct TypedFunction<T> {
     name: String,
     ops: Vec<T>,
 }
 
-impl<T: crate::Op> Function<T> {
+impl<T: crate::Op> TypedFunction<T> {
     pub fn name(&self) -> &str {
         &self.name
     }

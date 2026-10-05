@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "file_name": "hello_clang",
+    "path": "testdata/bin/hello_clang",
+    "extracted_at": "2026-10-04T23:52:49.936659Z",
+    "duration": 62958,
+    "birthmark_type": "OpSeq",
+    "ir": "ghidra-pcode"
+  },
+  "elements": [
+    {
+      "name": "entry",
+      "data": {
+        "Seq": [
+          "CALL",
+          "COPY",
+          "COPY",
+          "RETURN"
+        ]
+      }
+    }
+  ]
+}

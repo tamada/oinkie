@@ -188,8 +188,8 @@ mod tests {
             .parse_ref(&cmd, None, OsStr::new("op-3gram-set-dice"))
             .unwrap();
         assert_eq!(
-            a.analysis_type().unwrap().birthmark,
-            BirthmarkType::OpKgramSet(3)
+            a.analysis_type().unwrap().birthmark(),
+            &BirthmarkType::OpKgramSet(3)
         );
         let bt = BirthmarkTypeParser
             .parse_ref(&cmd, None, OsStr::new("op-3gram-set"))

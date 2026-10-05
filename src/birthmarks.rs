@@ -157,7 +157,7 @@ impl TryFrom<&Path> for Birthmark {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Metadata {
+pub(crate) struct Metadata {
     pub file_name: String,
     pub path: PathBuf,
     pub extracted_at: chrono::DateTime<chrono::Utc>,
@@ -199,12 +199,17 @@ where
     Ok(Duration::from_nanos(nanos))
 }
 
+/// The birthmark of one program: one [`Function`] per function it holds,
+/// and what it was extracted from and how.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Birthmark {
-    pub metadata: Metadata,
-    pub elements: Vec<Elements>,
+    pub(crate) metadata: Metadata,
+    /// Written under the key `elements`, which is what every birthmark file
+    /// before #131 used; renaming the key would make all of them unreadable.
+    #[serde(rename = "elements")]
+    pub(crate) functions: Vec<Function>,
     #[serde(skip)]
-    pub json_path: Option<PathBuf>,
+    pub(crate) json_path: Option<PathBuf>,
 }
 
 impl Birthmark {
@@ -272,42 +277,51 @@ impl Birthmark {
     }
 
     /// The birthmark of each function, in the order they were extracted.
-    pub fn elements(&self) -> &[Elements] {
-        &self.elements
+    pub fn functions(&self) -> &[Function] {
+        &self.functions
     }
 
     pub fn len(&self) -> usize {
-        self.elements.len()
+        self.functions.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.elements.is_empty()
+        self.functions.is_empty()
     }
 }
 
 impl crate::Iterable for &Birthmark {
-    type Item = Elements;
+    type Item = Function;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(self.elements.iter())
+        Box::new(self.functions.iter())
     }
 }
 
 impl crate::Iterable for Birthmark {
-    type Item = Elements;
+    type Item = Function;
     fn iter(&self) -> Box<dyn Iterator<Item = &Self::Item> + '_> {
-        Box::new(self.elements.iter())
+        Box::new(self.functions.iter())
     }
 }
 
+/// The birthmark of one function: its name, and the elements it is made of.
+///
+/// Not the function itself -- what was lifted from the binary is not public --
+/// but what extraction kept of it, which is why it lives in `birthmarks`.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Elements {
-    pub name: String,
-    pub data: Data,
+pub struct Function {
+    pub(crate) name: String,
+    pub(crate) data: Data,
 }
 
-impl Elements {
+impl Function {
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The elements this function's birthmark is made of.
+    pub fn data(&self) -> &Data {
+        &self.data
     }
 
     pub fn ops(&self) -> impl Iterator<Item = &str> {
@@ -323,6 +337,12 @@ impl Elements {
     }
 }
 
+/// The elements one function's birthmark is made of.
+///
+/// An element is one operation or call name (`String`) or one k-gram of them
+/// ([`Kgram`]), and the elements come as a sequence, a set or a frequency map,
+/// which is the birthmark's [`Shape`]. The number of elements is
+/// [`Function::len`]; the number of functions is [`Birthmark::len`].
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
     /// An operation named more than once is refused, for the reason
@@ -541,8 +561,8 @@ impl Data {
 }
 
 pub struct AnalysisType {
-    pub birthmark: BirthmarkType,
-    pub comparator: Comparator,
+    pub(crate) birthmark: BirthmarkType,
+    pub(crate) comparator: Comparator,
 }
 
 impl AnalysisType {
@@ -557,6 +577,11 @@ impl AnalysisType {
             birthmark: bt,
             comparator: algorithm.comparator(),
         })
+    }
+
+    /// The birthmark type this analysis compares.
+    pub fn birthmark(&self) -> &BirthmarkType {
+        &self.birthmark
     }
 
     pub fn comparator(&self) -> &Comparator {
@@ -1028,26 +1053,26 @@ mod tests {
             Data::KgramFreq([(kgram, 1)].into_iter().collect()),
         ];
         for data in variants {
-            let elements = Elements {
+            let function = Function {
                 name: "f".to_string(),
                 data,
             };
             // every variant above carries two mnemonics in total
-            assert_eq!(elements.ops().count(), 2);
-            assert!(!elements.is_empty());
-            assert_eq!(elements.name(), "f");
+            assert_eq!(function.ops().count(), 2);
+            assert!(!function.is_empty());
+            assert_eq!(function.name(), "f");
         }
     }
 
     #[test]
     fn test_elements_is_empty_on_empty_data() {
-        let elements = Elements {
+        let function = Function {
             name: "f".to_string(),
             data: Data::Seq(vec![]),
         };
-        assert!(elements.is_empty());
-        assert_eq!(elements.len(), 0);
-        assert_eq!(elements.ops().count(), 0);
+        assert!(function.is_empty());
+        assert_eq!(function.len(), 0);
+        assert_eq!(function.ops().count(), 0);
     }
 
     fn sample_birthmark() -> Birthmark {
@@ -1060,11 +1085,39 @@ mod tests {
                 birthmark_type: BirthmarkType::OpSeq,
                 ir: crate::lift::Ir::GhidraPcode,
             },
-            elements: vec![Elements {
+            functions: vec![Function {
                 name: "main".to_string(),
                 data: Data::Seq(vec!["COPY".to_string()]),
             }],
             json_path: None,
+        }
+    }
+
+    /// Files written before #131 renamed `Elements` to `Function` still load:
+    /// the list of functions is read from, and written back under, the JSON key
+    /// `elements`. The fixtures were written by `oinkie extract` from before the
+    /// rename, not by this code, so they cannot agree with it by construction.
+    #[test]
+    fn test_a_birthmark_written_before_the_rename_still_loads() {
+        for (fixture, functions) in [
+            ("testdata/birthmarks/hello_clang_op-seq.json", 1),
+            ("testdata/birthmarks/udl_op-3gram-freq.json", 3),
+        ] {
+            let b = Birthmark::try_from(Path::new(fixture))
+                .unwrap_or_else(|e| panic!("{fixture}: {e}"));
+            assert_eq!(b.len(), functions, "{fixture}");
+            assert_eq!(b.functions().len(), functions, "{fixture}");
+            assert!(b.functions().iter().any(|f| !f.is_empty()), "{fixture}");
+
+            let json = serde_json::to_value(&b).unwrap();
+            assert!(
+                json.get("elements").is_some(),
+                "{fixture}: the key must stay `elements`"
+            );
+            assert!(
+                json.get("functions").is_none(),
+                "{fixture}: the field name leaked into the file"
+            );
         }
     }
 
@@ -1172,7 +1225,7 @@ mod tests {
                 birthmark_type: BirthmarkType::OpKgramFreq(2),
                 ..sample_birthmark().metadata
             },
-            elements: vec![Elements {
+            functions: vec![Function {
                 name: "main".to_string(),
                 data: Data::KgramFreq(freq),
             }],
@@ -1195,7 +1248,7 @@ mod tests {
         let back: Birthmark = serde_json::from_str(&json).expect("and readable again");
 
         let (Data::KgramFreq(before), Data::KgramFreq(after)) =
-            (&b.elements[0].data, &back.elements[0].data)
+            (&b.functions[0].data, &back.functions[0].data)
         else {
             panic!("the shape changed");
         };
@@ -1231,12 +1284,12 @@ mod tests {
 
         // The data alone: `sample_birthmark` stamps `Utc::now()` into the
         // metadata, which is not what this is about.
-        let once = serde_json::to_string(&kgram_freq_birthmark().elements[0].data).unwrap();
+        let once = serde_json::to_string(&kgram_freq_birthmark().functions[0].data).unwrap();
         for _ in 0..8 {
-            let again = serde_json::to_string(&kgram_freq_birthmark().elements[0].data).unwrap();
+            let again = serde_json::to_string(&kgram_freq_birthmark().functions[0].data).unwrap();
             assert_eq!(again, once);
         }
-        let data = serde_json::to_value(&kgram_freq_birthmark().elements[0].data).unwrap();
+        let data = serde_json::to_value(&kgram_freq_birthmark().functions[0].data).unwrap();
         assert_eq!(
             data["KgramFreq"],
             serde_json::json!([

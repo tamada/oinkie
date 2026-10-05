@@ -417,7 +417,7 @@ mod tests {
                 let name = format!("{birthmark}-{shown}");
                 let parsed =
                     AnalysisType::try_from(name.as_str()).unwrap_or_else(|e| panic!("{name}: {e}"));
-                assert_eq!(parsed.birthmark, birthmark, "{name}");
+                assert_eq!(parsed.birthmark(), &birthmark, "{name}");
             }
         }
     }

@@ -48,7 +48,7 @@ fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
         .extract(&p)
         .unwrap();
     let calls: Vec<String> = b
-        .elements()
+        .functions()
         .iter()
         .flat_map(|e| e.ops().map(|s| s.to_string()))
         .collect();
