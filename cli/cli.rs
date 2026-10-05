@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 pub use crate::values::Analysis;
 use crate::values::{AnalysisParser, BirthmarkTypeParser};
@@ -356,6 +357,16 @@ The file contains the birthmark-wise similarity score list.",
         help = "Path to the directory containing the element-wise similarity scores"
     )]
     score_directory: PathBuf,
+
+    #[clap(
+        long,
+        value_name = "N|Rx",
+        help = "Drop the functions with fewer elements than this before aggregating.
+N is a count of elements; Rx is R times the mean count over every function of every birthmark
+in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is
+recorded on the last line of the summary."
+    )]
+    min_elements: Option<MinElements>,
 }
 
 impl ReviewOpts {
@@ -369,6 +380,57 @@ impl ReviewOpts {
 
     pub fn dest_file(&self) -> &PathBuf {
         &self.dest_file
+    }
+
+    pub fn min_elements(&self) -> Option<&crate::cli::MinElements> {
+        self.min_elements.as_ref()
+    }
+}
+
+/// The smallest function `--min-elements` keeps: a count of elements, or a
+/// multiple of the mean count over the directory (#128).
+///
+/// One option with two spellings rather than two options, so that there is no
+/// state in which both are given. A bare `0.3` is refused rather than read
+/// either way: as a count it would mean 0.3 elements, and as a ratio it would
+/// be the one place a number without its `x` meant a multiple.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MinElements {
+    Count(usize),
+    Ratio(f64),
+}
+
+impl FromStr for MinElements {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let s = s.trim();
+        if let Some(ratio) = s.strip_suffix('x') {
+            return match ratio.parse::<f64>() {
+                Ok(r) if r.is_finite() && r >= 0.0 => Ok(MinElements::Ratio(r)),
+                _ => Err(format!(
+                    "{s}: a ratio of the mean is a number of zero or more followed by x, such as 0.3x"
+                )),
+            };
+        }
+        match s.parse::<usize>() {
+            Ok(n) => Ok(MinElements::Count(n)),
+            Err(_) if s.parse::<f64>().is_ok() => Err(format!(
+                "{s}: a count of elements is a whole number; for {s} times the mean, write {s}x"
+            )),
+            Err(_) => Err(format!(
+                "{s}: expected a count of elements, such as 5, or a ratio of the mean, such as 0.3x"
+            )),
+        }
+    }
+}
+
+impl std::fmt::Display for MinElements {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MinElements::Count(n) => write!(f, "{n}"),
+            MinElements::Ratio(r) => write!(f, "{r}x"),
+        }
     }
 }
 

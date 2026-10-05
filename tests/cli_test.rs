@@ -585,6 +585,260 @@ fn test_run_given_an_input_twice_writes_its_birthmark_once() {
     }
 }
 
+/// A score directory from `run` over two programs whose functions hold
+/// different numbers of elements under `fc-set`: udl's hold 0, 0 and 3, and
+/// hello_clang's one holds 1, so the mean over all four is 1.
+fn fc_set_scores(dir: &std::path::Path) -> std::path::PathBuf {
+    let dest = dir.join("scores");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-a", "fc-set-jaccard", "-s", "all", "-d"])
+        .arg(&dest)
+        .args([
+            "testdata/lifted/pcodes/udl.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+        ])
+        .assert()
+        .success();
+    dest
+}
+
+/// `review --min-elements`, and what it leaves in the summary.
+fn review(scores: &std::path::Path, min: Option<&str>) -> (f64, Option<String>) {
+    let out = scores.parent().unwrap().join("review.csv");
+    let mut cmd = Command::cargo_bin("oinkie").unwrap();
+    cmd.arg("review").arg("-d").arg(&out).arg(scores);
+    if let Some(m) = min {
+        cmd.args(["--min-elements", m]);
+    }
+    cmd.assert().success();
+    let content = fs::read_to_string(&out).unwrap();
+    let last = content.lines().last().unwrap();
+    let recorded = last.starts_with("min elements,").then(|| last.to_string());
+    (first_score(&out), recorded)
+}
+
+/// Functions with fewer elements than the threshold are dropped before the
+/// pair is aggregated, and the summary says which threshold it was (#128).
+#[test]
+fn test_review_drops_the_functions_with_too_few_elements() {
+    let dir = tempdir().unwrap();
+    let scores = fc_set_scores(dir.path());
+    let (plain, recorded) = review(&scores, None);
+    assert_eq!(recorded, None, "no threshold, no line");
+    // udl's two empty functions take part: 1/3 over a padded 3x3 assignment
+    assert!((plain - 1.0 / 9.0).abs() < 1e-9, "{plain}");
+
+    // half the mean: udl's empty functions go, leaving entry against entry
+    let (half, recorded) = review(&scores, Some("0.5x"));
+    assert!((half - 1.0 / 3.0).abs() < 1e-9, "{half}");
+    assert_eq!(recorded.as_deref(), Some("min elements,0.5x,0.5"));
+
+    // a count that only udl's entry reaches: hello_clang has nothing left,
+    // and one side with nothing scores 0.0
+    let (two, recorded) = review(&scores, Some("2"));
+    assert_eq!(two, 0.0);
+    assert_eq!(recorded.as_deref(), Some("min elements,2,2"));
+
+    // one neither side reaches: both are empty, which scores 1.0
+    let (four, _) = review(&scores, Some("4"));
+    assert_eq!(four, 1.0);
+
+    // a threshold that drops nothing changes nothing but the record
+    let (zero, recorded) = review(&scores, Some("0"));
+    assert_eq!(zero, plain);
+    assert_eq!(recorded.as_deref(), Some("min elements,0,0"));
+}
+
+/// A ratio is of the mean over every function of every distinct birthmark
+/// in the directory: here op-seq, under which the functions are of different
+/// lengths, with udl in both pairs and counted once.
+#[test]
+fn test_review_min_elements_ratio_is_of_the_mean_over_the_directory() {
+    let dir = tempdir().unwrap();
+    let scores = dir.path().join("scores");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args([
+            "run",
+            "-a",
+            "op-seq-levenshtein",
+            "-s",
+            "first-vs-others",
+            "-d",
+        ])
+        .arg(&scores)
+        .args([
+            "testdata/lifted/pcodes/udl.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
+        ])
+        .assert()
+        .success();
+    let lengths = fs::read_dir(scores.join("birthmarks"))
+        .unwrap()
+        .flat_map(|e| {
+            let b: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(e.unwrap().path()).unwrap()).unwrap();
+            b["elements"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|f| f["data"]["Seq"].as_array().unwrap().len())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let mean = lengths.iter().sum::<usize>() as f64 / lengths.len() as f64;
+    assert_ne!(
+        mean, 1.0,
+        "the fixture no longer tells a ratio from a count"
+    );
+
+    let (_, recorded) = review(&scores, Some("1x"));
+    assert_eq!(recorded, Some(format!("min elements,1x,{mean}")));
+}
+
+#[test]
+fn test_review_refuses_a_bare_fraction_for_min_elements() {
+    let dir = tempdir().unwrap();
+    let scores = fc_set_scores(dir.path());
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["review", "--min-elements", "0.3"])
+        .arg(&scores)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("write 0.3x"));
+}
+
+/// Without the birthmarks there are no counts, and a directory that does not
+/// name them is refused rather than reviewed as if nothing were short.
+#[test]
+fn test_review_min_elements_needs_the_birthmarks_named() {
+    let dir = tempdir().unwrap();
+    let scores = fc_set_scores(dir.path());
+    let pair = scores.join("00000.csv");
+    let content = fs::read_to_string(&pair).unwrap();
+    // as written before the birthmark file was recorded: the field empty
+    let without = content
+        .lines()
+        .map(|l| {
+            if l.starts_with("left,") {
+                format!("{},", &l[..l.rfind(',').unwrap()])
+            } else {
+                l.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(&pair, without).unwrap();
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["review", "-d"])
+        .arg(dir.path().join("r.csv"))
+        .args(["--min-elements", "2"])
+        .arg(&scores)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("does not name the birthmarks"));
+    // and without the option the directory still reviews
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["review", "-d"])
+        .arg(dir.path().join("r.csv"))
+        .arg(&scores)
+        .assert()
+        .success();
+}
+
+/// A birthmark replaced since the comparison would lend its counts to
+/// another's functions.
+#[test]
+fn test_review_min_elements_refuses_a_birthmark_that_has_changed() {
+    let dir = tempdir().unwrap();
+    let scores = fc_set_scores(dir.path());
+    let pair = scores.join("00000.csv");
+    let (left, right) = (
+        side_birthmark(&pair, "left"),
+        side_birthmark(&pair, "right"),
+    );
+    fs::copy(&right, &left).unwrap();
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["review", "-d"])
+        .arg(dir.path().join("r.csv"))
+        .args(["--min-elements", "2"])
+        .arg(&scores)
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("has changed"));
+}
+
+/// A comparison with an empty birthmark on one side, or both, is written
+/// with a matrix that names no functions for that side, and `review` failed
+/// to read one back -- the very pairs `--min-elements` is about.
+#[test]
+fn test_review_reads_back_a_comparison_with_an_empty_birthmark() {
+    let dir = tempdir().unwrap();
+    let birthmarks = dir.path().join("birthmarks");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["extract", "-b", "fc-set", "-d"])
+        .arg(&birthmarks)
+        .args([
+            "testdata/lifted/pcodes/udl.json",
+            "testdata/lifted/pcodes/hello_clang.json",
+        ])
+        .assert()
+        .success();
+    let some = fs::read_dir(&birthmarks)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let mut json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&some).unwrap()).unwrap();
+    json["elements"] = serde_json::json!([]);
+    fs::write(birthmarks.join("empty.json"), json.to_string()).unwrap();
+    let mut inputs = fs::read_dir(&birthmarks)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+    inputs.sort();
+
+    let scores = dir.path().join("scores");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["compare", "-s", "all-and-self", "-d"])
+        .arg(&scores)
+        .args(&inputs)
+        .assert()
+        .success();
+    let out = dir.path().join("review.csv");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["review", "-d"])
+        .arg(&out)
+        .arg(&scores)
+        .assert()
+        .success();
+    let score_column = |p: &std::path::Path| {
+        fs::read_to_string(p)
+            .unwrap()
+            .lines()
+            .take_while(|l| !l.starts_with("total duration,"))
+            .map(|l| l.split(',').nth(1).unwrap().to_string())
+            .collect::<Vec<_>>()
+    };
+    let compared = score_column(&scores.join("results.csv"));
+    assert!(
+        compared.contains(&"0".to_string()) && compared.contains(&"1".to_string()),
+        "the fixture no longer has an empty side and two empty sides: {compared:?}"
+    );
+    assert_eq!(score_column(&out), compared);
+}
+
 /// The old name is refused, not aliased, and the refusal names the new one --
 /// including when it is handed the arguments the old command took.
 #[test]

@@ -9,7 +9,7 @@
 //! left,{the left side, as `Side::describe` writes it}
 //! right,{the right side}
 //! matrix,,{left function names...}
-//! 0, {right function name},{score against each left function...}
+//! 0,{right function name},{score against each left function...}
 //! ```
 
 use oinkie::birthmarks::Birthmark;
@@ -98,7 +98,7 @@ pub(crate) fn store<S: Side, P: AsRef<Path>>(comparison: &Comparison<S>, dest: P
     write!(out, "matrix,,{header}").map_err(io_err)?;
     let matrix = comparison.matrix();
     for (j, item) in row_names.iter().enumerate() {
-        write!(out, "\n{}, {}", j, escape(item)).map_err(io_err)?;
+        write!(out, "\n{},{}", j, escape(item)).map_err(io_err)?;
         for i in 0..column_names.len() {
             let value = matrix[[i, j]];
             write!(out, ",{value}").map_err(io_err)?;
@@ -175,7 +175,8 @@ mod tests {
 
         let content = std::fs::read_to_string(&dest).unwrap();
         assert!(content.starts_with("result,"), "{content}");
-        let (loaded, left, right, _) = crate::review::load_comparison(&dest).unwrap();
+        let stored = crate::review::load_comparison(&dest).unwrap();
+        let (loaded, left, right) = (stored.matrix, stored.left, stored.right);
         let written = c.matrix();
         let side = b1.len().max(b2.len());
         assert_eq!(written.dim(), (side, side), "padded to a square");
@@ -193,8 +194,10 @@ mod tests {
             (0..b1.len()).any(|i| written[[i, 0]] != written[[0, 0]]),
             "the fixture no longer tells a transposed matrix apart"
         );
-        assert_eq!(left, b1.path());
-        assert_eq!(right, b2.path());
+        assert_eq!(left.path, b1.path());
+        assert_eq!(right.path, b2.path());
+        assert_eq!(left.functions, b1.names(), "the column names, in order");
+        assert_eq!(right.functions, b2.names(), "the row names, in order");
     }
 
     /// A path with commas, quotes or a line break in it is quoted on the way
@@ -221,11 +224,38 @@ mod tests {
             let dir = tempfile::tempdir().unwrap();
             let dest = dir.path().join("00000.csv");
             store(&c, &dest).unwrap();
-            let (_, left, right, _) =
+            let stored =
                 crate::review::load_comparison(&dest).unwrap_or_else(|e| panic!("{path:?}: {e}"));
-            assert_eq!(left, PathBuf::from(path), "{path:?}");
-            assert_eq!(right, b2.path(), "{path:?}: the next record was disturbed");
+            assert_eq!(stored.left.path, PathBuf::from(path), "{path:?}");
+            assert_eq!(
+                stored.right.path,
+                b2.path(),
+                "{path:?}: the next record was disturbed"
+            );
         }
+    }
+
+    /// A function name that needs quoting -- a C++ template's, with a comma --
+    /// comes back whole, as a column and as a row. Each row once wrote its
+    /// name after a space, which hid the quotes from the reader, so the
+    /// name split and the next field was read as a score.
+    #[test]
+    fn test_a_function_name_that_needs_quoting_survives_the_round_trip() {
+        let name = "foo<int, \"q\">";
+        let mut json = serde_json::to_value(birthmark(CLANG)).unwrap();
+        json["elements"][0]["name"] = serde_json::json!(name);
+        let b: Birthmark = serde_json::from_value(json).unwrap();
+        let c = Algorithm::Jaccard
+            .comparator()
+            .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("00000.csv");
+        store(&c, &dest).unwrap();
+        let stored = crate::review::load_comparison(&dest).unwrap();
+        assert_eq!(stored.left.functions[0], name);
+        assert_eq!(stored.right.functions[0], name);
+        assert_eq!(stored.matrix.dim(), (b.len(), b.len()));
     }
 
     /// A program's line names it, counts its symbols and then its functions,

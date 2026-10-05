@@ -83,6 +83,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand --aggregator 'Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score. Available: - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,              maximizing the total similarity score. - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the              second birthmark when calculating the overall similarity score. This can reduce noise from less              relevant matches and focus on the most significant similarities.'
             cand -d 'Specify the result CSV file of the comparing results to review. The file contains the birthmark-wise similarity score list.'
             cand --dest-file 'Specify the result CSV file of the comparing results to review. The file contains the birthmark-wise similarity score list.'
+            cand --min-elements 'Drop the functions with fewer elements than this before aggregating. N is a count of elements; Rx is R times the mean count over every function of every birthmark in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is recorded on the last line of the summary.'
             cand -h 'Print help'
             cand --help 'Print help'
         }

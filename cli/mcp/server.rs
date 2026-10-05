@@ -240,6 +240,15 @@ pub struct ReviewParams {
     /// `oinkie review` does. The scores come back either way.
     #[serde(default)]
     pub dest_file: Option<String>,
+    /// Optional. Drop each pair's functions with fewer elements than this
+    /// before aggregating: a count such as "5", or a multiple of the mean
+    /// count over every function of every birthmark in the directory, such
+    /// as "0.3x". A bare "0.3" is refused. Short functions agree with each
+    /// other by chance, and this removes that agreement; scores under
+    /// different thresholds are not comparable with each other. Needs the
+    /// birthmark files the score CSVs name.
+    #[serde(default)]
+    pub min_elements: Option<String>,
 }
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
@@ -248,6 +257,16 @@ pub struct Reviewed {
     pub scores: Vec<Score>,
     /// Where the CSV was written, when one was asked for.
     pub dest_file: Option<String>,
+    /// The threshold the scores were recomputed under, when one was given.
+    pub min_elements: Option<MinElementsApplied>,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+pub struct MinElementsApplied {
+    /// As it was given: "5" or "0.3x".
+    pub given: String,
+    /// The element count it came to. A function with fewer was dropped.
+    pub threshold: f64,
 }
 
 #[tool_router]
@@ -387,7 +406,8 @@ impl Oinkie {
         description = "Recompute the score for every pair in a directory of element-wise \
                        similarity CSVs, using a different aggregator, without comparing \
                        anything again. Use this to ask what the same comparison would have \
-                       scored under 'topn' rather than 'hungarian'."
+                       scored under 'topn' rather than 'hungarian', or without the functions \
+                       too short to be evidence (min_elements)."
     )]
     async fn oinkie_review(
         &self,
@@ -412,15 +432,46 @@ impl Oinkie {
             )
         })?;
 
+        let min_elements = params
+            .min_elements
+            .as_deref()
+            .map(crate::cli::MinElements::from_str)
+            .transpose()
+            .map_err(|e| ErrorData::invalid_params(format!("min_elements: {e}"), None))?;
+
         // Off the async runtime: this reads every CSV in the directory and
         // runs an assignment problem per pair, so it is exactly the kind of
         // work that would otherwise stall everything else the server has to
         // answer, cancellation included.
         let written = dest.clone();
+        let roots = self.roots.clone();
         let scores = tokio::task::spawn_blocking(move || {
             let start = std::time::Instant::now();
-            let results = crate::review::review_all(&score_dir, &aggregator)?;
-            let scores = results
+            // The birthmarks are named by the score CSVs, not by the caller,
+            // and are read only if they are under a root like everything else.
+            let confine = |p: &Path| -> oinkie::Result<()> {
+                let refused = |message: String| {
+                    oinkie::Error::Io(
+                        p.to_path_buf(),
+                        std::io::Error::new(std::io::ErrorKind::PermissionDenied, message),
+                    )
+                };
+                let text = p
+                    .to_str()
+                    .ok_or_else(|| refused("not a path the server can confine".to_string()))?;
+                roots
+                    .resolve(text)
+                    .map(|_| ())
+                    .map_err(|e| refused(e.message.to_string()))
+            };
+            let review = crate::review::review_all(
+                &score_dir,
+                &aggregator,
+                min_elements.as_ref(),
+                &confine,
+            )?;
+            let scores = review
+                .results
                 .iter()
                 .map(|r| Score {
                     index: r.index,
@@ -430,19 +481,29 @@ impl Oinkie {
                     duration_ms: r.duration.as_millis() as u64,
                 })
                 .collect::<Vec<_>>();
+            let applied =
+                review
+                    .min_elements
+                    .as_ref()
+                    .map(|(given, threshold)| MinElementsApplied {
+                        given: given.to_string(),
+                        threshold: *threshold,
+                    });
             if let Some(d) = written {
-                crate::store_and_get_durations(results, &d, start)?;
+                crate::review::store(review, &d, start)?;
             }
-            Ok::<_, oinkie::Error>(scores)
+            Ok::<_, oinkie::Error>((scores, applied))
         })
         .await
         .map_err(|e| ErrorData::internal_error(format!("the review did not finish: {e}"), None))?
         .map_err(super::error::to_mcp)?;
 
+        let (scores, min_elements) = scores;
         Ok(Json(Reviewed {
             aggregator: name,
             scores,
             dest_file: dest.map(|d| d.display().to_string()),
+            min_elements,
         }))
     }
 }

@@ -319,6 +319,92 @@ fn test_a_score_directory_outside_the_root_is_refused() {
     );
 }
 
+/// A directory `oinkie_run` wrote, under `fc-set`, whose functions hold
+/// 0, 0 and 3 elements (udl) and 1 (hello_clang).
+fn fc_set_run(dir: &std::path::Path) -> std::path::PathBuf {
+    let scores = dir.join("scores");
+    let run = call_tool(
+        &[&here(), dir],
+        "oinkie_run",
+        serde_json::json!({
+            "files": [B, A],
+            "analysis": "fc-set-jaccard",
+            "strategy": "all",
+            "dest": scores.to_str().unwrap()
+        }),
+    );
+    assert!(run["error"].is_null(), "{run}");
+    scores
+}
+
+/// `min_elements` is `--min-elements`: the same threshold, the same scores,
+/// and the threshold said in the answer and in the CSV (#128).
+#[test]
+fn test_review_drops_the_functions_with_too_few_elements() {
+    let dir = tempfile::tempdir().unwrap();
+    let scores = fc_set_run(dir.path());
+    let out = dir.path().join("review.csv");
+    let result = call_review(
+        dir.path(),
+        serde_json::json!({
+            "score_directory": scores.to_str().unwrap(),
+            "min_elements": "0.5x",
+            "dest_file": out.to_str().unwrap()
+        }),
+    );
+    assert!(result["error"].is_null(), "{result}");
+    let s = similarities(&result);
+    assert!((s[0] - 1.0 / 3.0).abs() < 1e-9, "{s:?}");
+    let applied = &result["result"]["structuredContent"]["min_elements"];
+    assert_eq!(applied["given"], "0.5x");
+    assert_eq!(applied["threshold"], 0.5);
+    let written = std::fs::read_to_string(&out).unwrap();
+    assert_eq!(written.lines().last(), Some("min elements,0.5x,0.5"));
+}
+
+#[test]
+fn test_a_bare_fraction_for_min_elements_is_the_callers_mistake() {
+    let dir = tempfile::tempdir().unwrap();
+    let scores = fc_set_run(dir.path());
+    let result = call_review(
+        dir.path(),
+        serde_json::json!({
+            "score_directory": scores.to_str().unwrap(),
+            "min_elements": "0.3"
+        }),
+    );
+    assert_eq!(result["error"]["code"].as_i64(), Some(-32602), "{result}");
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("0.3x"), "{message}");
+}
+
+/// The birthmarks are named by the score CSVs rather than by the caller, and
+/// are read only under a root, like every other path.
+#[test]
+fn test_review_does_not_read_a_birthmark_outside_the_roots() {
+    let dir = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let scores = fc_set_run(dir.path());
+    let pair = scores.join("00000.csv");
+    let content = std::fs::read_to_string(&pair).unwrap();
+    let left = content.lines().find(|l| l.starts_with("left,")).unwrap();
+    let named = left.rsplit(',').next().unwrap();
+    let moved = elsewhere.path().join("moved.json");
+    std::fs::copy(named, &moved).unwrap();
+    std::fs::write(&pair, content.replace(named, moved.to_str().unwrap())).unwrap();
+
+    let result = call_review(
+        dir.path(),
+        serde_json::json!({
+            "score_directory": scores.to_str().unwrap(),
+            "min_elements": "2"
+        }),
+    );
+    assert_eq!(result["error"]["code"].as_i64(), Some(-32602), "{result}");
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("outside every allowed"), "{message}");
+}
+
 /// An aggregator the parser refuses is the caller's mistake, and has to come
 /// back as one -- `Aggregator::from_str` fails with the library's catch-all,
 /// which is deliberately not classified that way.

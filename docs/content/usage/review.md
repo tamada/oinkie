@@ -1,6 +1,6 @@
 ---
 title: "4. Reviewing Scores (`review` command)"
-description: "How to re-read a finished comparison under a different aggregator."
+description: "How to re-read a finished comparison under a different aggregator, or without the functions too short to be evidence."
 aliases: ["/usage/reaggregate/"]
 date: 2026-06-22
 draft: false
@@ -32,6 +32,10 @@ oinkie review [OPTIONS] <SCORE_DIRECTORY>
   * **`topn:N`**: Only average the top \\(N\\) closest matches for each function.
 * `-d, --dest-file <RESULT.CSV>`  
   The path to the destination CSV file where the recomputed program-wise similarity scores list will be saved. `[default: review.csv]`
+* `--min-elements <N|Rx>`  
+  Drop the functions with fewer elements than this from each pair before aggregating. See [Dropping short functions](#-dropping-short-functions).
+  * **`N`**: a count of elements, such as `5`.
+  * **`Rx`**: \(R\) times the mean element count, such as `0.3x`. A bare `0.3` is refused.
 
 ---
 
@@ -47,3 +51,24 @@ If you later want to analyze the results using the `topn:3` strategy, you do not
 oinkie review -A topn:3 -d comparison_results/review_top3.csv comparison_results
 ```
 This significantly speeds up analysis workflows on large-scale datasets.
+
+---
+
+## ✂️ Dropping short functions
+
+A function whose birthmark has only a few elements agrees with many others by chance: two one-element sets are often the same set, and two empty birthmarks are identical. Such functions raise the score of unrelated programs. `--min-elements` drops them after the fact, so one comparison can be re-read under several thresholds without comparing anything again:
+
+```sh
+oinkie review --min-elements 5    -d results/min5.csv   results
+oinkie review --min-elements 0.3x -d results/min03x.csv results
+```
+
+* Dropping a function removes its row and its column from the pair's function-to-function matrix, and the pair is aggregated from what is left. Nothing is compared again.
+* For `Rx`, the mean is over **every function of every birthmark in the directory**, taken once each. The threshold is therefore the same for every pair, and two reviews at different thresholds can be compared with each other.
+* A pair with no functions left on one side scores 0.0. A pair with none left on either side scores 1.0, as `compare` scores two empty birthmarks.
+* The summary ends with a line saying which threshold produced it, as given and as resolved to a count, because scores under different thresholds are not comparable:
+  ```
+  min elements,0.3x,4.2
+  ```
+
+The element counts come from the birthmark files each pair's CSV names. A directory written by `compare`, or by `run` since v0.8.0, names them; `review` refuses one that does not, and one whose birthmarks have changed since the comparison. A birthmark recorded with a relative path is looked up from the directory `review` is run in.
