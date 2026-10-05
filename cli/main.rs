@@ -217,11 +217,20 @@ fn perform_compare(opts: cli::CompareOpts) -> Result<Vec<Duration>> {
     Error::vec_result_to_result_vec(r).and_then(|r| store_and_get_durations(r, &result_file, start))
 }
 
+/// Writes a summary, one row per pair, and returns each pair's duration.
+///
+/// The rows are written in index order. The comparisons run in parallel and
+/// arrive in the order they finish, which differs between runs of the same
+/// binary; sorted, two runs over the same input write the same rows, and the
+/// file can be read top to bottom (#146). The results are all in memory by
+/// now, so sorting them in place costs no allocation, and an index is unique,
+/// so a stable sort would buy nothing.
 pub(crate) fn store_and_get_durations(
-    results: Vec<CompareResult>,
+    mut results: Vec<CompareResult>,
     destcsv: &Path,
     start: Instant,
 ) -> Result<Vec<Duration>> {
+    results.sort_unstable_by_key(|r| r.index);
     let mut file =
         std::fs::File::create(destcsv).map_err(|e| Error::Io(destcsv.to_path_buf(), e))?;
     let ritems = results
@@ -784,6 +793,56 @@ mod tests {
         right,program,hello_gcc,bin/hello_gcc,1,1,pcodes/hello_gcc.json\n\
         matrix,,entry\n\
         0,entry,0.75\n";
+
+    /// A summary's rows are in index order, whatever order the results arrive
+    /// in. The comparisons run in parallel and finish in any order, and a
+    /// summary in finishing order differs from one run to the next of the same
+    /// binary (#146). Fed a fixed scramble rather than a parallel run, so the
+    /// test does not depend on the scheduler coming out unsorted.
+    #[test]
+    fn test_a_summary_is_written_in_index_order() {
+        let scrambled = [5usize, 0, 7, 2, 9, 1, 8, 3, 6, 4];
+        let results = scrambled
+            .iter()
+            .map(|&i| {
+                CompareResult::new(
+                    i,
+                    i as f64 / 10.0,
+                    PathBuf::from(format!("left{i}")),
+                    PathBuf::from(format!("right{i}")),
+                    Duration::from_nanos(i as u64),
+                )
+            })
+            .collect::<Vec<_>>();
+        let dir = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("similarities.csv");
+        let durations = store_and_get_durations(results, &dest, Instant::now()).unwrap();
+        assert_eq!(durations.len(), scrambled.len());
+
+        let content = std::fs::read_to_string(&dest).unwrap();
+        let rows = content
+            .lines()
+            .filter(|l| !l.starts_with("total duration"))
+            .collect::<Vec<_>>();
+        let written = rows
+            .iter()
+            .map(|l| l.split(',').next().unwrap().parse::<usize>().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(written, (0..scrambled.len()).collect::<Vec<_>>());
+        // each row still carries its own pair, not its neighbour's
+        assert!(
+            rows[3].contains("left3") && rows[3].contains("right3"),
+            "{}",
+            rows[3]
+        );
+        assert!(
+            content
+                .lines()
+                .last()
+                .unwrap()
+                .starts_with("total duration,")
+        );
+    }
 
     #[test]
     fn test_a_stored_result_is_read_back_whole() {
