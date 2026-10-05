@@ -367,7 +367,7 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__review)
-            opts="-A -d -h --aggregator --dest-file --help <SCORE_DIRECTORY>"
+            opts="-A -d -h --aggregator --dest-file --min-elements --help <SCORE_DIRECTORY>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -386,6 +386,10 @@ _oinkie() {
                     return 0
                     ;;
                 -d)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --min-elements)
                     COMPREPLY=($(compgen -f "${cur}"))
                     return 0
                     ;;

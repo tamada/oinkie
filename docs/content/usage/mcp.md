@@ -70,7 +70,7 @@ rewrites what passes through it and breaks the JSON-RPC framing.
 | `oinkie_run` | lifted programs in, a similarity per pair out — the whole question in one call |
 | `oinkie_extract` | write birthmarks, which `oinkie_compare` takes |
 | `oinkie_compare` | score birthmarks, to try another algorithm without re-reading the programs |
-| `oinkie_review` | recompute scores in a directory under a different aggregator |
+| `oinkie_review` | recompute scores in a directory under a different aggregator, or without the functions too short to be evidence (`min_elements`) |
 
 An agent should ask `oinkie_info` first. The names are precise, and its lists
 are generated from the same code that parses them, so they cannot drift from
