@@ -44,6 +44,11 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(comparing_count * 3);
     let aggregator = opts.aggregator();
+    // The analysis names a birthmark and an algorithm, and both are used: each
+    // program's birthmark is extracted and the birthmarks are compared, which is
+    // what `extract` followed by `compare` does. Comparing the programs directly
+    // would score their operations whatever birthmark was named (#150).
+    let extractor = Extractor::new(atype.birthmark().clone());
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     let results = opts
@@ -61,27 +66,27 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                 pbar.inc(3);
                 read_result_file(&dest_file, i, path1, path2)
             } else {
-                pbar.set_message(format!("Loading program from {:?}", path1.display()));
-                let mut p1 = load_program(path1)?;
-                p1.set_json_path(path1.to_path_buf());
+                pbar.set_message(format!("Extracting from {:?}", path1.display()));
+                let b1 = extractor.extract(&load_program(path1)?)?;
                 pbar.inc(1);
-                pbar.set_message(format!("Loading program from {:?}", path2.display()));
-                let mut p2 = load_program(path2)?;
-                p2.set_json_path(path2.to_path_buf());
+                pbar.set_message(format!("Extracting from {:?}", path2.display()));
+                let b2 = extractor.extract(&load_program(path2)?)?;
                 pbar.inc(1);
                 pbar.set_message(format!(
-                    "Comparing two programs ({}/{})",
+                    "Comparing two birthmarks ({}/{})",
                     i + 1,
                     comparing_count
                 ));
-                let result = atype.comparator().compare_programs(&p1, &p2, aggregator)?;
+                let result = atype
+                    .comparator()
+                    .compare_birthmarks(&b1, &b2, aggregator)?;
                 pbar.inc(1);
                 score_csv::store(&result, &dest_file)?;
                 Ok(CompareResult::new(
                     i,
                     result.similarity(),
-                    p1.path().to_path_buf(),
-                    p2.path().to_path_buf(),
+                    b1.path().to_path_buf(),
+                    b2.path().to_path_buf(),
                     result.duration(),
                 ))
             }

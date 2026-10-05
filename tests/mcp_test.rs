@@ -371,46 +371,58 @@ fn test_running_gives_what_the_cli_gives() {
 /// Extracting and then comparing has to reach the same number as running,
 /// since it is the same computation with the birthmarks written down in
 /// between.
+///
+/// For every birthmark family and shape, not only `op-set`: `oinkie_run` once
+/// compared the programs' operations whatever birthmark the analysis named, so
+/// the `fc-*` and k-gram analyses disagreed while `op-set` alone agreed -- and
+/// `op-set` was the only one this test asked about (#150).
 #[test]
 fn test_extract_then_compare_agrees_with_run() {
-    let dir = tempfile::tempdir().unwrap();
-    // one root for the inputs, one for what the tools write
-    let birthmarks = dir.path().join("birthmarks");
+    for (birthmark_type, algorithm) in [
+        ("op-set", "jaccard"),
+        ("fc-set", "jaccard"),
+        ("op-2gram-set", "jaccard"),
+        ("fc-seq", "levenshtein"),
+        ("op-3gram-seq", "levenshtein"),
+        ("fc-freq", "cosine"),
+    ] {
+        let analysis = format!("{birthmark_type}-{algorithm}");
+        let dir = tempfile::tempdir().unwrap();
+        // one root for the inputs, one for what the tools write
+        let birthmarks = dir.path().join("birthmarks");
 
-    let extracted = call_tool(
-        &[&here(), dir.path()],
-        "oinkie_extract",
-        serde_json::json!({
-            "files": [A, B],
-            "birthmark_type": "op-set",
-            "dest": birthmarks.to_str().unwrap()
-        }),
-    );
-    let written = extracted["result"]["structuredContent"]["birthmarks"]
-        .as_array()
-        .unwrap_or_else(|| panic!("no birthmarks in {extracted}"))
-        .iter()
-        .map(|b| b["output"].as_str().unwrap().to_string())
-        .collect::<Vec<_>>();
-    assert_eq!(written.len(), 2, "{extracted}");
-    for w in &written {
-        assert!(std::path::Path::new(w).exists(), "{w} was not written");
+        let extracted = call_tool(
+            &[&here(), dir.path()],
+            "oinkie_extract",
+            serde_json::json!({
+                "files": [A, B],
+                "birthmark_type": birthmark_type,
+                "dest": birthmarks.to_str().unwrap()
+            }),
+        );
+        let written = extracted["result"]["structuredContent"]["birthmarks"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{analysis}: no birthmarks in {extracted}"))
+            .iter()
+            .map(|b| b["output"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(written.len(), 2, "{analysis}: {extracted}");
+
+        let compared = call_tool(
+            &[&here(), dir.path()],
+            "oinkie_compare",
+            serde_json::json!({"files": written, "algorithm": algorithm, "strategy": "all"}),
+        );
+        let two_step = similarities(&compared);
+
+        let one_step = similarities(&call_tool(
+            &[&here(), dir.path()],
+            "oinkie_run",
+            serde_json::json!({"files": [A, B], "analysis": analysis, "strategy": "all"}),
+        ));
+        assert_eq!(two_step, one_step, "{analysis}");
+        assert!(two_step[0] < 1.0, "{analysis}: {two_step:?}");
     }
-
-    let compared = call_tool(
-        &[&here(), dir.path()],
-        "oinkie_compare",
-        serde_json::json!({"files": written, "algorithm": "jaccard", "strategy": "all"}),
-    );
-    let two_step = similarities(&compared);
-
-    let one_step = similarities(&call_tool(
-        &[&here(), dir.path()],
-        "oinkie_run",
-        serde_json::json!({"files": [A, B], "analysis": "op-set-jaccard", "strategy": "all"}),
-    ));
-    assert_eq!(two_step, one_step);
-    assert!(two_step[0] < 1.0, "{two_step:?}");
 }
 
 /// A directory `oinkie_run` wrote has to be one `oinkie_review` can read,

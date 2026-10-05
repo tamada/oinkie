@@ -350,6 +350,80 @@ fn test_run_command() {
     );
 }
 
+/// The first score in a summary CSV: `index,similarity,left,right,duration`.
+fn first_score(summary: &std::path::Path) -> f64 {
+    let content =
+        fs::read_to_string(summary).unwrap_or_else(|e| panic!("{}: {e}", summary.display()));
+    let first = content.lines().next().expect("an empty summary");
+    first.split(',').nth(1).unwrap().parse().unwrap()
+}
+
+/// `run` is `extract` followed by `compare`, so the two give the same score --
+/// for every birthmark family and shape. `run` once compared the programs'
+/// operations whatever birthmark the analysis named, so every `fc-*` and
+/// k-gram analysis reported an `op-*` score under the wrong name (#150).
+#[test]
+fn test_run_scores_what_extract_and_compare_score() {
+    let inputs = [
+        "testdata/lifted/pcodes/hello_clang.json",
+        "testdata/lifted/pcodes/udl.json",
+    ];
+    for (birthmark_type, algorithm) in [
+        ("op-seq", "levenshtein"),
+        ("fc-seq", "levenshtein"),
+        ("op-3gram-seq", "levenshtein"),
+        ("fc-set", "jaccard"),
+        ("op-2gram-set", "jaccard"),
+        ("fc-freq", "cosine"),
+        ("op-2gram-freq", "weighted-jaccard"),
+    ] {
+        let analysis = format!("{birthmark_type}-{algorithm}");
+        let dir = tempdir().unwrap();
+
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(["run", "-a", &analysis, "-s", "all", "-d"])
+            .arg(dir.path().join("run"))
+            .args(inputs)
+            .assert()
+            .success();
+
+        let birthmarks = dir.path().join("birthmarks");
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(["extract", "-b", birthmark_type, "-d"])
+            .arg(&birthmarks)
+            .args(inputs)
+            .assert()
+            .success();
+        let mut extracted = fs::read_dir(&birthmarks)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect::<Vec<_>>();
+        // `compare` pairs its arguments in order; give them in the order `run` had
+        extracted.sort_by_key(|p| {
+            !p.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("hello_clang")
+        });
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(["compare", "-a", algorithm, "-s", "all", "-d"])
+            .arg(dir.path().join("compare"))
+            .args(&extracted)
+            .assert()
+            .success();
+
+        let run = first_score(&dir.path().join("run").join("results.csv"));
+        let compare = first_score(&dir.path().join("compare").join("results.csv"));
+        assert_eq!(
+            run, compare,
+            "{analysis}: run and extract + compare disagree"
+        );
+    }
+}
+
 /// The old name is refused, not aliased, and the refusal names the new one --
 /// including when it is handed the arguments the old command took.
 #[test]
