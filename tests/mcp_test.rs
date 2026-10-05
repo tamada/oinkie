@@ -425,6 +425,148 @@ fn test_extract_then_compare_agrees_with_run() {
     }
 }
 
+/// Given somewhere to write, `oinkie_run` writes the birthmarks it compared
+/// beside the scores, and each pair's CSV names them, as `run` does (#128).
+#[test]
+fn test_run_writes_the_birthmarks_it_compares_when_given_a_dest() {
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("scores");
+    let result = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_run",
+        serde_json::json!({
+            "files": [A, B],
+            "analysis": "fc-set-jaccard",
+            "strategy": "all",
+            "dest": dest.to_str().unwrap()
+        }),
+    );
+    assert!(result["error"].is_null(), "{result}");
+    let written = std::fs::read_dir(dest.join("birthmarks"))
+        .unwrap_or_else(|e| panic!("no birthmarks directory: {e}"))
+        .count();
+    assert_eq!(written, 2);
+    let pair = std::fs::read_to_string(dest.join("00000.csv")).unwrap();
+    let left = pair
+        .lines()
+        .find(|l| l.starts_with("left,birthmark,"))
+        .unwrap();
+    let named = left.rsplit(',').next().unwrap();
+    assert!(
+        std::path::Path::new(named).exists(),
+        "{named} does not exist"
+    );
+}
+
+/// `dest` is confined, and so is what `oinkie_run` writes below it. A
+/// `birthmarks` already there can be a symlink out of every root, and
+/// resolving `dest` alone does not look through it.
+#[cfg(unix)]
+#[test]
+fn test_run_does_not_write_birthmarks_through_a_symlink_out_of_the_roots() {
+    let dir = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("scores");
+    std::fs::create_dir_all(&dest).unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), dest.join("birthmarks")).unwrap();
+
+    let result = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_run",
+        serde_json::json!({
+            "files": [A, B],
+            "strategy": "all",
+            "dest": dest.to_str().unwrap()
+        }),
+    );
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("outside every allowed"),
+        "should have been refused: {result}"
+    );
+    assert_eq!(
+        std::fs::read_dir(elsewhere.path()).unwrap().count(),
+        0,
+        "something was written outside the roots"
+    );
+}
+
+/// The same, one level down: the directory is real, and a birthmark's file
+/// in it is the link -- to a file outside, or to nothing yet, which writing
+/// would create.
+#[cfg(unix)]
+#[test]
+fn test_run_does_not_write_a_birthmark_through_a_symlinked_file() {
+    for target_exists in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let elsewhere = tempfile::tempdir().unwrap();
+        let dest = dir.path().join("scores");
+        // the name run gives A's birthmark, learned from a run into a scratch dest
+        let scratch = dir.path().join("scratch");
+        let first = call_tool(
+            &[&here(), dir.path()],
+            "oinkie_run",
+            serde_json::json!({ "files": [A], "dest": scratch.to_str().unwrap() }),
+        );
+        assert!(first["error"].is_null(), "{first}");
+        let name = std::fs::read_dir(scratch.join("birthmarks"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .file_name();
+        std::fs::create_dir_all(dest.join("birthmarks")).unwrap();
+        let target = elsewhere.path().join("victim.json");
+        if target_exists {
+            std::fs::write(&target, "untouched").unwrap();
+        }
+        std::os::unix::fs::symlink(&target, dest.join("birthmarks").join(name)).unwrap();
+
+        let result = call_tool(
+            &[&here(), dir.path()],
+            "oinkie_run",
+            serde_json::json!({ "files": [A, B], "dest": dest.to_str().unwrap() }),
+        );
+        assert!(
+            !result["error"].is_null(),
+            "should have been refused (target exists: {target_exists}): {result}"
+        );
+        if target_exists {
+            assert_eq!(std::fs::read_to_string(&target).unwrap(), "untouched");
+        } else {
+            assert!(!target.exists(), "written through the link");
+        }
+    }
+}
+
+/// The same input twice is one birthmark, written once, rather than two
+/// workers writing one file at the same time.
+#[test]
+fn test_run_given_an_input_twice_writes_its_birthmark_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("scores");
+    let result = call_tool(
+        &[&here(), dir.path()],
+        "oinkie_run",
+        serde_json::json!({
+            "files": [A, A, B],
+            "strategy": "all",
+            "dest": dest.to_str().unwrap()
+        }),
+    );
+    assert!(result["error"].is_null(), "{result}");
+    let written = std::fs::read_dir(dest.join("birthmarks"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(written.len(), 2, "{written:?}");
+    for w in written {
+        let text = std::fs::read_to_string(&w).unwrap();
+        serde_json::from_str::<serde_json::Value>(&text)
+            .unwrap_or_else(|e| panic!("{}: {e}", w.display()));
+    }
+}
+
 /// A directory `oinkie_run` wrote has to be one `oinkie_review` can read,
 /// or the tools do not compose and the caller has to leave for the CLI.
 #[test]

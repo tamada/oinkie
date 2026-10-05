@@ -35,9 +35,10 @@ oinkie run [OPTIONS] [FILES]...
   `[possible values: all-and-self, all, self-coverage, adjacent, first-vs-others, last-vs-others]`
   *Refer a full list in [compare](../compare) subcommand.*
 * `-d, --dest <DIRECTORY>`  
-  Destination directory for output CSV files containing the similarity results. `[default: similarities]`
+  Destination directory for output CSV files containing the similarity results. `[default: similarities]`  
+  The birthmarks the comparisons were made from are written into its `birthmarks/` subdirectory, one per input, and each pair's CSV names the two it used -- so the directory holds everything [`review`](../review) needs to re-read the comparison.
 * `-S, --skip`  
-  Skip comparison if a similarity output already exists for a specific pair.
+  Reuse what an earlier run left in the destination. A birthmark already in `birthmarks/` is reused if it is of the analysis's birthmark type, and extracted again otherwise. A pair's CSV is reused only if both birthmarks it was computed from were reused; otherwise the pair is compared again, so a CSV never names a birthmark it was not computed from.
 
 ---
 

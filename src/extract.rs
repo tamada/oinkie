@@ -13,6 +13,11 @@ impl Extractor {
         Self { bt }
     }
 
+    /// The birthmark this extractor makes.
+    pub fn birthmark_type(&self) -> &BirthmarkType {
+        &self.bt
+    }
+
     pub(crate) fn extract_each_typed<T: crate::Op>(
         &self,
         p: &TypedProgram<T>,

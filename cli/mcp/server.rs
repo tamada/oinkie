@@ -5,7 +5,7 @@
 //! their progress; one such line corrupts the session. The tools call the
 //! library directly for the same reason no progress bar is constructed.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::vocabulary::{ALGORITHMS, STRATEGIES, by_name};
@@ -76,6 +76,25 @@ impl Oinkie {
 
     fn dest(&self, dest: Option<&str>) -> Result<Option<PathBuf>, ErrorData> {
         dest.map(|d| self.roots.resolve(d)).transpose()
+    }
+
+    /// `dest` was confined, but `run` writes below it, into a directory and
+    /// files the caller never named. One that is already there can be a
+    /// symlink out of every root, which resolving `dest` does not look
+    /// through -- so they are resolved too, before anything is written.
+    fn confine_birthmarks(&self, files: &[PathBuf], dest: &Path) -> Result<(), ErrorData> {
+        let derived = analysis::birthmark_files(files, dest).map_err(super::error::to_mcp)?;
+        std::iter::once(analysis::birthmarks_dir(dest))
+            .chain(derived)
+            .try_for_each(|p| {
+                let text = p.to_str().ok_or_else(|| {
+                    ErrorData::invalid_params(
+                        format!("{}: not a path the server can confine", p.display()),
+                        None,
+                    )
+                })?;
+                self.roots.resolve(text).map(|_| ())
+            })
     }
 
     fn strategy(name: Option<&str>) -> Result<PairingStrategy, ErrorData> {
@@ -263,8 +282,9 @@ impl Oinkie {
     #[tool(
         name = "oinkie_run",
         description = "Compare lifted programs and report how similar each pair is, in one \
-                       step and without writing birthmarks. This is the usual way to ask \
-                       whether one program is a copy of another: a high score suggests it is."
+                       step. Given a dest, the scores and the birthmarks they came from are \
+                       written there. This is the usual way to ask whether one program is a \
+                       copy of another: a high score suggests it is."
     )]
     async fn oinkie_run(
         &self,
@@ -278,6 +298,9 @@ impl Oinkie {
         let strategy = Self::strategy(params.strategy.as_deref())?;
         let aggregator = Self::aggregator(params.aggregator.as_deref())?;
         Self::bound(&strategy, &files, params.max_pairs)?;
+        if let Some(d) = &dest {
+            self.confine_birthmarks(&files, d)?;
+        }
 
         let written = dest.clone();
         let scores = tokio::task::spawn_blocking(move || {

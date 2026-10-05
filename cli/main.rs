@@ -12,6 +12,7 @@ use oinkie::extract::Extractor;
 use oinkie::lift::{Lifter, LifterBuilder};
 use oinkie::{Error, Program, Result};
 use rayon::prelude::*;
+use rustc_hash::FxHashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -42,7 +43,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let atype = opts.analysis_type()?;
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
-    let pbar = new_progress_bar(comparing_count * 3);
+    let pbar = new_progress_bar(opts.files.len() + comparing_count);
     let aggregator = opts.aggregator();
     // The analysis names a birthmark and an algorithm, and both are used: each
     // program's birthmark is extracted and the birthmarks are compared, which is
@@ -51,35 +52,50 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let extractor = Extractor::new(atype.birthmark().clone());
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
+    // Each input once, rather than once per pair it is in, and written down:
+    // the score directory then holds the birthmarks its scores came from, which
+    // is what `review` re-reads a comparison from (#128).
+    let birthmarks_dir = dest.join("birthmarks");
+    std::fs::create_dir_all(&birthmarks_dir).map_err(|e| Error::Io(birthmarks_dir.clone(), e))?;
+    pbar.set_message("Extracting birthmarks");
+    let by_input = extract_all(
+        &opts.files,
+        &birthmarks_dir,
+        &extractor,
+        opts.is_skip(),
+        || pbar.inc(1),
+    )?;
+    // Duplicates were extracted once, so they never reach the bar.
+    pbar.inc((opts.files.len() - by_input.len()) as u64);
+
     let results = opts
         .iter()
         .enumerate()
         .par_bridge()
         .map(|(i, (path1, path2))| {
             let dest_file = dest.join(format!("{i:05}.csv"));
-            if dest_file.exists() && opts.is_skip() {
+            let (e1, e2) = (&by_input[path1], &by_input[path2]);
+            // A score is kept only if both birthmarks it came from are still
+            // the ones there. One extracted now replaced whatever the score
+            // was computed from -- a birthmark of another type, or none, in a
+            // directory an earlier release wrote -- and keeping the score
+            // would leave it naming a birthmark it did not compare.
+            if dest_file.exists() && opts.is_skip() && !e1.fresh && !e2.fresh {
                 log::info!(
                     "Similarity file for {:?} and {:?} already exists. Skipping comparison.",
                     path1,
                     path2
                 );
-                pbar.inc(3);
+                pbar.inc(1);
                 read_result_file(&dest_file, i, path1, path2)
             } else {
-                pbar.set_message(format!("Extracting from {:?}", path1.display()));
-                let b1 = extractor.extract(&load_program(path1)?)?;
-                pbar.inc(1);
-                pbar.set_message(format!("Extracting from {:?}", path2.display()));
-                let b2 = extractor.extract(&load_program(path2)?)?;
-                pbar.inc(1);
+                let (b1, b2) = (&e1.birthmark, &e2.birthmark);
                 pbar.set_message(format!(
                     "Comparing two birthmarks ({}/{})",
                     i + 1,
                     comparing_count
                 ));
-                let result = atype
-                    .comparator()
-                    .compare_birthmarks(&b1, &b2, aggregator)?;
+                let result = atype.comparator().compare_birthmarks(b1, b2, aggregator)?;
                 pbar.inc(1);
                 score_csv::store(&result, &dest_file)?;
                 Ok(CompareResult::new(
@@ -357,6 +373,98 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
         );
     }
     r
+}
+
+/// A birthmark `extract_all` returned, and whether this call made it.
+pub(crate) struct Extracted {
+    pub(crate) birthmark: Birthmark,
+    /// False for one read back from the directory under `skip`. A score
+    /// computed from an older birthmark at the same path is only worth
+    /// keeping if this is false for both its sides.
+    pub(crate) fresh: bool,
+}
+
+/// The birthmark `extractor` makes of each program in `inputs`, written into
+/// `dir` under the name `extract` would give it, and returned with that path
+/// recorded, keyed by the input.
+///
+/// With `skip`, a birthmark already there is read instead -- but only one of
+/// the type asked for. The file name does not say which type a birthmark is,
+/// so a directory run before under another analysis would otherwise hand its
+/// birthmarks to this one.
+///
+/// Every input is read or extracted before anything is written, and each file
+/// is written once. Two inputs can name the same file -- the same path given
+/// twice, or two copies of one program under one stem -- and writing it from
+/// both workers at once could interleave the two into invalid JSON, or let a
+/// `skip` read it half written.
+pub(crate) fn extract_all(
+    inputs: &[PathBuf],
+    dir: &Path,
+    extractor: &Extractor,
+    skip: bool,
+    on_each: impl Fn() + Sync,
+) -> Result<FxHashMap<PathBuf, Extracted>> {
+    let mut unique = inputs.iter().collect::<Vec<_>>();
+    unique.sort();
+    unique.dedup();
+    let done = unique
+        .par_iter()
+        .map(|path| {
+            let dest_path = dir.join(dest_name::dest_file_name(path)?);
+            let r = read_or_extract(path, &dest_path, extractor, skip);
+            on_each();
+            r.map(|e| ((*path).clone(), dest_path, e))
+        })
+        .collect::<Vec<_>>();
+    let done = Error::vec_result_to_result_vec(done)?;
+
+    let mut writes = done
+        .iter()
+        .filter(|(_, _, e)| e.fresh)
+        .map(|(_, dest_path, e)| (dest_path, &e.birthmark))
+        .collect::<Vec<_>>();
+    writes.sort_by(|a, b| a.0.cmp(b.0));
+    writes.dedup_by(|a, b| a.0 == b.0);
+    let written = writes
+        .par_iter()
+        .map(|(dest_path, b)| {
+            let json = serde_json::to_string_pretty(b)
+                .map_err(|e| Error::Json((*dest_path).clone(), e))?;
+            std::fs::write(dest_path, json).map_err(|e| Error::Io((*dest_path).clone(), e))
+        })
+        .collect::<Vec<_>>();
+    Error::vec_result_to_result_vec(written)?;
+
+    Ok(done
+        .into_iter()
+        .map(|(path, dest_path, mut e)| {
+            e.birthmark.set_json_path(dest_path);
+            (path, e)
+        })
+        .collect())
+}
+
+fn read_or_extract(
+    path: &Path,
+    dest_path: &Path,
+    extractor: &Extractor,
+    skip: bool,
+) -> Result<Extracted> {
+    if skip && dest_path.exists() {
+        let existing: Birthmark = load(dest_path.to_path_buf())?;
+        if existing.birthmark_type() == extractor.birthmark_type() {
+            log::info!("Birthmark for {path:?} already exists. Skipping extraction.");
+            return Ok(Extracted {
+                birthmark: existing,
+                fresh: false,
+            });
+        }
+    }
+    Ok(Extracted {
+        birthmark: extractor.extract(&load_program(path)?)?,
+        fresh: true,
+    })
 }
 
 fn extract_impl(path: &Path, dest: &Path, extractor: &Extractor, skip: bool) -> Result<()> {
@@ -733,6 +841,32 @@ mod tests {
     use super::*;
     use oinkie::birthmarks::{AnalysisType, BirthmarkType};
     use oinkie::lift::Ir;
+
+    /// An input given twice is extracted once, so no two workers hold the
+    /// same file. A test of the files alone cannot show this: the race it
+    /// prevents seldom loses.
+    #[test]
+    fn test_an_input_given_twice_is_extracted_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let a = PathBuf::from("testdata/lifted/pcodes/hello_clang.json");
+        let b = PathBuf::from("testdata/lifted/pcodes/udl.json");
+        let seen = std::sync::atomic::AtomicUsize::new(0);
+        let extractor = Extractor::new(BirthmarkType::OpSet);
+        let by_input = extract_all(
+            &[a.clone(), b.clone(), a.clone()],
+            dir.path(),
+            &extractor,
+            false,
+            || {
+                seen.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            },
+        )
+        .unwrap();
+        assert_eq!(seen.into_inner(), 2);
+        assert_eq!(by_input.len(), 2);
+        assert!(by_input[&a].fresh && by_input[&b].fresh);
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
 
     /// A tool that is nowhere is reported the way `lift` always reported it,
     /// with `--home` offered first; anything else passes through untouched.

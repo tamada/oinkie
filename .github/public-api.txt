@@ -213,6 +213,7 @@ pub fn oinkie::compare::Comparison<'a, S>::similarity(&self) -> f64
 pub mod oinkie::extract
 pub struct oinkie::extract::Extractor
 impl oinkie::extract::Extractor
+pub fn oinkie::extract::Extractor::birthmark_type(&self) -> &oinkie::birthmarks::BirthmarkType
 pub fn oinkie::extract::Extractor::extract(&self, &oinkie::Program) -> oinkie::Result<oinkie::birthmarks::Birthmark>
 pub fn oinkie::extract::Extractor::new(oinkie::birthmarks::BirthmarkType) -> Self
 pub mod oinkie::lift

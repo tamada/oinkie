@@ -124,6 +124,21 @@ impl Roots {
                         None,
                     ));
                 }
+                // NotFound also comes back for a symlink whose target does
+                // not exist, and that one is there: writing to it creates the
+                // target, wherever the link points. Treated as a name still to
+                // be created, it was appended to its directory and passed.
+                Err(_) if walked.symlink_metadata().is_ok() => {
+                    return Err(ErrorData::invalid_params(
+                        format!(
+                            "{path}: {} is a symlink to something that does not exist, \
+                             so where it leads cannot be checked. Allowed: {}",
+                            walked.display(),
+                            self.render()
+                        ),
+                        None,
+                    ));
+                }
                 Err(_) => match (walked.file_name(), walked.parent()) {
                     (Some(name), Some(parent)) => {
                         tail.push(name.to_owned());
@@ -335,6 +350,20 @@ mod tests {
             .resolve(link.join("secret").to_str().unwrap())
             .unwrap_err();
         assert!(e.message.contains("outside every allowed"), "{}", e.message);
+    }
+
+    /// A link to nothing does not canonicalize, which looked like a name not
+    /// yet created -- and writing to it creates its target, outside.
+    #[cfg(unix)]
+    #[test]
+    fn test_a_dangling_symlink_is_refused() {
+        let f = fixture();
+        let link = f.root.join("dangling");
+        std::os::unix::fs::symlink(f.root.parent().unwrap().join("not-yet"), &link).unwrap();
+        for p in [link.clone(), link.join("below")] {
+            let err = f.roots.resolve(p.to_str().unwrap()).unwrap_err();
+            assert!(err.message.contains("symlink"), "{}", err.message);
+        }
     }
 
     /// A symlink that stays inside a root is allowed, and that is deliberate

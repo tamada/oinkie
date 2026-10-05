@@ -116,11 +116,30 @@ pub fn extract(
     Error::vec_result_to_result_vec(done)
 }
 
-/// Extracts the analysis's birthmark from each lifted program and compares the
-/// birthmarks, without writing them down first.
+/// Where `run` writes the birthmarks of a destination.
+pub fn birthmarks_dir(dest: &Path) -> PathBuf {
+    dest.join("birthmarks")
+}
+
+/// The files `run` writes the birthmarks of `inputs` to under `dest`, so the
+/// server can confine them as it confines `dest` itself.
+pub fn birthmark_files(inputs: &[PathBuf], dest: &Path) -> Result<Vec<PathBuf>> {
+    let dir = birthmarks_dir(dest);
+    inputs
+        .iter()
+        .map(|i| Ok(dir.join(crate::dest_name::dest_file_name(i)?)))
+        .collect()
+}
+
+/// Extracts the analysis's birthmark from each lifted program once and
+/// compares the birthmarks.
 ///
 /// Both halves of the analysis are used. Comparing the programs directly
 /// scored their operations whatever birthmark the analysis named (#150).
+///
+/// Given `dest`, the birthmarks are written into its `birthmarks/` and the
+/// scores' CSVs name them, as `run` does, so the directory can be reviewed on
+/// its own (#128). Without it they are held in memory only.
 pub fn run(
     inputs: &[PathBuf],
     analysis: &AnalysisType,
@@ -130,17 +149,38 @@ pub fn run(
 ) -> Result<Vec<Score>> {
     let start = Instant::now();
     prepare(dest)?;
+    let extractor = Extractor::new(analysis.birthmark().clone());
+    let by_input = match dest {
+        Some(d) => {
+            let dir = birthmarks_dir(d);
+            std::fs::create_dir_all(&dir).map_err(|e| Error::Io(dir.clone(), e))?;
+            crate::extract_all(inputs, &dir, &extractor, false, || ())?
+                .into_iter()
+                .map(|(input, e)| (input, e.birthmark))
+                .collect::<rustc_hash::FxHashMap<_, _>>()
+        }
+        None => {
+            let mut unique = inputs.iter().collect::<Vec<_>>();
+            unique.sort();
+            unique.dedup();
+            let done = unique
+                .par_iter()
+                .map(|input| Ok(((*input).clone(), extractor.extract(&Program::load(input)?)?)))
+                .collect::<Vec<_>>();
+            Error::vec_result_to_result_vec(done)?
+                .into_iter()
+                .collect::<rustc_hash::FxHashMap<_, _>>()
+        }
+    };
     let results = strategy
         .pairs(inputs)
         .enumerate()
         .par_bridge()
         .map(|(i, (left, right))| {
-            let extractor = Extractor::new(analysis.birthmark().clone());
-            let b1 = extractor.extract(&Program::load(left)?)?;
-            let b2 = extractor.extract(&Program::load(right)?)?;
+            let (b1, b2) = (&by_input[left], &by_input[right]);
             let comparison = analysis
                 .comparator()
-                .compare_birthmarks(&b1, &b2, aggregator)?;
+                .compare_birthmarks(b1, b2, aggregator)?;
             if let Some(d) = dest {
                 crate::score_csv::store(&comparison, d.join(format!("{i:05}.csv")))?;
             }
