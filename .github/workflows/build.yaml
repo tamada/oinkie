@@ -183,3 +183,29 @@ jobs:
           github-token: ${{ secrets.github_token }}
           path-to-lcov: coverage.lcov
         if: matrix.os == 'ubuntu-latest'
+
+  # What the library offers and what it depends on (#133). Neither depends on
+  # the platform, so this runs once, beside the matrix rather than in it, and
+  # adds nothing to how long the workflow takes.
+  library:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+
+      # `cargo add oinkie --no-default-features` must not pull in the command
+      # line's crates. The script also checks that it can see them at all, so
+      # a pattern that stopped matching fails rather than passes.
+      - name: The library does not depend on the command line
+        run: ./.github/scripts/check_library_deps.sh
+
+      # The nightly and the tool are pinned in the script, together, since
+      # each version of the tool reads one version of rustdoc's JSON.
+      - name: Install what reads the public API
+        run: ./.github/scripts/public_api.sh --install
+
+      # A new, removed or changed `pub` is a line in .github/public-api.txt,
+      # and so in the diff a reviewer reads. Changing the API on purpose means
+      # running the script with --update and committing the file.
+      - name: The public API is the one committed
+        run: ./.github/scripts/public_api.sh
