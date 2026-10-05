@@ -690,8 +690,11 @@ fn parse_kgram(name: &str) -> Option<BirthmarkType> {
     }
 }
 
+/// The k of a k-gram: a positive count. Zero parses as a number but names no
+/// birthmark -- a k-gram of nothing -- so it is refused here, where the name
+/// is read, instead of reaching an extraction that cannot take it.
 fn parse_k_value(k: &str) -> Option<usize> {
-    k.parse().ok()
+    k.parse().ok().filter(|&k| k > 0)
 }
 
 #[cfg(test)]
@@ -723,6 +726,24 @@ mod tests {
                 expected
             );
         }
+    }
+
+    /// A k-gram of nothing is not a birthmark: zero is refused where the name
+    /// is read, in a birthmark and in an analysis, rather than reaching an
+    /// extraction that cannot take it.
+    #[test]
+    fn test_a_zero_gram_is_refused_by_name() {
+        for name in ["op-0gram-seq", "op-0gram-set", "op-0gram-freq"] {
+            assert!(
+                BirthmarkType::try_from(name).is_err(),
+                "{name} was accepted"
+            );
+        }
+        let err = AnalysisType::try_from("op-0gram-set-jaccard")
+            .err()
+            .expect("op-0gram-set-jaccard was accepted");
+        assert!(err.to_string().contains("op-0gram-set"), "{err}");
+        assert!(BirthmarkType::try_from("op-1gram-set").is_ok());
     }
 
     #[test]

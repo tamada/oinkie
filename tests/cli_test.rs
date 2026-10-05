@@ -424,6 +424,26 @@ fn test_run_scores_what_extract_and_compare_score() {
     }
 }
 
+/// A k-gram of size zero is a usage error, not a panic -- `run` reached
+/// extraction with it once `run` extracted at all (#150).
+#[test]
+fn test_a_zero_gram_analysis_is_refused_not_a_panic() {
+    let dir = tempdir().unwrap();
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["run", "-a", "op-0gram-set-jaccard", "-s", "all", "-d"])
+        .arg(dir.path())
+        .args([
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/udl.json",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicates::str::contains("op-0gram-set"))
+        .stderr(predicates::str::contains("panicked").not());
+}
+
 /// The old name is refused, not aliased, and the refusal names the new one --
 /// including when it is handed the arguments the old command took.
 #[test]

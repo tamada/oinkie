@@ -472,6 +472,21 @@ fn test_an_impossible_pairing_is_refused_in_the_librarys_words() {
     assert_eq!(result["error"]["code"].as_i64(), Some(-32602), "{result}");
 }
 
+/// A k-gram of size zero is refused as the caller's mistake, before any
+/// extraction -- which would otherwise fail the tool's worker on a window of
+/// size zero (#150).
+#[test]
+fn test_a_zero_gram_analysis_is_refused_as_the_callers_mistake() {
+    let result = call_tool(
+        &[&here()],
+        "oinkie_run",
+        serde_json::json!({"files": [A, B], "analysis": "op-0gram-set-jaccard", "strategy": "all"}),
+    );
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(message.contains("op-0gram-set"), "{result}");
+    assert_eq!(result["error"]["code"].as_i64(), Some(-32602), "{result}");
+}
+
 /// A model handed a directory will pass all of it, and `all-and-self` is
 /// quadratic. The count is known before anything is read, so the refusal
 /// happens then.
