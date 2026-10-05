@@ -108,6 +108,7 @@ fn test_the_server_offers_the_tools_it_has() {
             "oinkie_info".to_string(),
             "oinkie_review".to_string(),
             "oinkie_run".to_string(),
+            "oinkie_stats".to_string(),
         ]
     );
 }
@@ -403,6 +404,124 @@ fn test_review_does_not_read_a_birthmark_outside_the_roots() {
     assert_eq!(result["error"]["code"].as_i64(), Some(-32602), "{result}");
     let message = result["error"]["message"].as_str().unwrap_or_default();
     assert!(message.contains("outside every allowed"), "{message}");
+}
+
+/// A directory of op-seq birthmarks of A and B, and a lifted program beside
+/// them that is not a birthmark and has to be reported as skipped.
+fn birthmark_directory(dir: &std::path::Path) -> std::path::PathBuf {
+    let birthmarks = dir.join("birthmarks");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["extract", "-b", "op-seq", "-d"])
+        .arg(&birthmarks)
+        .args([A, B])
+        .assert()
+        .success();
+    std::fs::copy(A, birthmarks.join("not-a-birthmark.json")).unwrap();
+    birthmarks
+}
+
+/// `oinkie_stats` is `oinkie stats -f json`: the same groups, top elements
+/// included, and the same files skipped. Checked against the CLI so the two
+/// cannot drift apart.
+#[test]
+fn test_stats_agrees_with_the_cli() {
+    let dir = tempfile::tempdir().unwrap();
+    let birthmarks = birthmark_directory(dir.path());
+    let out = Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["stats", "-f", "json", "--top", "2"])
+        .arg(&birthmarks)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let cli: Value = serde_json::from_slice(&out.stdout).unwrap();
+
+    let result = call_tool(
+        &[dir.path()],
+        "oinkie_stats",
+        serde_json::json!({ "paths": [birthmarks.to_str().unwrap()], "top": 2 }),
+    );
+    assert!(result["error"].is_null(), "{result}");
+    let served = &result["result"]["structuredContent"];
+    assert_eq!(served["groups"], cli["groups"]);
+    assert!(
+        served["groups"][0]["top"]
+            .as_array()
+            .is_some_and(|t| t.len() == 2),
+        "{served}"
+    );
+    let skipped = served["skipped"].as_array().unwrap();
+    assert_eq!(skipped.len(), 1, "{served}");
+    assert_eq!(skipped.len(), cli["skipped"].as_array().unwrap().len());
+    // the per-file rows only when asked for
+    assert!(served.get("files").is_none(), "{served}");
+}
+
+#[test]
+fn test_stats_reports_each_file_when_asked() {
+    let dir = tempfile::tempdir().unwrap();
+    let birthmarks = birthmark_directory(dir.path());
+    let result = call_tool(
+        &[dir.path()],
+        "oinkie_stats",
+        serde_json::json!({ "paths": [birthmarks.to_str().unwrap()], "per_file": true }),
+    );
+    assert!(result["error"].is_null(), "{result}");
+    let files = result["result"]["structuredContent"]["files"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no per-file rows: {result}"));
+    assert_eq!(files.len(), 2);
+}
+
+/// A directory contributes what is directly inside it, and what is below too
+/// only with `recursive`.
+#[test]
+fn test_stats_descends_only_when_recursive() {
+    let dir = tempfile::tempdir().unwrap();
+    birthmark_directory(dir.path());
+    for (recursive, groups) in [(false, 0), (true, 1)] {
+        let result = call_tool(
+            &[dir.path()],
+            "oinkie_stats",
+            serde_json::json!({ "paths": [dir.path().to_str().unwrap()], "recursive": recursive }),
+        );
+        assert!(result["error"].is_null(), "{result}");
+        let found = result["result"]["structuredContent"]["groups"]
+            .as_array()
+            .unwrap()
+            .len();
+        assert_eq!(found, groups, "recursive: {recursive}");
+    }
+}
+
+/// A directory inside the roots is confined, and so is every file found in
+/// it: one can be a symlink out of them.
+#[cfg(unix)]
+#[test]
+fn test_stats_does_not_read_through_a_symlink_out_of_the_roots() {
+    let dir = tempfile::tempdir().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    let birthmarks = birthmark_directory(elsewhere.path());
+    let inside = dir.path().join("inside");
+    std::fs::create_dir_all(&inside).unwrap();
+    let target = std::fs::read_dir(&birthmarks)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .find(|p| !p.ends_with("not-a-birthmark.json"))
+        .unwrap();
+    std::os::unix::fs::symlink(&target, inside.join("linked.json")).unwrap();
+
+    let result = call_tool(
+        &[dir.path()],
+        "oinkie_stats",
+        serde_json::json!({ "paths": [inside.to_str().unwrap()] }),
+    );
+    let message = result["error"]["message"].as_str().unwrap_or_default();
+    assert!(
+        message.contains("outside every allowed"),
+        "should have been refused: {result}"
+    );
 }
 
 /// An aggregator the parser refuses is the caller's mistake, and has to come
@@ -1004,7 +1123,7 @@ fn test_a_line_that_is_not_json_does_not_end_the_session() {
     let tools = reply(&messages, 5)["result"]["tools"]
         .as_array()
         .expect("the server answered after the garbage");
-    assert_eq!(tools.len(), 5, "{messages:#?}");
+    assert_eq!(tools.len(), 6, "{messages:#?}");
 }
 
 /// A required argument left out is the caller's mistake and is reported inside
