@@ -10,6 +10,12 @@ container_image := image_quay
 compile-check:
     ./assets/lifters/ghidra/compile-check.sh
 
+# Test the Ghidra lifting script's JSON escaping and path reading without running Ghidra
+test-ghidra-script:
+    ./assets/lifters/ghidra/compile-check.sh --run HighPCodeLifterTest \
+        assets/lifters/ghidra/scripts/HighPCodeLifter.java \
+        testdata/scripts/HighPCodeLifterTest.java
+
 container-local:
     docker build \
         --target light-image \
