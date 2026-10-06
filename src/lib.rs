@@ -50,6 +50,8 @@ use ndarray::ShapeError;
 
 use crate::birthmarks::BirthmarkType;
 
+#[allow(dead_code)]
+mod assignment;
 mod binaryninja;
 pub mod birthmarks;
 pub mod compare;
