@@ -6,6 +6,13 @@
 //! [`Lifter`] for it, and [`Lifter::lift`] writes the lifted program as JSON,
 //! which [`Program::load`](crate::Program::load) reads.
 //!
+//! oinkie uses these tools; it does not provide them. Installing a tool, and
+//! for IDA Pro and Binary Ninja holding a licence for it, is left to the user.
+//! oinkie only finds the installation -- the home given to
+//! [`LifterBuilder::home`], the tool's environment variable, or the usual
+//! installation directories -- and reports
+//! [`Error::ToolNotFound`](crate::Error::ToolNotFound) when there is none.
+//!
 //! ```no_run
 //! use std::path::Path;
 //!
