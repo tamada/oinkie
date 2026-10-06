@@ -32,8 +32,8 @@ set -euo pipefail
 readonly MIN_JDK=21
 
 run_class=""
-if [ "${1:-}" = "--run" ]; then
-    if [ $# -lt 2 ]; then
+if [[ "${1:-}" = "--run" ]]; then
+    if [[ $# -lt 2 ]]; then
         echo "$0: --run needs the name of a class to run" >&2
         exit 2
     fi
@@ -42,7 +42,7 @@ if [ "${1:-}" = "--run" ]; then
 fi
 
 scripts=("$@")
-if [ ${#scripts[@]} -eq 0 ]; then
+if [[ ${#scripts[@]} -eq 0 ]]; then
     scripts=("assets/lifters/ghidra/scripts/HighPCodeLifter.java")
 fi
 
@@ -54,22 +54,34 @@ fi
 case "$(uname -s)" in
 MINGW* | MSYS* | CYGWIN*)
     sep=';'
-    native() { cygpath -w "$1"; }
-    shell_path() { cygpath -u "$1"; }
+    native() {
+        local path=$1
+        cygpath -w "$path"
+    }
+    shell_path() {
+        local path=$1
+        cygpath -u "$path"
+    }
     ;;
 *)
     sep=':'
-    native() { printf '%s\n' "$1"; }
-    shell_path() { printf '%s\n' "$1"; }
+    native() {
+        local path=$1
+        printf '%s\n' "$path"
+    }
+    shell_path() {
+        local path=$1
+        printf '%s\n' "$path"
+    }
     ;;
 esac
 
 find_ghidra_home() {
-    if [ -n "${GHIDRA_HOME:-}" ]; then
+    if [[ -n "${GHIDRA_HOME:-}" ]]; then
         shell_path "$GHIDRA_HOME"
         return
     fi
-    if [ -n "${GHIDRA_INSTALL_DIR:-}" ]; then
+    if [[ -n "${GHIDRA_INSTALL_DIR:-}" ]]; then
         shell_path "$GHIDRA_INSTALL_DIR"
         return
     fi
@@ -77,7 +89,7 @@ find_ghidra_home() {
     for candidate in /opt/homebrew/opt/ghidra/libexec \
                      /usr/local/opt/ghidra/libexec \
                      /opt/ghidra/libexec; do
-        if [ -d "$candidate/Ghidra" ]; then
+        if [[ -d "$candidate/Ghidra" ]]; then
             echo "$candidate"
             return
         fi
@@ -91,10 +103,10 @@ find_javac() {
     # Converted only when set: cygpath refuses an empty path, and under -e
     # that would end the script before the PATH fallback below.
     local java_home=""
-    if [ -n "${JAVA_HOME:-}" ]; then
+    if [[ -n "${JAVA_HOME:-}" ]]; then
         java_home=$(shell_path "$JAVA_HOME")
     fi
-    if [ -n "$java_home" ] && [ -x "$java_home/bin/javac" ]; then
+    if [[ -n "$java_home" && -x "$java_home/bin/javac" ]]; then
         javac="$java_home/bin/javac"
     elif javac=$(command -v javac); then
         :
@@ -113,13 +125,13 @@ find_javac() {
     local reported major
     reported=$("$javac" -version 2>&1 | awk '{ print $2 }')
     major=${reported%%[!0-9]*}
-    if [ -z "$major" ]; then
+    if [[ -z "$major" ]]; then
         echo "$0: cannot tell which Java $javac is: it reports \"$reported\"." >&2
         echo "  Refusing rather than guessing, since the guard below is the" >&2
         echo "  only thing standing between you and an unreadable error." >&2
         exit 1
     fi
-    if [ "$major" -lt "$MIN_JDK" ]; then
+    if [[ "$major" -lt "$MIN_JDK" ]]; then
         echo "$0: $javac is Java $reported; Ghidra's class files need $MIN_JDK or newer." >&2
         echo "  An older javac fails with \"bad class file\" against Ghidra's jars," >&2
         echo "  which is about the JDK and not about the script." >&2
@@ -132,7 +144,7 @@ find_javac() {
 ghidra_home=$(find_ghidra_home)
 javac=$(find_javac)
 
-if [ ! -d "$ghidra_home/Ghidra" ]; then
+if [[ ! -d "$ghidra_home/Ghidra" ]]; then
     echo "$0: $ghidra_home does not look like a Ghidra installation (no Ghidra/ inside)." >&2
     exit 1
 fi
@@ -155,7 +167,7 @@ trap 'rm -rf "$outdir"' EXIT
 
 echo "ok: ${scripts[*]} compile against $ghidra_home"
 
-if [ -n "$run_class" ]; then
+if [[ -n "$run_class" ]]; then
     # The java beside the javac that was checked above, rather than whichever
     # one PATH finds first, so the two cannot be different JDKs.
     "$(dirname "$javac")/java" -cp "$(native "$outdir")$sep$classpath" "$run_class"
