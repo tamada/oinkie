@@ -61,15 +61,17 @@ pub trait Lifter {
     /// cloud decompilers for x64 and ARM64 and a local one for ARM64, it reads:
     ///
     /// ```text
-    /// This IDA installation has cloud decompilers (hexcx64, hexcarm64).
-    /// Microcode cannot be produced without a decompiler, and every function a
-    /// cloud one handles is sent to Hex-Rays' servers. Nothing has been sent
-    /// yet. It also has local decompilers (hexarm64); which of them handles
-    /// this binary depends on its architecture.
+    /// This IDA installation has cloud decompilers (hexcarm64.dylib,
+    /// hexcx64.dylib). Microcode cannot be produced without a decompiler, and
+    /// every function a cloud one handles is sent to Hex-Rays' servers.
+    /// Nothing has been sent yet. It also has local decompilers
+    /// (hexarm64.dylib); which of them handles this binary depends on its
+    /// architecture.
     /// ```
     ///
-    /// The last sentence is there only when local decompilers are installed
-    /// too. The text is one line; it is wrapped here to be read.
+    /// The decompilers are named by their plugin files, as installed. The last
+    /// sentence is there only when local decompilers are installed too. The
+    /// text is one line; it is wrapped here to be read.
     fn notice(&self) -> Option<String> {
         None
     }
