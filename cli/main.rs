@@ -845,7 +845,11 @@ fn main() {
             if e.kind() == clap::error::ErrorKind::DisplayHelp
                 || e.kind() == clap::error::ErrorKind::DisplayVersion
             {
-                println!("{}", e.render().ansi());
+                // clap's own printing, which colours only a terminal and
+                // honours NO_COLOR. `render().ansi()` coloured
+                // unconditionally, so a pipe or a file got the escape codes
+                // as text (#163).
+                let _ = e.print();
                 0
             } else {
                 // No "Error: " in front: clap's own message already begins
