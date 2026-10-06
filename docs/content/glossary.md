@@ -69,7 +69,7 @@ What to extract: the kind of element and the [shape](#shape), named `{element}-{
 
 ### Empty function, empty birthmark
 
-A function with no elements, and a birthmark with no functions. Both still compare. Two empty birthmarks have a [similarity](#similarity) of 1.0, and an empty one against one that is not, 0.0; most algorithms likewise give two empty functions 1.0. A perfect match between programs that should have nothing in common is therefore a reason to look at the inputs. `extract` warns when every function of an `fc-*` birthmark is empty — a program that calls nothing, or whose calls the lifter could not resolve — since two such birthmarks agree completely.
+A function with no elements, and a birthmark with no functions. Both still compare. Two empty birthmarks have a [similarity](#similarity) of 1.0, and an empty one against one that is not, 0.0; every [algorithm](#algorithm) scores empty functions by the same rule. A perfect match between programs that should have nothing in common is therefore a reason to look at the inputs. `extract` warns when every function of an `fc-*` birthmark is empty — a program that calls nothing, or whose calls the lifter could not resolve — since two such birthmarks agree completely.
 
 ---
 
