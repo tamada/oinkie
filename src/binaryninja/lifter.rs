@@ -12,22 +12,16 @@ use std::path::{Path, PathBuf};
 pub const DEFAULT_BINARY_NINJA_SCRIPT: &str =
     include_str!("../../assets/lifters/binaryninja/scripts/BnilLifter.py");
 
-/// Lifts with Binary Ninja's headless Python, at one of its three levels.
+/// Lifts with Binary Ninja's headless Python.
 ///
-/// The level is not a separate option: the caller names it by naming the
-/// representation -- `binary-ninja-llil`, `-mlil` or `-hlil` -- since a
-/// representation implies its tool. [`LifterBuilder::build`] turns that
-/// [`Ir`] into the word the script takes, and this lifter holds the word, one
-/// lifter per level over the one installation the three share.
+/// Binary Ninja lifts at three levels, LLIL, MLIL and HLIL, and each is an
+/// [`Ir`] of its own: `binary-ninja-llil`, `binary-ninja-mlil` and
+/// `binary-ninja-hlil`. A lifter lifts at one of them.
 ///
-/// [`LifterBuilder::build`]: crate::lift::LifterBuilder::build
 /// [`Ir`]: crate::lift::Ir
 pub struct BinaryNinjaLifter {
     home: PathBuf,
-    /// The word the lifting script takes for the level, resolved by
-    /// [`crate::binaryninja::level`] before this was constructed so that
-    /// nothing here has to account for a representation that is not Binary
-    /// Ninja's.
+    /// The level, as the lifting script names it: `llil`, `mlil` or `hlil`.
     level: &'static str,
     script: Option<PathBuf>,
     intermediate_dir: Option<PathBuf>,
