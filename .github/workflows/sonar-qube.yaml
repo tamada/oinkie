@@ -1,0 +1,78 @@
+name: SonarQube
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  sonarqube:
+    name: SonarQube
+    runs-on: ubuntu-latest
+    # A pull request from a fork is not given SONAR_TOKEN, so the scan could
+    # only fail there. Skipped instead, which says what happened.
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: checkout
+        uses: actions/checkout@v6
+        with:
+          # The whole history, for blame and for telling new code from old.
+          fetch-depth: 0
+
+      - name: setup rust
+        run: |
+          rustup update stable
+          rustup component add clippy llvm-tools-preview
+
+      # The tests lift with Ghidra, so the coverage run needs what build.yaml
+      # sets up for its own: a JDK, Ghidra, and a decompiler that runs here.
+      - name: Setup java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: "25.0.2"
+
+      - name: Setup ghidra
+        uses: antoniovazquezblanco/setup-ghidra@v2
+        with:
+          version: "12.1"
+          auth_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Make sure Ghidra can decompile
+        shell: bash
+        run: ./.github/scripts/ensure_ghidra_decompiler.sh
+
+      # The same run as build.yaml's coverage step, so SonarQube and Coveralls
+      # report the same number. --features mcp, or cli/mcp/ is not compiled
+      # into the report at all.
+      - name: Coverage
+        env:
+          GHIDRA_HOME: ${{ env.GHIDRA_INSTALL_DIR }}
+        run: |
+          cargo install cargo-llvm-cov --locked
+          cargo llvm-cov --features mcp --lcov --output-path coverage.lcov
+
+      # The analyzer imports clippy's findings but does not run clippy. The
+      # report is JSON on stdout; without -D warnings clippy exits 0 on a
+      # finding, so a warning reaches SonarQube rather than stopping here.
+      - name: Clippy report
+        run: cargo clippy --all-targets --features mcp --message-format=json > clippy-report.json
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      # What is analysed is in sonar-project.properties.
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v8
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
