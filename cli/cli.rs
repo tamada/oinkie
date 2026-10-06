@@ -79,7 +79,7 @@ pub enum OinkieCommand {
 
     #[command(
         name = "review",
-        about = "Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores"
+        about = "Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities"
     )]
     Review(ReviewOpts),
 
@@ -331,13 +331,13 @@ pub struct ReviewOpts {
         default_value = "hungarian",
         value_name = "METHOD",
         ignore_case = true,
-        help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+        help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
 Available:
-- hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
-             maximizing the total similarity score.
-- topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
-             second birthmark when calculating the overall similarity score. This can reduce noise from less
-             relevant matches and focus on the most significant similarities."
+- hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+             two birthmarks, maximizing the total similarity.
+- topn:N     Take each function's best match in the other birthmark, and average the N best of those from
+             each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+             and focus on the most significant similarities."
     )]
     aggregator: Aggregator,
 
@@ -346,7 +346,7 @@ Available:
         long,
         value_name = "RESULT.CSV",
         help = "Specify the result CSV file of the comparing results to review.
-The file contains the birthmark-wise similarity score list.",
+The file lists the similarity of each pair.",
         default_value = "review.csv"
     )]
     dest_file: PathBuf,
@@ -354,7 +354,7 @@ The file contains the birthmark-wise similarity score list.",
     #[clap(
         index = 1,
         value_name = "SCORE_DIRECTORY",
-        help = "Path to the directory containing the element-wise similarity scores"
+        help = "Path to the score directory: the pair CSVs that compare or run wrote, holding the function similarities"
     )]
     score_directory: PathBuf,
 
@@ -537,13 +537,13 @@ pub struct CompareOpts {
         default_value = "hungarian",
         value_name = "METHOD",
         ignore_case = true,
-        help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+        help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
 Available:
-- hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
-             maximizing the total similarity score.
-- topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
-             second birthmark when calculating the overall similarity score. This can reduce noise from less
-             relevant matches and focus on the most significant similarities."
+- hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+             two birthmarks, maximizing the total similarity.
+- topn:N     Take each function's best match in the other birthmark, and average the N best of those from
+             each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+             and focus on the most significant similarities."
     )]
     aggregator: Aggregator,
 
@@ -590,7 +590,7 @@ impl CompareOpts {
 
     pub fn aggregator(&self) -> &Aggregator {
         log::info!(
-            "Using {:?} as the aggregator for combining element-wise similarity scores",
+            "Using {:?} as the aggregator for combining function similarities",
             self.aggregator
         );
         &self.aggregator
@@ -629,13 +629,13 @@ parses in a k-gram name, not only the ones listed.")]
         default_value = "hungarian",
         value_name = "METHOD",
         ignore_case = true,
-        help = "Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+        help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
 Available:
-- hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
-             maximizing the total similarity score.
-- topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
-             second birthmark when calculating the overall similarity score. This can reduce noise from less
-             relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn)."
+- hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+             two birthmarks, maximizing the total similarity.
+- topn:N     Take each function's best match in the other birthmark, and average the N best of those from
+             each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+             and focus on the most significant similarities. available topn:N or topn:all (same as topn)."
     )]
     aggregator: Aggregator,
 
@@ -674,7 +674,7 @@ impl RunOpts {
 
     pub fn aggregator(&self) -> &Aggregator {
         log::info!(
-            "Using {:?} as the aggregator for combining element-wise similarity scores",
+            "Using {:?} as the aggregator for combining function similarities",
             self.aggregator
         );
         &self.aggregator

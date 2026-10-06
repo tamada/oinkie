@@ -40,6 +40,10 @@ externalLinkForceNewTab = false
     name = "📃 Academic"
     pageRef = "/academic"
     weight = 60
+[[menus.footer]]
+    name = "📖 Glossary"
+    pageRef = "/glossary"
+    weight = 70
 
 [module]
 [[module.imports]]

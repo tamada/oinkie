@@ -28,7 +28,7 @@ oinkie run [OPTIONS] [FILES]...
   `[default: op-set-jaccard]`  
   *Refer below for a list of common configuration formats.*
 * `-A, --aggregator <METHOD>`  
-  Specify the method for combining individual element-wise (function-to-function) similarities into a single program-wide similarity score. `[default: hungarian]`  
+  Specify the method for combining the function similarities of a pair into its single similarity. `[default: hungarian]`  
   *Refer below for a full list of aggregators.*
 * `-s, --strategy <STRATEGY>`  
   The pairing strategy to use when comparing files. `[default: all-and-self]`  

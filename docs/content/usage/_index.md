@@ -9,6 +9,8 @@ draft: false
 
 The `oinkie` command-line utility provides all the subcommands required to perform the entire software birthmarking process—from lifting binary files, extracting birthmarks, to comparing similarities.
 
+The terms these pages use — birthmark, function, element, similarity and the rest — are each defined once in the [glossary](../glossary).
+
 ---
 
 ## 🚀 General Help and Subcommands
@@ -25,7 +27,7 @@ Commands:
   lift         Lift binary files to P-code JSON files using a specified lifter
   extract      Extract birthmarks from a lifted binary file (JSON format)
   compare      Compare birthmarks and output the similarity score
-  review       Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores
+  review       Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities
   stats        Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
   run          Extract birthmarks and compare them in one command
   mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
@@ -63,7 +65,7 @@ The toolkit's operations are divided into distinct stages. You can execute them 
    Compare extracted birthmarks between pairs of files using chosen similarity algorithms and matching heuristics.
    
 4. **[Reviewing Scores](review)**  
-   Recalculate program-wide similarity scores from saved element-wise similarity scores.
+   Recalculate the similarity of each pair from saved function similarities.
    
 5. **[All-in-One Execution (Run)](run)**  
    Execute extraction and comparison together in a single command.

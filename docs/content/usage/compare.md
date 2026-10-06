@@ -27,7 +27,7 @@ oinkie compare [OPTIONS] [JSON_FILES]...
   Specify the similarity calculation algorithm to compare birthmarks. `[default: jaccard]`  
   *Refer below for a full list of algorithms.*
 * `-A, --aggregator <METHOD>`  
-  Specify the method for combining individual element-wise (function-to-function) similarities into a single program-wide similarity score. `[default: hungarian]`  
+  Specify the method for combining the function similarities of a pair into its single similarity. `[default: hungarian]`  
   *Refer below for a full list of aggregators.*
 * `-s, --strategy <STRATEGY>`  
   The pairing strategy to use when comparing files. `[default: all-and-self]`  
@@ -72,10 +72,10 @@ The mathematical algorithms used to compare two birthmark properties:
 
 ## 🏗️ Similarity Aggregators (`--aggregator`)
 
-Because software birthmarks are extracted at a **function level**, comparing two programs involves comparing sets of functions. **oinkie** uses aggregators to resolve these function-to-function similarities into a single program-level similarity score:
+Because software birthmarks are extracted at a **function level**, comparing two programs involves comparing sets of functions. **oinkie** uses aggregators to resolve these function similarities into the single similarity of the pair:
 
 ### 1. `hungarian` (Default)
-Uses the **Hungarian Algorithm** to find the optimal global matching between the functions of program A and program B. This ensures that every function is paired up with its most likely match in the other program, maximizing the overall global similarity score.
+Uses the **Hungarian Algorithm** to find the optimal global matching between the functions of program A and program B. This ensures that every function is paired up with its most likely match in the other program, maximizing the overall similarity.
 
 ### 2. `topn:N`
-For each function in the first program, it considers only the top \\(N\\) most similar functions in the second program when calculating the overall average similarity score. This reduces noise from minor or unrelated function matches.
+Takes each function's best match in the other program, on both sides, and averages the \\(N\\) best of those from each side. The matching need not be one-to-one. This reduces noise from minor or unrelated function matches.
