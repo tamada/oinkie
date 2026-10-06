@@ -19,7 +19,7 @@ jobs:
   # Prepends the hand-written upgrade note for this version to the draft that
   # release-start opened. The note lives in the repository so that whoever
   # makes a breaking change writes it while they still have the context,
-  # rather than someone reconstructing it at release time (#31).
+  # rather than someone reconstructing it at release time.
   #
   # A missing file is a hard failure on purpose: release-start has already
   # tagged and drafted by this point, so a silent skip is exactly the
@@ -173,10 +173,8 @@ jobs:
   # one step here that cannot be undone: a version can be yanked but never
   # re-uploaded. Anything that was going to fail should have failed already.
   #
-  # It used to skip when CARGO_REGISTRY_TOKEN was unset, so that adding the job
-  # published nothing by itself. There is no such secret now and no such skip:
-  # a release that cannot authenticate fails, because the alternative is a
-  # tagged release with no crate and nothing saying so.
+  # A release that cannot authenticate fails rather than skipping, because the
+  # alternative is a tagged release with no crate and nothing saying so.
   crates-io:
     runs-on: ubuntu-latest
     # release-notes as well as the artefacts. It runs in parallel with them, so
@@ -195,8 +193,7 @@ jobs:
       # Trusted publishing: crates.io recognises this repository and workflow
       # and issues a token that lives for the length of this job. There is no
       # long-lived secret in the repository to leak, to rotate, or to forget to
-      # rotate -- which is what the first upload had to use, since crates.io
-      # cannot scope a token to a crate that does not exist yet.
+      # rotate.
       - name: Get a publishing token from crates.io
         uses: rust-lang/crates-io-auth-action@v1
         id: auth

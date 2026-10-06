@@ -6,7 +6,7 @@
 /HANDOVER.md
 /designs
 
-# Reports the SonarQube workflow writes before scanning (#159); run locally,
+# Reports the SonarQube workflow writes before scanning; run locally,
 # they land in the working tree.
 /coverage.lcov
 /clippy-report.json

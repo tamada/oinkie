@@ -72,8 +72,8 @@ public class HighPCodeLifter extends GhidraScript {
      * on Windows it is `/D:/a/oinkie/testdata/bin/hello_clang`, with a slash
      * before the drive letter. `Path.of` rejects that --
      * `InvalidPathException: Illegal char <:> at index 3` -- and the exception
-     * leaves `run` before anything is written, so every lift on Windows failed
-     * as a missing output file (#136).
+     * would leave `run` before anything is written, so the lift would fail as a
+     * missing output file.
      *
      * A Unix path cannot take this branch: it has no drive letter for a slash
      * to precede. Recognised by shape rather than by asking which operating

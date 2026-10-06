@@ -7,7 +7,7 @@
 #
 # A new `pub`, a removed one or a changed signature then shows up as a line in
 # the pull request's diff, where a reviewer sees it, instead of reaching
-# crates.io unnoticed (#133). Updating the file is the deliberate act of
+# crates.io unnoticed. Updating the file is the deliberate act of
 # saying the change is meant.
 #
 # cargo-public-api reads rustdoc's JSON output, which only nightly produces,
@@ -48,7 +48,7 @@ api() {
 }
 
 # The library has no API behind a feature: the features are the command
-# line's, and nothing in the library may depend on them (#133). So the API is
+# line's, and nothing in the library may depend on them. So the API is
 # taken with no features and with all of them, and the two must be the same --
 # otherwise a `pub` item gated on a feature would be invisible to the file
 # below while every default build exposed it.

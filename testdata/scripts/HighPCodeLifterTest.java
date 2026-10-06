@@ -7,12 +7,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Tests the string handling in HighPCodeLifter.java without running Ghidra
- * (#138).
+ * Tests the string handling in HighPCodeLifter.java without running Ghidra.
  *
- * Its two pure static methods are the two that have shipped wrong: `q`, the
- * JSON escaper (#77), and `programPath`, Ghidra's spelling of a Windows path
- * (#136). Both are private, so they are reached by reflection, and the rest
+ * Its two pure static methods are where its logic can go wrong without a
+ * Program: `q`, the JSON escaper, and `programPath`, Ghidra's spelling of a
+ * Windows path. Both are private, so they are reached by reflection, and the rest
  * of the script -- which needs a Program and a decompiler -- is left to a
  * real lift.
  *

@@ -3,11 +3,10 @@
 # Rewrites the version this repository claims about itself.
 #
 # Each replacement is anchored to what precedes the version, rather than
-# matching the previous version string anywhere it appears. It used to be
-# `sed "s/${FROM_VERSION}/${TO_VERSION}/g"` over the whole file, which
-# rewrites any text that happens to contain the old number: going 0.3.0 to
-# 0.4.0 would have turned the NII CRID 1572824500.3.007232 of a cited paper
-# into ...500.4.007232, silently, in the released README (#75).
+# matching the previous version string anywhere it appears: a plain
+# replacement over the whole file would rewrite any text that happens to
+# contain the old number -- an identifier in a cited paper's URL, say --
+# silently, in the released README.
 #
 # Matching the shape of a version rather than the literal old one also makes
 # this idempotent, so it does not matter whether Cargo.toml still holds the
@@ -15,10 +14,8 @@
 
 set -eu
 
-# Every path below is relative to the repository root, and always was -- run
-# from anywhere else, this used to fail at the first sed with
-# `Cargo.toml: No such file or directory`. Going there rather than saying so
-# removes the precondition instead of documenting it.
+# Every path below is relative to the repository root, so the script goes
+# there first: that removes the precondition instead of documenting it.
 cd "$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)"
 
 # cargo is needed for the lock file below. Said here, because `cargo: not
@@ -85,9 +82,8 @@ done
 # and is the wrong tool, because it rebuilds the whole thing and dependency
 # resolutions can move with it.
 #
-# Not `--offline`. It was here, on the reasoning that a release runner should
-# resolve nothing from the network, and it made the bump fail on the only
-# machine that matters: a fresh runner has no crates.io index, and `--offline`
-# forbids fetching one, so resolution cannot succeed at all (#102). It passed
-# every local test because a developer's registry is already warm.
+# Not `--offline`: a fresh release runner has no crates.io index, and
+# `--offline` forbids fetching one, so resolution could not succeed there --
+# while passing every local test, since a developer's registry is already
+# warm.
 cargo update --workspace

@@ -3,8 +3,7 @@ name = "oinkie"
 version = "0.7.0"
 description = "Detects software theft by comparing birthmarks extracted from binaries"
 edition = "2024"
-# crates.io refuses an upload without a licence. The file has been here since
-# the first commit; the manifest had never said so.
+# crates.io refuses an upload without a licence.
 license = "MIT"
 repository = "https://github.com/tamada/oinkie"
 homepage = "https://tamada.github.io/oinkie"
@@ -52,7 +51,7 @@ mcp = [ "cli", "dep:rmcp", "dep:tokio" ]
 chrono = { version = "0.4.44", features = [ "serde" ] }
 # "string" lets the builder take runtime-generated values, which is what the
 # completion lists for --birthmark-type and --analysis are: they are computed
-# from the birthmark vocabulary rather than written out (#25).
+# from the birthmark vocabulary rather than written out.
 clap = { version = "4.6.1", optional = true, features = [ "derive", "string" ] }
 clap_complete = { version = "4.6.5", optional = true }
 csv = "1.4.0"
@@ -96,10 +95,10 @@ name = "gencomp"
 path = "cli/gencomp.rs"
 required-features = [ "gencomp" ]
 
-# Two pedantic lints, on because SonarQube Cloud reports what they find
-# (#167): a closure that only calls a method, and an `else` after a branch
-# that leaves. CI runs clippy with -D warnings, so they stay fixed rather than
-# coming back for SonarQube to find again.
+# Two pedantic lints, on because SonarQube Cloud reports what they find: a
+# closure that only calls a method, and an `else` after a branch that leaves.
+# CI runs clippy with -D warnings, so they are caught before SonarQube sees
+# them.
 [lints.clippy]
 redundant_closure_for_method_calls = "warn"
 redundant_else = "warn"

@@ -13,8 +13,8 @@
 # `ghidra-image`, which is the CLI and the server in one.
 #
 # They share the builder stage below, and that sharing is the point of the file:
-# when this was two files with identical builder halves, a directory that moved
-# had to be fixed in both, and was fixed in neither (#91).
+# two files with identical builder halves would each need every change, and a
+# directory that moved would have to be fixed in both.
 #
 # `docker build` with no --target builds the *last* stage. Anything that wants
 # another must say so, and every caller here does.

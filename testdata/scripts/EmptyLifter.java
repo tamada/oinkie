@@ -14,9 +14,7 @@ import java.nio.file.Path;
  *
  * Not a hypothetical shape. A Ghidra whose decompiler native binary is missing
  * produces exactly this: `DecompInterface` fails for every function,
- * HighPCodeLifter skips each one, and analyzeHeadless exits 0 (#54, #126).
- * That went unnoticed on two platforms until a test that wanted a particular
- * function name failed for want of any.
+ * HighPCodeLifter skips each one, and analyzeHeadless exits 0.
  *
  * Used by tests/cli_test.rs through `--script`, because the refusal has to be
  * on the output: a replacement script is arbitrary Java that oinkie never
