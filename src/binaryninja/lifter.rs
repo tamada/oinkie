@@ -14,9 +14,14 @@ pub const DEFAULT_BINARY_NINJA_SCRIPT: &str =
 
 /// Lifts with Binary Ninja's headless Python, at one of its three levels.
 ///
-/// The level is carried as an [`Ir`](crate::lift::Ir) rather than as a separate argument for
-/// the reason `lift` takes only one: a representation implies its tool, and
-/// the three levels share this installation.
+/// The level is not a separate option: the caller names it by naming the
+/// representation -- `binary-ninja-llil`, `-mlil` or `-hlil` -- since a
+/// representation implies its tool. [`LifterBuilder::build`] turns that
+/// [`Ir`] into the word the script takes, and this lifter holds the word, one
+/// lifter per level over the one installation the three share.
+///
+/// [`LifterBuilder::build`]: crate::lift::LifterBuilder::build
+/// [`Ir`]: crate::lift::Ir
 pub struct BinaryNinjaLifter {
     home: PathBuf,
     /// The word the lifting script takes for the level, resolved by
