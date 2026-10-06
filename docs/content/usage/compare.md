@@ -19,10 +19,12 @@ oinkie compare [OPTIONS] [JSON_FILES]...
 ```
 
 ### Arguments
+
 * `<JSON_FILES>...`  
   Paths to the birthmark JSON files (generated using the `extract` command) to compare.
 
 ### Options
+
 * `-a, --algorithm <ALGORITHM>`  
   Specify the similarity calculation algorithm to compare birthmarks. `[default: jaccard]`  
   *Refer below for a full list of algorithms.*
@@ -75,7 +77,9 @@ The mathematical algorithms used to compare two birthmark properties:
 Because software birthmarks are extracted at a **function level**, comparing two programs involves comparing sets of functions. **oinkie** uses aggregators to resolve these function similarities into the single similarity of the pair:
 
 ### 1. `hungarian` (Default)
+
 Uses the **Hungarian Algorithm** to find the optimal global matching between the functions of program A and program B. This ensures that every function is paired up with its most likely match in the other program, maximizing the overall similarity.
 
 ### 2. `topn:N`
+
 Takes each function's best match in the other program, on both sides, and averages the \\(N\\) best of those from each side. The matching need not be one-to-one. This reduces noise from minor or unrelated function matches.

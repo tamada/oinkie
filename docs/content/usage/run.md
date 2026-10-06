@@ -19,10 +19,12 @@ oinkie run [OPTIONS] [FILES]...
 ```
 
 ### Arguments
+
 * `<FILES>...`  
   Paths to the OIR JSON files (previously generated via the `lift` command) to extract and compare.
 
 ### Options
+
 * `-a, --analysis <ANALYSIS>`  
   The combination of birthmark-type, representation, and similarity-algorithm to evaluate.  
   `[default: op-set-jaccard]`  
@@ -55,6 +57,7 @@ For instance:
 * `op-3gram-seq-levenshtein`: Extract opcode 3-grams as a sequence and compare using Levenshtein distance.
 
 ### Full List of Supported Configurations
+
 You can use any valid combination of elements, structures, and matching algorithms. Run `oinkie info` or consult the `--help` command for a comprehensive list of all possible analysis parameters on your system. Typical options include:
 
 * `fc-freq-cosine`, `fc-set-dice`, `fc-freq-euclidean`, `fc-set-jaccard`, `fc-seq-levenshtein`, `fc-seq-lcs`, `fc-set-simpson`, `fc-freq-weightedjaccard`

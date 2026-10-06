@@ -19,10 +19,12 @@ oinkie extract [OPTIONS] [FILES]...
 ```
 
 ### Arguments
+
 * `<FILES>...`  
   Path to the OIR JSON files (previously generated via the `lift` command) from which to extract birthmarks.
 
 ### Options
+
 * `-d, --dest <DIRECTORY>`  
   Specify the destination directory for saving the extracted birthmark files. Defaults to the `./birthmarks` directory. `[default: birthmarks]`
 * `-b, --birthmark-type <BIRTHMARK_TYPE>`  

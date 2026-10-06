@@ -30,10 +30,12 @@ oinkie stats [OPTIONS] <PATHS>...
 ```
 
 ### Arguments
+
 * `<PATHS>...`  
   Birthmark files, or directories holding them. A directory contributes the `*.json` directly inside it. A file that does not read as a birthmark (a lifted program, say) is skipped with a warning, and the number skipped is part of the output.
 
 ### Options
+
 * `-f, --format <FORMAT>`  
   `json`, `csv` or `markdown`. `[default: markdown]`
 * `-o, --output <FILE>`  
