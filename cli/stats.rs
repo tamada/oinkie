@@ -1,10 +1,10 @@
 //! `oinkie stats`: what a set of birthmarks looks like, before comparing them.
 //!
-//! Two counts are kept apart by name throughout (#129). A birthmark file is one
+//! Two counts are kept apart by name throughout. A birthmark file is one
 //! program and holds one entry per **function**; each function's birthmark is
 //! made of **elements** -- operations, calls or k-grams. "Birthmark length" is
 //! the number of elements in one function's birthmark, which is the sense
-//! #128's `--min-elements` uses. The library's types follow the same terms:
+//! `review --min-elements` uses. The library's types follow the same terms:
 //! `Birthmark::functions()` holds the functions, and each `Function`'s `Data`
 //! holds its elements.
 

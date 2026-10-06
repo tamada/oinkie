@@ -133,9 +133,9 @@ mod tests {
     /// birthmark ever written, which silently defeats `--skip` and orphans a
     /// directory of results.
     ///
-    /// sha2 0.11 is what made that a live question: its `Output` does not
-    /// implement `LowerHex`, so the hex is written out here rather than by the
-    /// formatter. This is the assertion that says the rewrite kept the answer.
+    /// The hex is written out by hand rather than by the formatter, since
+    /// sha2's `Output` does not implement `LowerHex`; this is the assertion
+    /// that the hand-written form gives the standard answer.
     ///
     /// The expected value was computed outside this crate, by hashing the same
     /// bytes with Python's hashlib, so it is not this implementation agreeing

@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 /// Compares two programs the way the command line does: the `op-set`
 /// birthmark of each, by Jaccard. There is no comparing of programs as such --
-/// a comparison is of birthmarks, which say what is compared (#150).
+/// a comparison is of birthmarks, which say what is compared.
 fn compare(a: &Program, b: &Program) -> oinkie::Result<f64> {
     let extractor = Extractor::new(BirthmarkType::OpSet);
     let (ba, bb) = (extractor.extract(a)?, extractor.extract(b)?);
@@ -76,9 +76,9 @@ fn test_every_level_finds_the_call_that_is_there() {
     }
 }
 
-/// A representation is not comparable with another, and these three are the
-/// first pairs that can actually reach the refusal: until Binary Ninja could
-/// be read, only one representation existed.
+/// A representation is not comparable with another, and Binary Ninja's three
+/// levels are three representations of one program: the pair most likely to be
+/// compared by mistake.
 #[test]
 fn test_two_levels_of_the_same_program_refuse_to_be_compared() {
     let llil = Program::load(&fixture("llil", "hello_clang.json")).unwrap();

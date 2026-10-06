@@ -163,12 +163,12 @@ pub fn birthmark_files(inputs: &[PathBuf], dest: &Path) -> Result<Vec<PathBuf>> 
 /// Extracts the analysis's birthmark from each lifted program once and
 /// compares the birthmarks.
 ///
-/// Both halves of the analysis are used. Comparing the programs directly
-/// scored their operations whatever birthmark the analysis named (#150).
+/// Both halves of the analysis are used: its birthmark is extracted and its
+/// algorithm compares them.
 ///
 /// Given `dest`, the birthmarks are written into its `birthmarks/` and the
 /// scores' CSVs name them, as `run` does, so the directory can be reviewed on
-/// its own (#128). Without it they are held in memory only.
+/// its own. Without it they are held in memory only.
 pub fn run(
     inputs: &[PathBuf],
     analysis: &AnalysisType,

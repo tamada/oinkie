@@ -339,7 +339,7 @@ fn fc_set_run(dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 /// `min_elements` is `--min-elements`: the same threshold, the same scores,
-/// and the threshold said in the answer and in the CSV (#128).
+/// and the threshold said in the answer and in the CSV.
 #[test]
 fn test_review_drops_the_functions_with_too_few_elements() {
     let dir = tempfile::tempdir().unwrap();
@@ -577,10 +577,9 @@ fn test_running_gives_what_the_cli_gives() {
 /// since it is the same computation with the birthmarks written down in
 /// between.
 ///
-/// For every birthmark family and shape, not only `op-set`: `oinkie_run` once
-/// compared the programs' operations whatever birthmark the analysis named, so
-/// the `fc-*` and k-gram analyses disagreed while `op-set` alone agreed -- and
-/// `op-set` was the only one this test asked about (#150).
+/// For every birthmark family and shape, not only `op-set`: a run that
+/// compared the programs' operations whatever birthmark the analysis named
+/// would agree on `op-set` alone.
 #[test]
 fn test_extract_then_compare_agrees_with_run() {
     for (birthmark_type, algorithm) in [
@@ -631,7 +630,7 @@ fn test_extract_then_compare_agrees_with_run() {
 }
 
 /// Given somewhere to write, `oinkie_run` writes the birthmarks it compared
-/// beside the scores, and each pair's CSV names them, as `run` does (#128).
+/// beside the scores, and each pair's CSV names them, as `run` does.
 #[test]
 fn test_run_writes_the_birthmarks_it_compares_when_given_a_dest() {
     let dir = tempfile::tempdir().unwrap();
@@ -1002,7 +1001,7 @@ fn test_an_impossible_pairing_is_refused_in_the_librarys_words() {
 
 /// A k-gram of size zero is refused as the caller's mistake, before any
 /// extraction -- which would otherwise fail the tool's worker on a window of
-/// size zero (#150).
+/// size zero.
 #[test]
 fn test_a_zero_gram_analysis_is_refused_as_the_callers_mistake() {
     let result = call_tool(

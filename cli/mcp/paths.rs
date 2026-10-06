@@ -1,8 +1,7 @@
 //! Which paths the tools are allowed to touch.
 //!
 //! The CLI can trust the hand that typed its arguments. A server driven by a
-//! language model cannot: every path here was written by the model, and
-//! nothing else in oinkie was built on that assumption.
+//! language model cannot: every path here is written by the model.
 //!
 //! So the server takes `--root`, and every path -- input and output alike --
 //! has to resolve inside one of them. A refusal names the roots, because the
@@ -19,13 +18,12 @@ pub struct Roots(Vec<PathBuf>);
 
 /// Whether the text names a `..` component, under either platform's rules.
 ///
-/// Written over the string rather than over `Path::components`, which was the
-/// first version and is inert where it matters most. `canonicalize` on Windows
-/// returns verbatim paths -- the `\\?\C:\...` form -- and inside one of those
-/// `/` is not a separator, so `pcodes/../../outside/secret` joined to a root
-/// arrives as a single component with no `ParentDir` in it. The guard did not
-/// fire; the root check caught the path afterwards, so nothing escaped, but
-/// the first of two defences was doing nothing on that platform.
+/// Written over the string rather than over `Path::components`, which is inert
+/// where it matters most. `canonicalize` on Windows returns verbatim paths --
+/// the `\\?\C:\...` form -- and inside one of those `/` is not a separator,
+/// so `pcodes/../../outside/secret` joined to a root arrives as a single
+/// component with no `ParentDir` in it. The root check would still catch it,
+/// but the first of two defences would be doing nothing on that platform.
 ///
 /// Both separators are treated as separators here, on every platform. A
 /// caller writing `..\..\etc` on Unix means the same thing by it, and a
@@ -127,7 +125,7 @@ impl Roots {
                 // NotFound also comes back for a symlink whose target does
                 // not exist, and that one is there: writing to it creates the
                 // target, wherever the link points. Treated as a name still to
-                // be created, it was appended to its directory and passed.
+                // be created, it would be appended to its directory and pass.
                 Err(_) if walked.symlink_metadata().is_ok() => {
                     return Err(ErrorData::invalid_params(
                         format!(
@@ -298,12 +296,10 @@ mod tests {
 
     /// Both separators count, on every platform.
     ///
-    /// The refusal used to be `Path::components`, which is inert inside a
-    /// Windows verbatim path -- the `\\?\C:\...` form `canonicalize` returns --
-    /// because `/` is not a separator there. `pcodes/../../outside/secret`
-    /// joined to such a root arrives as one component, so the guard saw no
-    /// `..`. The root check caught it afterwards and nothing escaped, but the
-    /// first of two defences was doing nothing on that platform.
+    /// `Path::components` would be inert inside a Windows verbatim path -- the
+    /// `\\?\C:\...` form `canonicalize` returns -- because `/` is not a
+    /// separator there: `pcodes/../../outside/secret` joined to such a root
+    /// arrives as one component, with no `..` for a guard to see.
     #[test]
     fn test_a_parent_component_is_seen_through_either_separator() {
         for named in [
@@ -409,9 +405,9 @@ mod tests {
     }
 
     /// A component that exists but cannot be resolved is reported as itself.
-    /// It used to be treated as "not there" and walked past, which built the
-    /// answer out of a prefix nobody had established -- and then checked that
-    /// against the roots, so the verdict meant nothing either way.
+    /// Treated as "not there" and walked past, it would build the answer out
+    /// of a prefix nobody had established -- and then check that against the
+    /// roots, so the verdict would mean nothing either way.
     ///
     /// `ENOTDIR` stands in for the family. A permission error is the other
     /// everyday member and cannot be arranged portably in a test, since a
