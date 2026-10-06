@@ -132,6 +132,18 @@ jobs:
           python3 -m py_compile assets/lifters/binaryninja/scripts/BnilLifter.py
           python3 -m py_compile assets/lifters/ida/scripts/MicrocodeLifter.py
 
+      # The script's string handling, run without starting Ghidra (#138): the
+      # JSON escaper and the reading of Ghidra's Windows path spelling, which
+      # are the two places it has shipped wrong (#77, #136). On every runner,
+      # Windows included, since the path spelling is a Windows matter and the
+      # test asserts what it does there.
+      - name: Test the lifting script's string handling
+        shell: bash
+        run: |
+          ./assets/lifters/ghidra/compile-check.sh --run HighPCodeLifterTest \
+            assets/lifters/ghidra/scripts/HighPCodeLifter.java \
+            testdata/scripts/HighPCodeLifterTest.java
+
       - name: build
         shell: bash
         run: |

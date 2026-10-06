@@ -128,6 +128,18 @@ assets/lifters/ghidra/compile-check.sh path/to/Yours.java
 Ghidra is found the way `oinkie` finds it: `GHIDRA_HOME`, then
 `GHIDRA_INSTALL_DIR`, then the usual install locations.
 
+The built-in script's string handling -- `q()` above, and the reading of
+Ghidra's Windows path spelling -- is also tested without running Ghidra, by
+compiling a small runner beside it and running that:
+
+```sh
+just test-ghidra-script
+```
+
+A script of your own can be tested the same way: `compile-check.sh --run
+YourTest Yours.java YourTest.java` compiles both against Ghidra's jars, then
+runs `YourTest` and fails if it exits non-zero.
+
 The script needs a JDK at least as new as Ghidra's own class files (21 for
 Ghidra 12). An older `javac` fails with `bad class file` against Ghidra's jars
 and says nothing about your script at all, so the check refuses to run rather

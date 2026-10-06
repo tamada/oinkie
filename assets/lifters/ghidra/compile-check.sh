@@ -9,7 +9,15 @@
 # buried in the process output. This catches it in about two seconds instead of
 # a Ghidra round trip.
 #
-# Usage: assets/lifters/ghidra/compile-check.sh [script.java ...]
+# Usage: assets/lifters/ghidra/compile-check.sh [--run CLASS] [script.java ...]
+#
+# With --run, CLASS is then run from what was compiled, against the same jars,
+# and its exit status is this script's. That is how the script's own string
+# handling is tested without starting Ghidra (#138):
+#
+#   compile-check.sh --run HighPCodeLifterTest \
+#       assets/lifters/ghidra/scripts/HighPCodeLifter.java \
+#       testdata/scripts/HighPCodeLifterTest.java
 #
 # Ghidra is found the way oinkie finds it: GHIDRA_HOME, then
 # GHIDRA_INSTALL_DIR (which the CI action exports), then the usual install
@@ -23,18 +31,46 @@ set -euo pipefail
 # in entirely the wrong place.
 readonly MIN_JDK=21
 
+run_class=""
+if [ "${1:-}" = "--run" ]; then
+    if [ $# -lt 2 ]; then
+        echo "$0: --run needs the name of a class to run" >&2
+        exit 2
+    fi
+    run_class=$2
+    shift 2
+fi
+
 scripts=("$@")
 if [ ${#scripts[@]} -eq 0 ]; then
     scripts=("assets/lifters/ghidra/scripts/HighPCodeLifter.java")
 fi
 
+# Under Git Bash on Windows the shell's paths are /d/a/..., which the JDK
+# cannot read, and the JDK separates a classpath with ';'. Everything handed to
+# javac and java is converted there, and the homes the environment gives in
+# Windows form are converted the other way before the shell looks inside them.
+# Elsewhere both pass through unchanged.
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*)
+    sep=';'
+    native() { cygpath -w "$1"; }
+    shell_path() { cygpath -u "$1"; }
+    ;;
+*)
+    sep=':'
+    native() { printf '%s\n' "$1"; }
+    shell_path() { printf '%s\n' "$1"; }
+    ;;
+esac
+
 find_ghidra_home() {
     if [ -n "${GHIDRA_HOME:-}" ]; then
-        echo "$GHIDRA_HOME"
+        shell_path "$GHIDRA_HOME"
         return
     fi
     if [ -n "${GHIDRA_INSTALL_DIR:-}" ]; then
-        echo "$GHIDRA_INSTALL_DIR"
+        shell_path "$GHIDRA_INSTALL_DIR"
         return
     fi
     local candidate
@@ -52,8 +88,14 @@ find_ghidra_home() {
 
 find_javac() {
     local javac
-    if [ -n "${JAVA_HOME:-}" ] && [ -x "$JAVA_HOME/bin/javac" ]; then
-        javac="$JAVA_HOME/bin/javac"
+    # Converted only when set: cygpath refuses an empty path, and under -e
+    # that would end the script before the PATH fallback below.
+    local java_home=""
+    if [ -n "${JAVA_HOME:-}" ]; then
+        java_home=$(shell_path "$JAVA_HOME")
+    fi
+    if [ -n "$java_home" ] && [ -x "$java_home/bin/javac" ]; then
+        javac="$java_home/bin/javac"
     elif javac=$(command -v javac); then
         :
     else
@@ -98,14 +140,23 @@ fi
 # The trailing separator is stripped: Java reads an empty classpath element as
 # the current directory, so leaving it there would put "." on the classpath and
 # let a stray .class file stand in for a jar that is actually missing.
-classpath=$(find "$ghidra_home/Ghidra" -name '*.jar' | tr '\n' ':')
-classpath=${classpath%:}
+classpath=""
+while IFS= read -r jar; do
+    classpath+="$(native "$jar")$sep"
+done < <(find "$ghidra_home/Ghidra" -name '*.jar')
+classpath=${classpath%"$sep"}
 
 outdir=$(mktemp -d)
 trap 'rm -rf "$outdir"' EXIT
 
 # -proc:none because the scripts use no annotation processors and Ghidra's jars
 # carry some that would otherwise run.
-"$javac" -nowarn -proc:none -cp "$classpath" -d "$outdir" "${scripts[@]}"
+"$javac" -nowarn -proc:none -cp "$classpath" -d "$(native "$outdir")" "${scripts[@]}"
 
 echo "ok: ${scripts[*]} compile against $ghidra_home"
+
+if [ -n "$run_class" ]; then
+    # The java beside the javac that was checked above, rather than whichever
+    # one PATH finds first, so the two cannot be different JDKs.
+    "$(dirname "$javac")/java" -cp "$(native "$outdir")$sep$classpath" "$run_class"
+fi
