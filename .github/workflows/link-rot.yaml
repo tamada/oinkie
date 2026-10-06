@@ -23,17 +23,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Markdown only, and only what is outside this repository: the rest is
+      # already checked on every push. target/ is not in a fresh checkout, but
+      # holds old copies of the README in a working tree that has packaged one.
+      #
+      # --root-dir: the site's pages link to each other root-relatively
+      # (`/install`), which Hugo rewrites under the base URL when it builds.
+      # Without a root lychee cannot resolve them and reports each as an
+      # error; with one they resolve to local files, which the two --scheme
+      # options then leave out, as intended.
+      #
+      # --exclude: hosts that answer a link checker with 403 whatever the
+      # link, so a rotted link there is indistinguishable from a live one and
+      # every run reports all of them (#152). Nothing links to academia.edu
+      # or ResearchGate, which do the same: CiNii, a DOI or arXiv instead. dl.acm.org links are DOIs, which
+      # do not rot the way a conference site does.
       - name: Check external links
         id: lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          # Markdown only, and only what is outside this repository: the rest
-          # is already checked on every push.
           args: >-
             --no-progress
             --exclude-path docs/public
+            --exclude-path target
+            --root-dir ${{ github.workspace }}/docs/content
             --scheme https
             --scheme http
+            --exclude '^https://dl\.acm\.org/'
+            --exclude '^https://coveralls\.io/'
             --max-retries 3
             './**/*.md'
           fail: false
