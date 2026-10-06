@@ -35,7 +35,8 @@ jobs:
       #
       # --exclude: hosts that answer a link checker with 403 whatever the
       # link, so a rotted link there is indistinguishable from a live one and
-      # every run reports all of them (#152). dl.acm.org links are DOIs, which
+      # every run reports all of them (#152). Nothing links to academia.edu
+      # or ResearchGate, which do the same: CiNii, a DOI or arXiv instead. dl.acm.org links are DOIs, which
       # do not rot the way a conference site does.
       - name: Check external links
         id: lychee
@@ -49,7 +50,6 @@ jobs:
             --scheme https
             --scheme http
             --exclude '^https://dl\.acm\.org/'
-            --exclude '^https://www\.academia\.edu/'
             --exclude '^https://coveralls\.io/'
             --max-retries 3
             './**/*.md'

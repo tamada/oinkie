@@ -34,13 +34,13 @@ Software birthmarking has been researched extensively. Below is a collection of 
 8. *Jun Nakamura and Haruaki Tamada*, **Fast Comparison of Software Birthmarks for Detecting the Theft with the Search Engine**, In Proc. of the 4th International Conference on Applied Computing & Information Technology ([ACIT 2016](https://www.computer.org/csdl/proceedings/acit-csi/2016/12OmNBscCYB)), pp. 152--157, December 2016 (UNLV, Las Vegas, NV, USA). [ [Link](https://ieeexplore.ieee.org/document/7916974/) ]
     * **Contribution:** Demonstrated using a search engine index to rapidly retrieve and match similar birthmarks.
 
-9. *Takehiro Tsuzaki, Teruaki Yamamoto, Haruaki Tamada, and Akito Monden*, **A Fuzzy Hashing Technique for Large Scale Software Birthmarks**, In Proc. 15th IEEE/ACIS International Conference on Computer and Information Science ([ICIS 2016](https://www.computer.org/csdl/proceedings/2016/icis/12OmNxuXcvH)), pp. 867--872, July 2016 (Okayama, Japan).  [ [Link](https://ieeexplore.ieee.org/document/7550868) ]
+9. *Takehiro Tsuzaki, Teruaki Yamamoto, Haruaki Tamada, and Akito Monden*, **A Fuzzy Hashing Technique for Large Scale Software Birthmarks**, In Proc. 15th IEEE/ACIS International Conference on Computer and Information Science ([ICIS 2016](https://www.computer.org/csdl/proceedings/icis/2016/12OmNxuXcvH)), pp. 867--872, July 2016 (Okayama, Japan).  [ [Link](https://ieeexplore.ieee.org/document/7550868) ]
     * **Contribution:** Introduced fuzzy hashing to significantly accelerate software birthmark comparisons.
 
 10. *Kazumasa Fukuda, and Haruaki Tamada*, **A Dynamic Birthmark from Analyzing Operand Stack Runtime Behavior to Detect Copied Software**, In Proc. 13th ACIS International Conference on Software Engineering, Artificial Intelligence, Networking and Parallel/Distributed Computing ([SNPD 2013](https://dl.acm.org/doi/proceedings/10.5555/2553191)), pp. 505--510, July 2013 (Honolulu, Hawaii, U.S.A.). [ [Link](https://ieeexplore.ieee.org/document/6598511/) ]
     * **Contribution:** Proposed a dynamic software birthmarking method for Java based on the runtime behavior and state transitions of the JVM operand stack.
 
-11. *Takesi Kakimoto, Akito Monden, Yasutaka Kamei, Haruaki Tamada, Masateru Tsunoda, and Ken'ichi Matsumoto*, **Using Software Birthmarks to Identify Similar Classes and Major Functionalities**, In Proc. the 3rd International Workshop on Mining Software Repositories ([MSR 2006](https://web.archive.org/web/20070113001105/http://msr.uwaterloo.ca/msr2006/)), pp. 171--172, May 2006 (Shanghai, China). [ [Link](https://dl.acm.org/doi/10.1145/1137983.1138026) ]
+11. *Takesi Kakimoto, Akito Monden, Yasutaka Kamei, Haruaki Tamada, Masateru Tsunoda, and Ken'ichi Matsumoto*, **Using Software Birthmarks to Identify Similar Classes and Major Functionalities**, In Proc. the 3rd International Workshop on Mining Software Repositories ([MSR 2006](http://2006.msrconf.org)), pp. 171--172, May 2006 (Shanghai, China). [ [Link](https://dl.acm.org/doi/10.1145/1137983.1138026) ]
     * **Contribution:** Explored a novel application of software birthmarks to automatically group similar classes and identify major functional modules in large codebases.
 
 12. *Haruaki Tamada, Masahide Nakamura, Akito Monden, and Ken'ichi Matsumoto*, **Java Birthmarks --Detecting the Software Theft--**, IEICE Transactions on Information and Systems, Vol. E88-D, No. 9, pp. 2148--2158, September 2005. [ [Link](https://dl.acm.org/doi/10.1093/ietisy/e88-d.9.2148) ]
@@ -49,7 +49,7 @@ Software birthmarking has been researched extensively. Below is a collection of 
 13. *Haruaki Tamada, Keiji Okamoto, Masahide Nakamura, Akito Monden, and Ken'ichi Matsumoto*, **Dynamic Software Birthmarks to Detect the Theft of Windows Applications**, In Proc. International Symposium on Future Software Technology 2004 (ISFST 2004), October 2004 (Xi'an, China).  [ [Link](https://www.semanticscholar.org/paper/Dynamic-Software-Birthmarks-to-Detect-the-Theft-of-Tamada-Okamoto/44085ac534b0120ad516f9f61ad0901bd360ef18) ]
     * **Contribution:** Introduced dynamic software birthmarks, and proposed birthmark types EXESEQ (Execution Sequence) and EXEFREQ (Execution Frequency).
 
-14. *Haruaki Tamada, Masahide Nakamura, Akito Monden, and Ken'ichi Matsumoto*, **Design and Evaluation of Birthmarks for Detecting Theft of Java Programs**, In Proc. IASTED International Conference on Software Engineering (IASTED SE 2004), pp. 569--575, February 2004 (Innsbruck, Austria). [ [Link](https://www.academia.edu/4149089/Design_and_evaluation_of_birthmarks_for_detecting_theft_of_java_programs) ]
+14. *Haruaki Tamada, Masahide Nakamura, Akito Monden, and Ken'ichi Matsumoto*, **Design and Evaluation of Birthmarks for Detecting Theft of Java Programs**, In Proc. IASTED International Conference on Software Engineering (IASTED SE 2004), pp. 569--575, February 2004 (Innsbruck, Austria). [ [Link](https://cir.nii.ac.jp/crid/1572824500637007232) ]
     * **Contribution:** Proposed the foundational concept of software birthmarks, introducing the static birthmark types CVFV (Constant Value Frequency Vector), UC (Used Classes), SMC (Sequence of Method Calls), and IS (Inheritance Structure).
 
 ---
@@ -63,15 +63,15 @@ Software birthmarking has been researched extensively. Below is a collection of 
 
 ### Whole Program Path (Dynamic Birthmarks)
 
-* *Ginger Myles and Christian Collberg*, **Detecting Software Theft via Whole Program Path Birthmarks**, In Proc. of the International Conference on Information Security 2004, pp. 404--415, 2004.  
+* *Ginger Myles and Christian Collberg*, **Detecting Software Theft via Whole Program Path Birthmarks**, In Proc. of the International Conference on Information Security 2004, pp. 404--415, 2004. [ [DOI](https://doi.org/10.1007/978-3-540-30144-8_34) ]
     * **Summary:** Proposed dynamic birthmarking based on whole program execution paths.
 
 ---
 
 ## 📚 Systematic Surveys and Books
 
-* *Christian Collberg and Jasvir Nagra*, **Surreptitious Software: Obfuscation, Watermarking, and Tamperproofing for Software Protection**, Addison-Wesley Professional, ISBN: 978-0-321-54925-9, August 2009.  
+* *Christian Collberg and Jasvir Nagra*, **Surreptitious Software: Obfuscation, Watermarking, and Tamperproofing for Software Protection**, Addison-Wesley Professional, ISBN: 978-0-321-54925-9, August 2009. [ [Link](https://dl.acm.org/doi/book/10.5555/1594894) ]
     * **Summary:** The leading comprehensive book covering software security, obfuscation, watermarking, and birthmarking techniques.
   
-* *Shah Nazir, Sara Shahzad and Neelam Mukhtar*, **Software Birthmark Design and Estimation: A Systematic Literature Review**, Arabian Journal for Science and Engineering, Vol. 44, pp. 3905--3927, January 2019.  
+* *Shah Nazir, Sara Shahzad and Neelam Mukhtar*, **Software Birthmark Design and Estimation: A Systematic Literature Review**, Arabian Journal for Science and Engineering, Vol. 44, pp. 3905--3927, January 2019. [ [DOI](https://doi.org/10.1007/s13369-019-03718-9) ]
     * **Summary:** A comprehensive review mapping out the state-of-the-art developments and methodologies in software birthmarking.
