@@ -246,11 +246,11 @@ impl<T: crate::Op> TypedFunction<T> {
     }
 
     pub fn ops(&self) -> impl Iterator<Item = &str> {
-        self.ops.iter().map(|op| op.mnemonic())
+        self.ops.iter().map(crate::Op::mnemonic)
     }
 
     pub fn ops_freq(&self) -> rustc_hash::FxHashMap<String, usize> {
-        crate::extract::seq_to_freq(self.ops().map(|s| s.to_string()))
+        crate::extract::seq_to_freq(self.ops().map(ToString::to_string))
     }
 }
 

@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -276,9 +277,13 @@ fn scan_directory_for_results(score_dir: &Path) -> Result<Vec<CompareResult>> {
     for entry in std::fs::read_dir(score_dir).map_err(|e| Error::Io(score_dir.to_path_buf(), e))? {
         let entry = entry.map_err(|e| Error::Io(score_dir.to_path_buf(), e))?;
         let path = entry.path();
-        if path.extension().and_then(|s| s.to_str()) == Some("csv")
-            && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
-            && stem.chars().all(|c| c.is_numeric())
+        // ASCII digits: `is_numeric` also takes any other script's digits,
+        // which `parse` then refuses, so a file named in them failed the
+        // whole review instead of being passed over as not a pair CSV.
+        if path.extension().and_then(OsStr::to_str) == Some("csv")
+            && let Some(stem) = path.file_stem().and_then(OsStr::to_str)
+            && !stem.is_empty()
+            && stem.bytes().all(|b| b.is_ascii_digit())
         {
             let index = stem
                 .parse::<usize>()
@@ -302,14 +307,15 @@ fn load_results_impl(score_dir: &Path) -> Result<Vec<CompareResult>> {
         std::fs::File::open(result_file.clone()).map_err(|e| Error::Io(result_file.clone(), e))?;
     let mut results = Vec::new();
     let bufr = BufReader::new(&mut reader);
-    for line in bufr.lines().map_while(|r| r.ok()) {
-        let lower = line.to_lowercase();
-        if lower.strip_prefix("total duration,").is_some() {
+    // A line that cannot be read is an error, not the end of the list. It
+    // used to end it quietly, so a summary unreadable part-way through came
+    // back as one with fewer pairs, and `review` rescored only those.
+    for line in bufr.lines() {
+        let line = line.map_err(|e| Error::Io(result_file.clone(), e))?;
+        if line.to_lowercase().starts_with("total duration,") {
             break;
-        } else {
-            let cr = CompareResult::parse(&line)?;
-            results.push(cr);
         }
+        results.push(CompareResult::parse(&line)?);
     }
     Ok(results)
 }
@@ -403,7 +409,7 @@ pub(crate) fn load_comparison<P: AsRef<Path>>(path: P) -> Result<Stored> {
                 // `matrix,,` is how a side with no functions is written
                 col_names = Some(if names == [""] { Vec::new() } else { names });
             }
-            _ if prefix.chars().all(|c| c.is_numeric()) && !prefix.is_empty() => {
+            _ if !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_digit()) => {
                 rows.push(row_name(record.get(1).unwrap_or("")));
                 for value in record.iter().skip(2) {
                     items.push(
@@ -569,7 +575,7 @@ mod tests {
             threshold: 2.0,
             birthmarks,
         };
-        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let names = |n: &[&str]| n.iter().map(ToString::to_string).collect::<Vec<_>>();
         let csv = Path::new("00000.csv");
         assert_eq!(f.keep(&b, &names(&["entry", "main"]), csv).unwrap(), [0]);
         for other in [&["main", "entry"][..], &["entry"], &["entry", "main", "x"]] {
@@ -671,6 +677,46 @@ mod tests {
         // the total-duration line rather than trying to parse it as a result
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].similarity, 0.75);
+    }
+
+    /// A summary unreadable part-way through is an error. It used to end the
+    /// list there, so `review` rescored the pairs before the bad line and
+    /// reported nothing about the rest.
+    #[test]
+    fn test_a_summary_that_cannot_be_read_to_the_end_is_refused() {
+        let d = dir_with(&[("00000.csv", A_COMPARISON), ("00001.csv", A_COMPARISON)]);
+        let mut summary = b"0,0.75,bin/a,bin/b,28083\n".to_vec();
+        summary.extend_from_slice(b"\xff\xfe not text\n");
+        summary.extend_from_slice(b"1,0.5,bin/a,bin/c,28083\ntotal duration,1,00:00:000\n");
+        std::fs::write(d.path().join("results.csv"), summary).unwrap();
+        let Err(e) = load_results(d.path()) else {
+            panic!("a summary with an unreadable line was read as a shorter one");
+        };
+        assert!(e.to_string().starts_with("IO error for"), "{e}");
+    }
+
+    /// Only ASCII digits name a pair. A stem in another script's digits used
+    /// to pass the check and fail the parse, which failed the whole review
+    /// over a file that is simply not a pair CSV.
+    #[test]
+    fn test_a_file_named_in_other_digits_is_not_a_pair() {
+        let d = dir_with(&[("00000.csv", A_COMPARISON), ("\u{0663}.csv", A_COMPARISON)]);
+        let found = load_results(d.path())
+            .unwrap()
+            .iter()
+            .map(|cr| cr.index)
+            .collect::<Vec<_>>();
+        assert_eq!(found, vec![0]);
+    }
+
+    /// The same inside a pair CSV: a record starting with other digits is not
+    /// a matrix row, and is skipped like any record it does not know.
+    #[test]
+    fn test_a_record_starting_with_other_digits_is_not_a_row() {
+        let with_extra = format!("{A_COMPARISON}\u{0663},x,notanumber\n");
+        let d = dir_with(&[("00000.csv", with_extra.as_str())]);
+        let stored = load_comparison(d.path().join("00000.csv")).unwrap();
+        assert_eq!(stored.matrix.dim(), (1, 2));
     }
 
     /// The stem is all digits by the time it is parsed, so the only way this

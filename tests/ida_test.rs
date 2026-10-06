@@ -61,7 +61,7 @@ fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
     let calls: Vec<String> = b
         .functions()
         .iter()
-        .flat_map(|e| e.ops().map(|s| s.to_string()))
+        .flat_map(|e| e.ops().map(ToString::to_string))
         .collect();
     assert!(
         calls.iter().any(|c| c == "_printf"),

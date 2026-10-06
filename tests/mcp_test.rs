@@ -152,7 +152,7 @@ fn test_the_vocabulary_served_is_the_one_the_library_generates() {
         birthmarks,
         BirthmarkType::all(ceiling)
             .iter()
-            .map(|bt| bt.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
     );
 

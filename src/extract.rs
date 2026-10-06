@@ -78,7 +78,7 @@ fn extract_birthmark_op<T: crate::Op>(
                 BirthmarkType::FcSeq => Data::Seq(extract_function_calls(f, p)),
                 BirthmarkType::OpFreq => Data::Freq(f.ops_freq()),
                 BirthmarkType::OpSet => Data::Set(f.ops_freq().into_keys().collect()),
-                BirthmarkType::OpSeq => Data::Seq(f.ops().map(|s| s.into()).collect()),
+                BirthmarkType::OpSeq => Data::Seq(f.ops().map(Into::into).collect()),
                 BirthmarkType::OpKgramSeq(k) => Data::KgramSeq(extract_op_kgram_seq(f, *k)),
                 BirthmarkType::OpKgramFreq(k) => Data::KgramFreq(extract_op_kgram_freq(f, *k)),
                 BirthmarkType::OpKgramSet(k) => {
@@ -121,7 +121,7 @@ fn build_metadata<T>(
 
 fn extract_op_kgram_seq<T: crate::Op>(f: &TypedFunction<T>, k: usize) -> Vec<Kgram> {
     f.ops()
-        .map(|s| s.into())
+        .map(Into::into)
         .collect::<Vec<_>>()
         .windows(k)
         .map(|w| Kgram::new(w.to_vec()))
@@ -212,9 +212,9 @@ fn empty_family<T: crate::Op>(p: &TypedProgram<T>) -> Option<EmptyFamily> {
 fn extract_function_calls<T: crate::Op>(f: &TypedFunction<T>, p: &TypedProgram<T>) -> Vec<String> {
     f.iter()
         .filter(|op| op.is_call())
-        .filter_map(|op| op.symbol_key())
+        .filter_map(crate::Op::symbol_key)
         .filter_map(|key| p.symbol(&key))
-        .map(|s| s.to_string())
+        .map(ToString::to_string)
         .collect()
 }
 
@@ -330,7 +330,7 @@ mod tests {
                     .extract(p)
                     .unwrap_or_else(|e| panic!("{e}"))
                     .iter()
-                    .flat_map(|e| e.ops())
+                    .flat_map(Function::ops)
                     .count()
             })
             .collect();
@@ -494,7 +494,7 @@ mod tests {
                 .extract_each_typed(&program)
                 .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
             assert!(
-                b.iter().flat_map(|e| e.ops()).next().is_none(),
+                b.iter().flat_map(Function::ops).next().is_none(),
                 "{bt}: a leaf function calls nothing, so this should be empty"
             );
         }

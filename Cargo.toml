@@ -95,3 +95,11 @@ serial_test = "4.0.1"
 name = "gencomp"
 path = "cli/gencomp.rs"
 required-features = [ "gencomp" ]
+
+# Two pedantic lints, on because SonarQube Cloud reports what they find
+# (#167): a closure that only calls a method, and an `else` after a branch
+# that leaves. CI runs clippy with -D warnings, so they stay fixed rather than
+# coming back for SonarQube to find again.
+[lints.clippy]
+redundant_closure_for_method_calls = "warn"
+redundant_else = "warn"

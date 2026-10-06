@@ -171,7 +171,7 @@ impl Ir {
     /// Written out because nothing derives it, so a test holds it to the enum
     /// with an exhaustive `match`: a variant added without being listed here
     /// stops the build instead of quietly going unlisted.
-    pub const ALL: &'static [Ir] = &[
+    pub const ALL: &[Ir] = &[
         Ir::GhidraPcode,
         Ir::IdaMicrocode,
         Ir::BinaryNinjaLlil,
@@ -262,7 +262,7 @@ impl Ir {
             return Ok(h.to_path_buf());
         }
         self.home_spec()
-            .find_in(|k| std::env::var(k).ok(), |p| p.exists())
+            .find_in(|k| std::env::var(k).ok(), Path::exists)
     }
 }
 

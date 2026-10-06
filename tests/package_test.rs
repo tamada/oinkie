@@ -50,7 +50,7 @@ fn test_every_compiled_in_file_is_listed_here() {
         }
     }
     found.sort();
-    let mut expected: Vec<String> = COMPILED_IN.iter().map(|s| s.to_string()).collect();
+    let mut expected: Vec<String> = COMPILED_IN.iter().map(ToString::to_string).collect();
     expected.sort();
     assert_eq!(
         found, expected,

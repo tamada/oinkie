@@ -153,7 +153,7 @@ pub oinkie::compare::Algorithm::Levenshtein
 pub oinkie::compare::Algorithm::Simpson
 pub oinkie::compare::Algorithm::WeightedJaccard
 impl oinkie::compare::Algorithm
-pub const oinkie::compare::Algorithm::ALL: &'static [oinkie::compare::Algorithm]
+pub const oinkie::compare::Algorithm::ALL: &[oinkie::compare::Algorithm]
 pub fn oinkie::compare::Algorithm::comparator(&self) -> oinkie::compare::Comparator
 pub fn oinkie::compare::Algorithm::name(&self) -> &'static str
 pub fn oinkie::compare::Algorithm::shape(&self) -> oinkie::birthmarks::Shape
@@ -180,7 +180,7 @@ pub oinkie::compare::PairingStrategy::FirstVsOthers
 pub oinkie::compare::PairingStrategy::LastVsOthers
 pub oinkie::compare::PairingStrategy::SelfCoverage
 impl oinkie::compare::PairingStrategy
-pub const oinkie::compare::PairingStrategy::ALL: &'static [oinkie::compare::PairingStrategy]
+pub const oinkie::compare::PairingStrategy::ALL: &[oinkie::compare::PairingStrategy]
 pub fn oinkie::compare::PairingStrategy::compare_count<T>(&self, &[T]) -> usize
 pub fn oinkie::compare::PairingStrategy::pairs<'a, T: core::marker::Sync>(&'a self, &'a [T]) -> alloc::boxed::Box<(dyn core::iter::traits::iterator::Iterator<Item = (&'a T, &'a T)> + core::marker::Send + 'a)>
 impl core::clone::Clone for oinkie::compare::PairingStrategy
@@ -224,7 +224,7 @@ pub oinkie::lift::Ir::BinaryNinjaMlil
 pub oinkie::lift::Ir::GhidraPcode
 pub oinkie::lift::Ir::IdaMicrocode
 impl oinkie::lift::Ir
-pub const oinkie::lift::Ir::ALL: &'static [oinkie::lift::Ir]
+pub const oinkie::lift::Ir::ALL: &[oinkie::lift::Ir]
 pub fn oinkie::lift::Ir::tool(&self) -> &'static str
 impl core::clone::Clone for oinkie::lift::Ir
 pub fn oinkie::lift::Ir::clone(&self) -> Self

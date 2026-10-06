@@ -40,7 +40,7 @@ impl PairingStrategy {
     ///
     /// Written out because nothing derives it; a test holds it to the enum
     /// with an exhaustive `match`.
-    pub const ALL: &'static [PairingStrategy] = &[
+    pub const ALL: &[PairingStrategy] = &[
         PairingStrategy::AllAndSelf,
         PairingStrategy::All,
         PairingStrategy::SelfCoverage,
@@ -358,7 +358,7 @@ impl Algorithm {
     ///
     /// Written out because nothing derives it; a test holds it to the enum
     /// with an exhaustive `match`.
-    pub const ALL: &'static [Algorithm] = &[
+    pub const ALL: &[Algorithm] = &[
         Algorithm::Cosine,
         Algorithm::Dice,
         Algorithm::Euclidean,
@@ -1062,16 +1062,16 @@ mod tests {
     }
 
     fn seq(items: &[&str]) -> Data {
-        Data::Seq(items.iter().map(|s| s.to_string()).collect())
+        Data::Seq(items.iter().map(ToString::to_string).collect())
     }
 
     fn set(items: &[&str]) -> Data {
-        Data::Set(items.iter().map(|s| s.to_string()).collect())
+        Data::Set(items.iter().map(ToString::to_string).collect())
     }
 
     fn freq(items: &[&str]) -> Data {
         Data::Freq(seq2freq(
-            &items.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
+            &items.iter().map(ToString::to_string).collect::<Vec<_>>(),
         ))
     }
 
