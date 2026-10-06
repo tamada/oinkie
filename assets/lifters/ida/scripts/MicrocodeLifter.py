@@ -75,8 +75,7 @@ def walk(insn):
     """
     for mop in (insn.l, insn.r, insn.d):
         if mop is not None and mop.t == ida_hexrays.mop_d and mop.d is not None:
-            for nested in walk(mop.d):
-                yield nested
+            yield from walk(mop.d)
     yield insn
 
 
@@ -86,8 +85,7 @@ def instructions(mba):
         block = mba.get_mblock(i)
         insn = block.head
         while insn:
-            for one in walk(insn):
-                yield one
+            yield from walk(insn)
             insn = insn.next
 
 

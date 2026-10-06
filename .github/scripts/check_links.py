@@ -38,8 +38,8 @@ DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*(<[^>]*>|\S+)", re.MULTILINE)
 # A fence opens and closes with three or more backticks or tildes.
 FENCE = re.compile(r"^\s*(```+|~~~+)")
 
-# A run of backticks and everything up to the matching run.
-SPAN = re.compile(r"(`+)(?:(?!\1).)*?\1", re.DOTALL)
+# A run of backticks: where a code span opens or closes.
+TICKS = re.compile(r"`+")
 
 CONTENT = Path("docs/content")
 
@@ -64,8 +64,38 @@ def without_code(text):
             kept.append(" " * len(line))
             continue
         kept.append(" " * len(line) if inside else line)
-    blanked = "\n".join(kept)
-    return SPAN.sub(lambda m: " " * len(m.group(0)), blanked)
+    return without_spans("\n".join(kept))
+
+
+def without_spans(text):
+    """The text with every code span blanked.
+
+    A span opens with a run of backticks and closes at the next run of the
+    same length; a run with none after it is literal text, as in CommonMark.
+
+    Walked once over the runs rather than matched with a backreference, which
+    retried from every later position after an unclosed run and so took time
+    growing with the square of the file (SonarQube python:S8786, #169).
+    """
+    runs = [(m.start(), m.end()) for m in TICKS.finditer(text)]
+    # For each run, the next one of the same length, found from the end.
+    closer = [None] * len(runs)
+    last = {}
+    for i in range(len(runs) - 1, -1, -1):
+        length = runs[i][1] - runs[i][0]
+        closer[i] = last.get(length)
+        last[length] = i
+    out = list(text)
+    i = 0
+    while i < len(runs):
+        j = closer[i]
+        if j is None:
+            i += 1
+            continue
+        start, end = runs[i][0], runs[j][1]
+        out[start:end] = [c if c == "\n" else " " for c in text[start:end]]
+        i = j + 1
+    return "".join(out)
 
 
 def tracked_markdown():
