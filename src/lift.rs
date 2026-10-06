@@ -54,7 +54,22 @@ pub trait Lifter {
     /// user would want to know before the work begins, not a log entry about
     /// work already done.
     ///
-    /// None by default: most lifters have nothing to disclose.
+    /// None by default: most lifters have nothing to disclose. Of oinkie's
+    /// own, the Ghidra and Binary Ninja lifters return `None`, and the IDA Pro
+    /// lifter returns one when the installation has a cloud decompiler, since
+    /// producing microcode then sends functions to Hex-Rays' servers. With
+    /// cloud decompilers for x64 and ARM64 and a local one for ARM64, it reads:
+    ///
+    /// ```text
+    /// This IDA installation has cloud decompilers (hexcx64, hexcarm64).
+    /// Microcode cannot be produced without a decompiler, and every function a
+    /// cloud one handles is sent to Hex-Rays' servers. Nothing has been sent
+    /// yet. It also has local decompilers (hexarm64); which of them handles
+    /// this binary depends on its architecture.
+    /// ```
+    ///
+    /// The last sentence is there only when local decompilers are installed
+    /// too. The text is one line; it is wrapped here to be read.
     fn notice(&self) -> Option<String> {
         None
     }
