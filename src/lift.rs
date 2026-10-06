@@ -63,11 +63,10 @@ pub trait Lifter {
 ///
 /// A writer is exactly the kind of code that looks finished while producing
 /// something nothing can read. `analyzeHeadless` exits 0 whether or not its
-/// post-script threw; the built-in script wrote unescaped names for as long as
-/// it existed; and a replacement script the caller supplies is arbitrary Java that
-/// oinkie never sees. Without this, all three end the same way: a directory of
-/// files that look lifted, and a failure at `extract` naming a line and column
-/// in a file the reader did not know existed.
+/// post-script threw, and a script the caller supplies is code oinkie never
+/// sees. Without this check, a broken lift would end as a directory of files
+/// that look lifted, and a failure at `extract` naming a line and column in a
+/// file the reader did not know existed.
 ///
 /// Two things are looked at, and only one of them is a refusal. A file that
 /// cannot be read is not a lift. A file that reads and holds no functions
@@ -109,13 +108,11 @@ impl<L: Lifter> Lifter for Verifying<L> {
 /// empty birthmarks score as a perfect match, and whether that is the truth
 /// about the binary or a broken tool is not something the file says.
 ///
-/// Ghidra gets the cause it has always had. An official release ships no
-/// decompiler binary for macOS, `DecompInterface` then fails for every
-/// function, and `analyzeHeadless` exits 0 regardless -- which is how this
-/// arrived twice, on two platforms, during one release (#126, #135). The other
-/// representations get the fact without the advice: nothing has been measured
-/// about why they would come back empty, and a guess would send the reader to
-/// a Ghidra directory they do not have.
+/// For Ghidra the likely cause is named: a release that ships no decompiler
+/// binary for the platform makes `DecompInterface` fail for every function,
+/// and `analyzeHeadless` exits 0 regardless. The other representations get
+/// the fact without the advice, since no cause is known for them, and a guess
+/// would send the reader to a Ghidra directory they do not have.
 fn no_functions_message(input: &Path, ir: Ir) -> String {
     let binary = input.display();
     let hint = if ir == Ir::GhidraPcode {
@@ -138,23 +135,12 @@ fn no_functions_message(input: &Path, ir: Ir) -> String {
 /// because one tool can produce several and they are not interchangeable —
 /// Binary Ninja lifts to LLIL, MLIL or HLIL, each with its own vocabulary.
 /// What everything downstream needs to know is which vocabulary it is looking
-/// at: whether two birthmarks can be compared, and which `Op` type can read
-/// the file.
+/// at: whether two birthmarks can be compared, and how the file is read.
 ///
-/// This used to sit beside a `LifterType` that named the tool, and `lift`
-/// took both. The pair could disagree — a Ghidra lifter asked for HLIL — so
-/// something had to check, report and be tested for a state that only existed
-/// because there were two enums. There is one now, and that state cannot be
-/// written down. It is the finer of the two: a representation implies its
-/// tool, while a tool does not imply a representation.
-///
-/// Every variant here can be both written and read today, which has not
-/// always been so: representations are declared when they are named and filled
-/// in later, and while one was unreadable there was a `readable()` list and an
-/// `UnsupportedIr` to report against it. Both went when IDA's maturities
-/// landed and nothing was left to refuse. The guard that remains is the
-/// exhaustive match in [`crate::program::Program::load`], which is what
-/// stops a new variant being added without a decision about reading it.
+/// The representation is all a caller names, not a tool beside it: a
+/// representation implies its tool, while a tool does not imply a
+/// representation, and naming both would allow a pair that disagrees -- a
+/// Ghidra lift asked for HLIL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "kebab-case")]
 #[non_exhaustive]
@@ -165,26 +151,15 @@ pub enum Ir {
     GhidraPcode,
     /// The Hex-Rays microcode -- which runs IDA Pro's decompiler, so on an
     /// installation with a cloud decompiler each function is sent to Hex-Rays'
-    /// servers.
-    ///
-    /// The disclosure is in the first paragraph because that is the paragraph a
-    /// reader sees first: someone choosing a representation should learn it
-    /// before choosing, not after. What is left out of it is detail, not
-    /// warning.
+    /// servers. The lifter's [`Lifter::notice`] says so before the first lift.
     ///
     /// Read at `MMAT_LVARS`, the last of the decompiler's maturities and the
-    /// one the pseudocode is rendered from. The earlier maturities are not
-    /// offered. They are the decompiler's
-    /// pipeline rather than representations it publishes: the same enum holds
-    /// `MMAT_ZERO`, "microcode does not exist", and `MMAT_GLBOPT2` is
-    /// described by Hex-Rays only as "most global optimization passes are
-    /// done". Nothing says their shape is stable across releases, and a name
-    /// here is permanent -- a file carrying it has to stay readable. Adding
-    /// one later costs nothing; removing one breaks every file that named it.
-    ///
-    /// Producing microcode at all means running IDA Pro's decompiler, and on
-    /// an installation whose only decompiler is the cloud one that means the
-    /// function is sent to Hex-Rays' servers. `lift` says so before it starts.
+    /// one the pseudocode is rendered from. The other maturities are not
+    /// offered: they are stages of the decompiler's pipeline rather than
+    /// representations it publishes -- the same enum holds `MMAT_ZERO`,
+    /// "microcode does not exist" -- and nothing says their shape is stable
+    /// across releases, while a name here is permanent, since a file carrying
+    /// it has to stay readable.
     IdaMicrocode,
     /// Binary Ninja's Low Level IL: one expression per machine instruction,
     /// registers and flags still explicit.
@@ -371,16 +346,11 @@ impl HomeSpec {
     /// path exists.
     ///
     /// Both are handed in rather than read directly so that a test can
-    /// describe a machine instead of having to become one. The tests used to
-    /// set `GHIDRA_HOME` and put it back afterwards; the environment is
-    /// process-global, so two of them running at once in the same test binary
-    /// saw each other's writes, and in edition 2024 `set_var` is `unsafe`
-    /// precisely because a concurrent read of it is undefined behaviour rather
-    /// than merely a wrong answer (#24).
-    ///
-    /// It also makes the "not found" case testable at all. It could assert
-    /// nothing before, because the machine running the test might genuinely
-    /// have Ghidra at one of the candidates.
+    /// describe a machine instead of having to become one. The environment is
+    /// process-global: tests that set it would see each other's writes, and
+    /// `set_var` is `unsafe` because a concurrent read of it is undefined
+    /// behaviour. A described machine also lets the "not found" case be
+    /// asserted on one that has the tool installed.
     pub(crate) fn find_in(
         &self,
         env: impl Fn(&str) -> Option<String>,
@@ -546,8 +516,7 @@ mod tests {
     }
 
     /// A name that is no representation is refused, and the refusal names
-    /// what was given. This used to be reached only through the score CSV's
-    /// metadata parser, which went with the format to the command line.
+    /// what was given.
     #[test]
     fn test_an_unknown_representation_is_refused_by_name() {
         let err = "ghidra-pcodes".parse::<Ir>().unwrap_err();
@@ -589,8 +558,8 @@ mod tests {
         }
     }
 
-    /// Every representation resolves to a tool, which is the property that let
-    /// the tool stop being a separate argument.
+    /// Every representation resolves to a tool, which is what makes naming the
+    /// representation enough.
     #[test]
     fn test_every_representation_names_a_tool() {
         for ir in Ir::ALL {
@@ -636,10 +605,9 @@ mod tests {
     /// [`Ir`].
     ///
     /// `Ir::GhidraPcode`'s own list is empty on Windows, where oinkie knows of
-    /// no install location, so the two tests below read it off the end of an
-    /// empty slice and panicked there while passing everywhere else. What they
-    /// are about is the search, not which paths this platform happens to
-    /// offer, and a constructed spec exercises it on all of them.
+    /// no install location. What the two tests below are about is the search,
+    /// not which paths a platform happens to offer, and a constructed spec
+    /// exercises it on all of them.
     fn a_spec_with_candidates() -> HomeSpec {
         HomeSpec {
             tool: "Ghidra",
@@ -666,10 +634,8 @@ mod tests {
         assert_eq!(home, PathBuf::from(spec.candidates[0]));
     }
 
-    /// This is what a machine with no Ghidra sees, and until the search took
-    /// its environment as a parameter it could not be asserted: the test ran
-    /// on a machine that might have Ghidra at one of the candidates, so it
-    /// checked only that nothing panicked.
+    /// What a machine with no Ghidra sees -- asserted on a described machine,
+    /// so that it holds on one that has Ghidra installed.
     #[test]
     fn test_a_ghidra_that_is_nowhere_says_what_to_set_and_where_it_looked() {
         let spec = Ir::GhidraPcode.home_spec();
@@ -699,9 +665,8 @@ mod tests {
     /// platforms where a representation names somewhere to look it names
     /// several, and on Windows -- where none of them does -- this would be
     /// asserting the same thing as every other test in this module.
-    /// An empty list is what a backend added before anyone has
-    /// checked where it installs looks like, which is how both IDA Pro and
-    /// Binary Ninja began.
+    /// An empty list is what a backend looks like before anyone has checked
+    /// where it installs.
     #[test]
     fn test_a_backend_with_no_usual_locations_does_not_offer_an_empty_list() {
         let spec = HomeSpec {
@@ -782,10 +747,9 @@ mod verifying_tests {
         }
     }
 
-    /// It has a function, and that is not incidental. This constant used to
-    /// end `"functions": []` and stand for a successful lift, which is the
-    /// defect #135 was about: a file that reads and holds nothing was the
-    /// example of everything having worked.
+    /// It has a function, and that is not incidental: a file that reads and
+    /// holds nothing is the case the verifier warns about, not the example of
+    /// everything having worked.
     const A_READABLE_PROGRAM: &str = r#"{
         "program": "sample",
         "path": "bin/sample",
@@ -870,13 +834,9 @@ mod verifying_tests {
         assert!(e.to_string().contains("JSON error"), "{e}");
     }
 
-    /// An output whose representation this build does not know is caught here
+    /// An output whose representation this build does not know -- what a
+    /// lifter written against a newer oinkie would write -- is caught here
     /// rather than at `extract`.
-    ///
-    /// It used to name a declared-but-unreadable representation. Every
-    /// declared one has a reader now, so what is left is a name from a future
-    /// version -- which is what a lifter written against a newer oinkie would
-    /// write.
     #[test]
     fn test_an_output_in_an_unknown_representation_fails_the_lift() {
         let json = A_READABLE_PROGRAM.replace("ghidra-pcode", "llvm-ir");
@@ -887,10 +847,10 @@ mod verifying_tests {
 
     /// A file with no functions is a successful lift, and says so out loud.
     ///
-    /// The refusal this used to be was wrong: a binary can genuinely have no
-    /// functions, and nothing in the file distinguishes that from a tool that
-    /// found none. Stopping would have decided the question on the reader's
-    /// behalf, and taken the rest of a batch with it.
+    /// A binary can genuinely have no functions, and nothing in the file
+    /// distinguishes that from a tool that found none. Stopping would decide
+    /// the question on the reader's behalf, and take the rest of a batch with
+    /// it.
     #[test]
     fn test_an_output_with_no_functions_is_still_a_successful_lift() {
         let (r, _dir) = lift_with(Writes(A_PROGRAM_WITH_NO_FUNCTIONS), "bin/sample");
@@ -919,14 +879,13 @@ mod verifying_tests {
         assert!(m.contains("perfect match"), "{m}");
     }
 
-    /// Ghidra gets the cause named, because it has been the same cause both
-    /// times: a release that ships no decompiler binary for the platform, and
-    /// a `DecompInterface` that then fails for every function while
-    /// analyzeHeadless still exits 0 (#126).
+    /// Ghidra gets its likely cause named: a release that ships no decompiler
+    /// binary for the platform, and a `DecompInterface` that then fails for
+    /// every function while analyzeHeadless still exits 0.
     ///
-    /// The others do not, because nothing has been measured about why they
-    /// would come back empty, and advice invented for them would send the
-    /// reader to a Ghidra directory they do not have.
+    /// The others do not, because no cause is known for them, and advice
+    /// invented for them would send the reader to a Ghidra directory they do
+    /// not have.
     #[test]
     fn test_only_ghidra_is_told_about_the_decompiler() {
         let ghidra = no_functions_message(Path::new("bin/sample"), Ir::GhidraPcode);

@@ -3,23 +3,18 @@
 //! Ghidra, Binary Ninja and IDA Pro are all driven the same way: run the
 //! tool's headless entry point with a script that writes JSON, then move the
 //! result where the caller asked for it. The command lines differ; the path
-//! handling around them does not, and it is the path handling that has been
-//! wrong twice already.
+//! handling around them does not, and it is the easy part to get wrong:
 //!
-//! Every bug fixed in this file was a real one:
+//! - every path handed to the tool is absolute, because the tool runs in its
+//!   own working directory and would resolve a relative one a second time
+//!   against it;
+//! - each lift works in a directory of its own, because the script writes
+//!   into its working directory, and two lifts of same-named binaries running
+//!   in parallel would otherwise race on one path;
+//! - the result is moved by copying when `rename` cannot cross file systems,
+//!   as it cannot from a temporary directory on another volume.
 //!
-//! - a relative intermediate directory was resolved twice, once by the caller and
-//!   again by Ghidra against its own working directory, which is that
-//!   directory nested inside itself
-//! - the script writes into the process's working directory, so two lifts of
-//!   same-named binaries running in parallel raced on one path in the user's
-//!   current directory
-//! - `rename` fails across file systems, which a temporary directory on
-//!   another volume reaches every time
-//!
-//! A second and third lifter writing this out again would be two more chances
-//! to reintroduce them, so a lifter supplies its command line and its script
-//! and nothing else.
+//! So a lifter supplies its command line and its script, and nothing else.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -239,13 +234,11 @@ impl Headless<'_> {
 /// A headless decompiler writes hundreds of progress lines; the reason it
 /// stopped is near the end, and the rest would bury it.
 ///
-/// Near, not at. Twenty lines was too few, and in a way worth recording: when
-/// a lifting script throws, the reason is the *first* line of the stack trace
-/// and the frames follow it, and Ghidra then goes on printing progress after
-/// the trace. On the Windows runner that left exactly the frames and none of
-/// the exception -- fourteen `at ghidra.app...` lines, under a message saying
-/// the tool's own output was the only account of why. Eighty holds a trace,
-/// its `Caused by` chain, and what follows it, and is still bounded.
+/// Near, not at. When a lifting script throws, the reason is the *first* line
+/// of the stack trace, the frames follow it, and Ghidra goes on printing
+/// progress after the trace; too short a tail keeps the frames and loses the
+/// exception. Eighty lines hold a trace, its `Caused by` chain, and what
+/// follows it, and are still bounded.
 fn tail(text: &str) -> String {
     const LINES: usize = 80;
     let text = text.trim_end();
@@ -266,10 +259,8 @@ mod tests {
     /// point: it exercises the path handling without needing a decompiler.
     /// A program that exists and does nothing, wherever the tests are run.
     ///
-    /// `lift` canonicalizes the program before spawning it, so a path that is
-    /// not there fails before the argument closure runs -- which on Windows
-    /// left six of these tests reporting `args were never built` about
-    /// `/usr/bin/true`.
+    /// `lift` canonicalizes the program before spawning it, so it has to be a
+    /// path that exists on every platform the tests run on.
     fn a_program_that_exists() -> &'static Path {
         Path::new(if cfg!(windows) {
             r"C:\Windows\System32\cmd.exe"
@@ -311,8 +302,7 @@ mod tests {
 
     /// The tool runs with the working directory set to its own scratch
     /// directory, so a relative input would be resolved against that rather
-    /// than the caller's -- the shape of the bug that made `lift -i irs` look
-    /// for `irs/irs`.
+    /// than the caller's -- `lift -i irs` would look for `irs/irs`.
     #[test]
     fn test_paths_reach_the_command_absolute() {
         let dir = tempfile::Builder::new()

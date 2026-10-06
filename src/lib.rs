@@ -41,7 +41,7 @@
 //! ```
 
 // Every public item is documented, and stays so: CI runs clippy with
-// -D warnings, which makes this an error there (#173).
+// -D warnings, which makes this an error there.
 #![warn(missing_docs)]
 
 use std::path::PathBuf;
@@ -67,17 +67,15 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Everything that can go wrong in oinkie.
 ///
 /// Each variant's message, its `Display`, is written for a person, and names
-/// the file or the value it is about. [`Error::is_caller_fault`] says whether
-/// asking differently could have avoided it.
-///
-/// The messages live on the variants rather than in a `Display` match, so
-/// that adding a variant and deciding how it reads are the same edit.
-///
-/// The wrapped errors are `#[source]` but not `#[from]`. `Io` and `Json`
-/// carry the path beside the error — which path failed is the useful half —
-/// so they could not be `#[from]` anyway, and for the rest an explicit
-/// `map_err(Error::Csv)` at the call site says more than a conversion hidden
-/// inside a `?`.
+/// the file or the value it is about. A wrapped error is reachable as the
+/// `source`. [`Error::is_caller_fault`] says whether asking differently could
+/// have avoided it.
+//
+// Each message sits on its variant, so that adding a variant and deciding how
+// it reads are one edit. The wrapped errors are `#[source]` but not
+// `#[from]`: `Io` and `Json` carry the path beside the error, since which path
+// failed is the useful half, and for the rest an explicit `map_err` at the
+// call site says what failed where a `?` would hide it.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -111,16 +109,15 @@ pub enum Error {
     /// indistinguishable from one that works until something reads what it
     /// wrote.
     ///
-    /// The output's path is not repeated here: every error
-    /// [`crate::Program::load`] can return carries it already, and
-    /// naming it twice put the same long path in the message twice.
+    /// The output's path is not repeated: every error
+    /// [`crate::Program::load`] returns names it already.
     #[error(
         "{binary}: the lifter reported success, but what it wrote cannot be read back: {cause}",
         binary = .0.display(),
         cause = .1
     )]
     UnreadableOutput(PathBuf, #[source] Box<Error>),
-    /// A lifted file naming a representation this build cannot read.
+    /// A P-Code operation given by a number Ghidra does not define.
     #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
     /// An I/O failure on a path the caller gave: a file to read, a destination
@@ -215,11 +212,10 @@ impl Error {
     /// Whether the caller could have avoided this by asking differently: a
     /// name, a pairing or a number they supplied, or a file they named.
     ///
-    /// Decided here, by an exhaustive match, because this is the one place the
-    /// match can stay exhaustive. `Error` is `#[non_exhaustive]`, so a crate
-    /// that matches on it has to have a wildcard arm, and a new variant would
-    /// fall into that arm unclassified. Inside the crate that defines it, a
-    /// new variant stops the build here until someone decides which it is.
+    /// Answered by the crate that defines `Error`, because only it can match
+    /// every variant. `Error` is `#[non_exhaustive]`, so a match elsewhere
+    /// needs a wildcard arm, where a new variant would go unclassified; here a
+    /// new variant stops the build until it is classified.
     pub fn is_caller_fault(&self) -> bool {
         match self {
             // A name, a pairing or a number that the caller supplied.
@@ -235,8 +231,7 @@ impl Error {
 
             // Something went wrong inside, or in a file oinkie itself
             // produced; or in the machine it runs on, which no argument can
-            // change. A missing tool was never the caller's fault either, back
-            // when it arrived as a `Parse`.
+            // change. No argument installs a missing tool either.
             //
             // `ToolIo` is on a path oinkie chose: the tool it found, or a
             // scratch file. The tool's path can come from a home the caller
@@ -345,16 +340,14 @@ pub(crate) trait Op {
     /// table keys it, so that [`crate::program::TypedProgram::symbol`] can resolve
     /// it, or `None` when that operand cannot name a symbol.
     ///
-    /// Callers choose which operations to ask — the only caller today asks
-    /// calls, to build the `fc-*` birthmarks — so an implementation need not
-    /// inspect the opcode itself.
+    /// It is asked of calls, to build the `fc-*` birthmarks, so an
+    /// implementation need not inspect the opcode itself.
     ///
     /// Returning `None` for a target no symbol could name is the part that
     /// matters. An indirect call through a register or a temporary is
     /// resolved at run time and has no name to find; a key that cannot match
     /// would be indistinguishable from a lookup that legitimately found
-    /// nothing, which is how the `fc-*` family came to be silently empty
-    /// before this method existed.
+    /// nothing.
     ///
     /// The operand notation is the lifter's own — Ghidra writes
     /// `"(ram, 0x100000480, 8)"` while its symbol table is keyed
@@ -625,9 +618,8 @@ mod tests {
         assert!(!rendered.contains("0."), "numbered from zero: {rendered}");
     }
 
-    /// `impl std::error::Error for Error {}` was empty, so `source()` was
-    /// `None` even for the variants holding a cause. Nothing called it —
-    /// there was nothing to get (#62).
+    /// A variant holding a cause reports it as its `source`, so that a caller
+    /// walking the chain reaches the I/O or JSON error underneath.
     #[test]
     fn test_a_wrapped_error_is_reachable_as_a_source() {
         use std::error::Error as _;

@@ -436,10 +436,7 @@ impl Algorithm {
     /// This is the canonical spelling inside an analysis name. A name with a
     /// hyphen between its words is accepted as well (see
     /// [`Algorithm::hyphenated`]), so that a name built from either spelling
-    /// parses (#71).
-    ///
-    /// A hyphen here is no longer forbidden. It was, while an analysis name
-    /// was split on its last one.
+    /// parses.
     fn spec(&self) -> (&'static str, Shape) {
         match self {
             Algorithm::Cosine => ("cosine", Shape::Freq),
@@ -482,13 +479,15 @@ impl Algorithm {
     }
 }
 
-/// This struct holds the specific algorithm instance and dispatches the comparison calls to it.
+/// Compares birthmarks under one [`Algorithm`]. [`Algorithm::comparator`] and
+/// [`AnalysisType::comparator`](crate::birthmarks::AnalysisType::comparator)
+/// make one.
 pub struct Comparator {
     inner: ComparatorImpl,
 }
 
-/// The implementation of Comparator, which holds the specific algorithm instance and dispatches the comparison calls to it.
-/// However, the specific algorithm does not appear in the public API of Comparator, so that the internal implementation can be changed without affecting the users of Comparator.
+/// The algorithm behind a [`Comparator`], kept out of its public API so that
+/// the algorithms can change without changing it.
 enum ComparatorImpl {
     Cosine(Cosine),
     Dice(Dice),
@@ -788,7 +787,7 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
         for j in 1..=m {
             let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
 
-            // 3つの操作の最小値をとる
+            // the cheapest of substitution, insertion and deletion
             let substitution = prev[j - 1] + cost;
             let insertion = curr[j - 1] + 1;
             let deletion = prev[j] + 1;
@@ -841,9 +840,9 @@ fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(
         .sum::<f64>();
     let magnitude1 = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     let magnitude2 = f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
-    // A zero magnitude is an empty function. Two of them agree, as with every
-    // other algorithm; one against a function that is not empty does not. It
-    // used to score 1.0 as well, so an empty function matched anything (#162).
+    // A zero magnitude is an empty function. Two of them agree, as under every
+    // other algorithm; one against a function that is not empty does not, or
+    // an empty function would match anything.
     match (magnitude1 > 0.0, magnitude2 > 0.0) {
         (true, true) => dot_product / (magnitude1 * magnitude2),
         (false, false) => 1.0,
@@ -866,9 +865,9 @@ fn euclidean_distance<T: std::cmp::Eq + std::hash::Hash>(
         .sum::<f64>();
     let scale = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()
         + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
-    // Zero only when both functions are empty, where the quotient below is
-    // 0/0. That came out as NaN and went into the assignment, and from there
-    // into the pair's similarity (#162).
+    // Zero only when both functions are empty, where the quotient below would
+    // be 0/0: a NaN that would reach the assignment and the pair's
+    // similarity. Two empty functions agree, as under every other algorithm.
     if scale == 0.0 {
         return 1.0;
     }
@@ -906,8 +905,7 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(
 fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let n = s1.len();
     let m = s2.len();
-    // Two empty functions agree, as with every other algorithm; this alone
-    // called them different (#162).
+    // Two empty functions agree, as under every other algorithm.
     if n == 0 && m == 0 {
         return 1.0;
     }
@@ -1241,11 +1239,9 @@ mod tests {
             .collect()
     }
 
-    /// The rule the birthmark-level comparison already follows, for every
-    /// algorithm and every representation it takes: two empty functions agree
-    /// (1.0), and an empty one against one that is not does not (0.0), in
-    /// either order. Cosine scored the second 1.0, Euclidean the first NaN,
-    /// and LCS the first 0.0 (#162).
+    /// The rule the birthmark-level comparison follows, for every algorithm
+    /// and every representation it takes: two empty functions agree (1.0), and
+    /// an empty one against one that is not does not (0.0), in either order.
     #[test]
     fn every_algorithm_scores_empty_functions_by_the_same_rule() {
         for (algorithm, comparator, builders) in each_algorithm() {

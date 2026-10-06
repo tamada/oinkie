@@ -34,11 +34,11 @@ pub(crate) mod lifter;
 /// The word the lifting script takes for a representation, or `None` for one
 /// that is not Binary Ninja's.
 ///
-/// Exhaustive over [`crate::lift::Ir`] on purpose. The lifter used to hold
-/// this as a match with an `unreachable!` arm for the representations that
-/// cannot reach it, which is a branch nothing can exercise and nothing can
-/// check; adding a Binary Ninja level and forgetting it here is now a `None`
-/// that turns into a refusal, and adding one anywhere is a build failure.
+/// Exhaustive over [`crate::lift::Ir`] on purpose, rather than an
+/// `unreachable!` arm for the representations that cannot reach it -- a
+/// branch nothing can exercise. Adding a representation anywhere is a build
+/// failure here, and a Binary Ninja level forgotten here is a `None` that
+/// turns into a refusal.
 pub(crate) fn level(ir: crate::lift::Ir) -> Option<&'static str> {
     use crate::lift::Ir;
     match ir {

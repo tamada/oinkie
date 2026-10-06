@@ -172,11 +172,11 @@ where
 /// logger, and so that the caller owns how loudly it is said.
 ///
 /// The two cases are kept apart because they send the reader somewhere else.
-/// Nothing being a call is `is_call`; calls that resolve to nothing is the
-/// symbol table or `symbol_key`. Both were reached by a real lifter during
-/// v0.6.0 -- the Hex-Rays microcode writes a global as `$name` and the table
-/// was keyed by the resolved name, and the optimiser folds a call into another
-/// instruction's operand, which a reader walking only the block's list misses.
+/// Nothing being a call points at `is_call`; calls that resolve to nothing
+/// point at the symbol table or `symbol_key`. Both are easy for a lifter to
+/// reach: a tool may spell a global differently in operands and in its symbol
+/// table, and an optimiser may fold a call into another instruction's operand,
+/// where a reader walking only the block's list misses it.
 #[derive(Debug, PartialEq, Eq)]
 enum EmptyFamily {
     /// No operation in the program is a call.
@@ -208,10 +208,10 @@ impl EmptyFamily {
 
 /// Decides which, if either, applies.
 ///
-/// One pass, returning at the first call that resolves. The count is only read
-/// when none did, and reaching that answer means the whole program was walked
-/// anyway -- so counting here costs an extraction that has calls nothing, where
-/// counting first cost it a full traversal for a number it threw away.
+/// One pass, returning at the first call that resolves. The count is only
+/// needed when none does, and reaching that answer means the whole program was
+/// walked anyway -- so counting along the way costs an extraction that has
+/// calls nothing, where counting first would cost it a full traversal.
 fn empty_family<T: crate::Op>(p: &TypedProgram<T>) -> Option<EmptyFamily> {
     let mut calls = 0usize;
     for function in p.iter() {
@@ -314,10 +314,8 @@ mod tests {
         }
     }
 
-    /// One program that cannot answer does not stop the others.
-    ///
-    /// It used to: the refusal was an `Err`, and a corpus with a single
-    /// call-less binary in it lost every birthmark after that one.
+    /// One program that cannot answer does not stop the others: a corpus with a
+    /// single call-less binary in it keeps every other birthmark.
     #[test]
     fn test_a_program_that_calls_nothing_does_not_stop_the_rest() {
         let dir = tempdir().unwrap();
@@ -367,9 +365,7 @@ mod tests {
     /// Which of the two emptied the family, and that neither fires when one
     /// call resolves.
     ///
-    /// This is the part worth keeping from the old refusal: the two send the
-    /// reader somewhere else, and both were reached by a real lifter during
-    /// v0.6.0.
+    /// The two send the reader somewhere else, so they are told apart.
     #[test]
     fn test_the_two_ways_of_emptying_a_family_are_told_apart() {
         let unresolved = a_program_whose_calls_resolve_to_nothing();
@@ -488,10 +484,10 @@ mod tests {
     /// A leaf function calls nothing, so its fc-* birthmark is empty. That is
     /// the measurement, and it is handed back.
     ///
-    /// It used to be refused. Two empty birthmarks score as a perfect match,
-    /// and in a theft-detection tool that reads as a positive -- but the answer
-    /// to that is to say so, not to decide on the caller's behalf that the
-    /// question cannot be asked. `empty_family` is what says so.
+    /// Two empty birthmarks score as a perfect match, and in a theft-detection
+    /// tool that reads as a positive -- but the answer to that is to say so,
+    /// not to decide on the caller's behalf that the question cannot be asked.
+    /// `empty_family` is what says so.
     #[test]
     fn test_fc_extraction_of_a_program_without_calls_is_empty_not_refused() {
         let json = r#"{

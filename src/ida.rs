@@ -96,7 +96,7 @@ mod tests {
         }
     }
 
-    /// Both spellings of a call are calls. `m_icall` was the one worth
+    /// Both spellings of a call are calls. `m_icall` is the one worth
     /// asserting: an indirect call is still a call, and leaving it out would
     /// quietly shrink every `fc-*` birthmark of a program that makes them.
     #[test]

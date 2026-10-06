@@ -187,11 +187,10 @@ impl TryFrom<PathBuf> for Birthmark {
 
     /// Reads the file whole, then parses the bytes.
     ///
-    /// `from_reader` on a bare `File` looks like the obvious thing and is a
-    /// trap: serde_json's `IoRead` takes one byte at a time, so an unbuffered
-    /// file is one `read` syscall per byte. On a 9 MB birthmark that is 2.7 s
-    /// against 15 ms here, and `compare` loads its inputs once per *pair*, so
-    /// the loader runs O(n²) times (#51).
+    /// Not `from_reader` on the `File`: serde_json reads a reader one byte at
+    /// a time, so an unbuffered file costs a system call per byte -- seconds
+    /// for a large birthmark, against milliseconds read whole -- and a
+    /// comparison loads each birthmark once per pair it is in.
     ///
     /// `from_slice` rather than `read_to_string` + `from_str`: bytes that are
     /// not UTF-8 are the file's content being wrong, and stay a JSON error
@@ -225,11 +224,10 @@ pub(crate) struct Metadata {
     /// The representation the program was lifted to, carried over so that two
     /// birthmarks can be told apart by more than their type.
     ///
-    /// Defaulted as a fallback for the same reason the field on `TypedProgram` is:
-    /// every birthmark this crate wrote before the field existed came from
-    /// Ghidra's P-Code, since no other lifter has existed. It is not a
-    /// deduction — a file that simply omits the field reads the same way —
-    /// but anything written since carries it.
+    /// A file without the field reads as Ghidra's P-Code, as a lifted program
+    /// without one does: that is what every such file was written from. It is
+    /// a fallback rather than a deduction, since a file that simply omits the
+    /// field reads the same way; this crate always writes it.
     #[serde(default)]
     pub ir: crate::lift::Ir,
 }
@@ -258,8 +256,8 @@ where
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Birthmark {
     pub(crate) metadata: Metadata,
-    /// Written under the key `elements`, which is what every birthmark file
-    /// before #131 used; renaming the key would make all of them unreadable.
+    /// Written under the key `elements`, the key every birthmark file uses,
+    /// so that every one of them keeps reading.
     #[serde(rename = "elements")]
     pub(crate) functions: Vec<Function>,
     #[serde(skip)]
@@ -276,11 +274,11 @@ impl Birthmark {
 
     /// Explains why these two cannot be compared, when they cannot.
     ///
-    /// A birthmark is only meaningful against another built the same way. The
-    /// type has always had to match; the representation now does too, because
-    /// two lifters describe the same instruction with different operations,
-    /// and comparing across them measures the disagreement between the tools
-    /// rather than anything about the programs.
+    /// A birthmark is only meaningful against another built the same way: of
+    /// the same type, and from the same representation, because two lifters
+    /// describe the same instruction with different operations, and comparing
+    /// across them measures the disagreement between the tools rather than
+    /// anything about the programs.
     ///
     /// The `fc-*` family is the one that could eventually cross this line: it
     /// holds symbol names read from the binary rather than operations read
@@ -420,10 +418,9 @@ impl Function {
 pub enum Data {
     /// Each element with how often it occurs (`freq`).
     ///
-    /// An operation named more than once is refused, for the reason
-    /// [`Data::KgramFreq`] gives: serde's derived map deserializer takes the
-    /// last of a repeated key without saying so, and a birthmark names each
-    /// operation once (#66).
+    /// A file naming an operation more than once is refused: a birthmark
+    /// names each once, and taking the last of a repeated key would score a
+    /// count the file contradicts itself about.
     Freq(
         #[serde(serialize_with = "sorted_freq", deserialize_with = "no_repeated_key")]
         FxHashMap<String, usize>,
@@ -437,21 +434,10 @@ pub enum Data {
     /// Each k-gram with how often it occurs (`op-{k}gram-freq`).
     ///
     /// Written as a list of `[kgram, count]` pairs rather than as a JSON
-    /// object.
-    ///
-    /// A JSON object's keys are strings, and a k-gram is a list of
-    /// operations. `serde_json` refuses it — "key must be a string" — so
-    /// every non-empty `op-*gram-freq` birthmark failed at write time.
-    /// `op-1gram-freq` through `op-8gram-freq` — eight of the thirty
-    /// birthmark types then listed, and one of the three shapes a k-gram
-    /// comes in — could not produce a file at all (#59). It looked k-dependent only because a program with fewer than k
-    /// operations yields an empty map, and an empty map has no key to refuse.
-    ///
-    /// A list of pairs rather than a stringified key, because the alternative
-    /// is to make `Kgram` serialize as a string, and `KgramSeq` and
-    /// `KgramSet` already write it as a list — those two families work, and
-    /// their files would stop reading. It also needs no separator, so no
-    /// mnemonic can ever contain one.
+    /// object, whose keys can only be strings: a k-gram is a list of
+    /// operations. A list of pairs keeps the k-gram written as the list
+    /// `KgramSeq` and `KgramSet` write it as, and needs no separator that a
+    /// mnemonic might contain.
     KgramFreq(#[serde(with = "kgram_freq")] FxHashMap<Kgram, usize>),
     /// Each distinct k-gram once, in no order (`op-{k}gram-set`).
     KgramSet(#[serde(serialize_with = "sorted_kgram_set")] FxHashSet<Kgram>),
@@ -459,9 +445,9 @@ pub enum Data {
 
 /// A map and a set have no order of their own, so the one they are written in
 /// has to come from somewhere. Hash order comes from the insertion history and
-/// the hasher, which means two equal birthmarks can be written differently and
-/// a `rustc-hash` bump relays every file for no reason. Sorted, the bytes are
-/// a function of what the birthmark holds (#68).
+/// the hasher, so two equal birthmarks could be written differently. Sorted,
+/// the bytes are a function of what the birthmark holds, and a file can be
+/// diffed and cached.
 ///
 /// `Seq` and `KgramSeq` are not here on purpose. Their order is the program's,
 /// and sorting them would not canonicalise the file — it would destroy the
@@ -498,8 +484,8 @@ where
 /// Reads a frequency map, refusing a key that appears more than once.
 ///
 /// serde's derived deserializer inserts in a loop, so `{"COPY": 3, "COPY": 5}`
-/// loads as 5 and nothing is said — a similarity computed from a count the
-/// file contradicts itself about (#66).
+/// would load as 5 and nothing be said -- a similarity computed from a count
+/// the file contradicts itself about.
 ///
 /// Two decisions here, on different axes, and they are easy to run together.
 ///
@@ -694,8 +680,8 @@ impl TryFrom<String> for AnalysisType {
 
     /// Parses `{birthmark}-{algorithm}`, for example `op-3gram-set-dice`.
     ///
-    /// Only the algorithm name is read here; everything before it is handed to
-    /// [`BirthmarkType::try_from`], which is the parser that owns that half.
+    /// The algorithm's name is read here; everything before it is handed to
+    /// [`BirthmarkType::try_from`], the parser that owns that half.
     ///
     /// Where the two halves meet is found rather than assumed. Each hyphen is
     /// tried as the split, rightmost first, and the first one whose tail names
@@ -708,13 +694,9 @@ impl TryFrom<String> for AnalysisType {
     ///    ^ "weighted-jaccard" is an algorithm and "op-freq" is a birthmark
     /// ```
     ///
-    /// It used to split on the last hyphen, which made an algorithm name
-    /// containing one unrepresentable — so `weightedjaccard` was spelled
-    /// without one while the hyphenated `weighted-jaccard` was what people
-    /// were shown, and a name built from what they were shown was refused
-    /// (#71). Searching for the split costs a few string
-    /// comparisons on a name a person typed, and removes the rule that a
-    /// future algorithm must not be two words.
+    /// Searching, rather than splitting on the last hyphen, lets an
+    /// algorithm's name have a hyphen of its own -- `weighted-jaccard` -- at
+    /// the cost of a few string comparisons on a name a person typed.
     fn try_from(name: String) -> Result<Self> {
         let lowered = name.to_lowercase();
         // The rightmost split that got as far as naming an algorithm, so that
@@ -762,7 +744,7 @@ impl Shape {
 }
 
 /// An algorithm by either of the names it goes by: the one an analysis name
-/// uses, and the same with a hyphen between its words (#71).
+/// uses, and the same with a hyphen between its words.
 ///
 /// They differ for `weightedjaccard` / `weighted-jaccard` alone; the other
 /// seven are single words and spell the same either way.
@@ -959,7 +941,7 @@ mod tests {
             ),
             ("op-3gram-seq-lcs", BirthmarkType::OpKgramSeq(3)),
             // no ceiling: the grammar accepts any k, whatever list of
-            // names a caller chooses to offer (#25)
+            // names a caller chooses to offer
             ("op-9gram-freq-cosine", BirthmarkType::OpKgramFreq(9)),
             ("op-12gram-set-jaccard", BirthmarkType::OpKgramSet(12)),
         ];
@@ -970,7 +952,7 @@ mod tests {
     }
 
     /// An analysis name accepts an algorithm spelled with a hyphen between its
-    /// words as well as without, so that a name built from either parses (#71).
+    /// words as well as without, so that a name built from either parses.
     #[test]
     fn test_an_algorithm_answers_to_both_of_its_spellings() {
         for algorithm in Algorithm::ALL {
@@ -1211,10 +1193,10 @@ mod tests {
         }
     }
 
-    /// Files written before #131 renamed `Elements` to `Function` still load:
-    /// the list of functions is read from, and written back under, the JSON key
-    /// `elements`. The fixtures were written by `oinkie extract` from before the
-    /// rename, not by this code, so they cannot agree with it by construction.
+    /// Birthmark files keep the key `elements` for the list of functions,
+    /// read and written. The fixtures were written by an `oinkie extract` built
+    /// independently of this code, so they cannot agree with it by
+    /// construction.
     #[test]
     fn test_a_birthmark_written_before_the_rename_still_loads() {
         for (fixture, functions) in [
@@ -1265,9 +1247,8 @@ mod tests {
         assert!(!b1.check_comparable_with(&b2).is_ok());
     }
 
-    /// A representation mismatch must be reported as such. Before this, the
-    /// two were indistinguishable: any refusal came back as a type mismatch,
-    /// and a comparison across representations was not refused at all.
+    /// A representation mismatch is reported as such, not as a type mismatch:
+    /// the two are different reasons, and the message should say which.
     #[test]
     fn test_refuses_a_comparison_across_representations() {
         let b1 = sample_birthmark();
@@ -1282,8 +1263,8 @@ mod tests {
         assert!(!b1.check_comparable_with(&b2).is_ok());
     }
 
-    /// The type check still reports a type mismatch rather than being
-    /// swallowed by the new one.
+    /// And a type mismatch between birthmarks of one representation is still
+    /// reported as a type mismatch.
     #[test]
     fn test_still_refuses_a_mismatched_type() {
         let b1 = sample_birthmark();
@@ -1351,14 +1332,12 @@ mod tests {
         }
     }
 
-    /// A k-gram is a list of operations, and a JSON object's keys are
-    /// strings, so `serde_json` refused the map outright — every non-empty
-    /// `op-*gram-freq` birthmark failed at write time, so eight of the thirty
-    /// birthmark types then listed could not produce a file (#59).
+    /// A k-gram is a list of operations and a JSON object's keys are strings,
+    /// so an `op-*gram-freq` birthmark has to be written in some other form
+    /// to be written at all.
     ///
-    /// A non-empty map is what makes this a test. An empty one has no key to
-    /// refuse, which is why the bug looked as though it only affected small
-    /// k: the fixture yields nothing for k >= 5.
+    /// A non-empty map is what makes this a test: an empty one has no key to
+    /// write, and the fixture yields nothing for k >= 5.
     #[test]
     fn test_a_kgram_frequency_birthmark_survives_a_round_trip() {
         let b = kgram_freq_birthmark();
@@ -1420,8 +1399,7 @@ mod tests {
 
     /// A map and a set have no order of their own, so what gets written has
     /// to be decided. Hash order decides it by insertion history and by the
-    /// hasher, which means two equal birthmarks can be written differently
-    /// and a `rustc-hash` bump relays every file (#68).
+    /// hasher, which would let two equal birthmarks be written differently.
     ///
     /// Built twice from the same elements in opposite orders: the bytes have
     /// to match. Fifty elements rather than a handful, because `FxHash` is
@@ -1497,10 +1475,8 @@ mod tests {
     /// agree is refused too. A repeated key is malformed however the values
     /// fall.
     ///
-    /// `Freq` used serde's derived map deserializer, which inserts in a loop,
-    /// so `{"COPY": 3, "COPY": 5}` loaded as 5 with nothing said — the same
-    /// hazard #59 removed from `KgramFreq`, in the family that already worked
-    /// (#66).
+    /// serde's derived map deserializer inserts in a loop, so without the
+    /// check `{"COPY": 3, "COPY": 5}` would load as 5 with nothing said.
     ///
     /// The line is ambiguity, not repetition. A `Set` repeating an element
     /// denotes the same set, so collapsing loses nothing; a `Seq` repeating
@@ -1598,9 +1574,9 @@ mod tests {
         assert!(msg.contains("CALL"), "does not say which one: {msg}");
     }
 
-    /// Only `KgramFreq` changed. The fix could have been to make `Kgram`
-    /// itself serialize as a string, and that would have rewritten the two
-    /// k-gram families that already work — whose files are readable today.
+    /// `KgramSeq` and `KgramSet` write a k-gram as a list, the same list
+    /// `KgramFreq`'s pairs hold, so the three families agree on what a k-gram
+    /// looks like on disk.
     #[test]
     fn test_the_other_kgram_families_still_write_a_plain_list() {
         let k = kgram(&["CALL", "COPY"]);
@@ -1630,9 +1606,8 @@ mod tests {
         ));
 
         // Bytes that are not UTF-8 are the file's content being wrong, not
-        // the read failing, so they come back as a JSON error. This is the
-        // difference between reading to bytes and reading to a String:
-        // `read_to_string` would report `Error::Io` here (#51).
+        // the read failing, so they come back as a JSON error rather than an
+        // I/O one.
         let not_utf8 = dir.path().join("not-utf8.json");
         std::fs::write(&not_utf8, b"{\"name\": \"\xff\xfe\"}").unwrap();
         assert!(matches!(
