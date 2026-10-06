@@ -839,6 +839,33 @@ fn test_review_reads_back_a_comparison_with_an_empty_birthmark() {
     assert_eq!(score_column(&out), compared);
 }
 
+/// Help and the version go to a pipe as text: no colour codes, which a
+/// terminal would turn into colour and anything else keeps as `^[[1m` (#163).
+/// The test's captured stdout is such a pipe. And they still succeed.
+#[test]
+fn test_help_written_to_a_pipe_has_no_colour_codes() {
+    for args in [
+        vec!["-h"],
+        vec!["--help"],
+        vec!["review", "-h"],
+        vec!["compare", "--help"],
+        vec!["--version"],
+    ] {
+        let out = Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{args:?}");
+        assert!(!out.stdout.is_empty(), "{args:?}: nothing printed");
+        assert!(
+            !out.stdout.contains(&0x1b),
+            "{args:?}: an escape code in {:?}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+    }
+}
+
 /// The old name is refused, not aliased, and the refusal names the new one --
 /// including when it is handed the arguments the old command took.
 #[test]
