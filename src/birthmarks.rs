@@ -1,3 +1,31 @@
+//! What a birthmark is, and what it holds.
+//!
+//! A [`Birthmark`] is one program's: one [`Function`] for each of its
+//! functions, each made of elements -- operations, the names of called
+//! functions, or [`Kgram`]s of operations -- held as [`Data`] in the
+//! [`Shape`] its [`BirthmarkType`] names. An [`AnalysisType`] pairs a
+//! birthmark type with the algorithm that compares it.
+//!
+//! The terms are defined in the
+//! [glossary](https://tamada.github.io/oinkie/glossary/).
+//!
+//! ```
+//! use oinkie::birthmarks::{AnalysisType, BirthmarkType, Shape};
+//!
+//! # fn main() -> oinkie::Result<()> {
+//! let bt = BirthmarkType::try_from("op-3gram-set")?;
+//! assert_eq!(bt, BirthmarkType::OpKgramSet(3));
+//! assert_eq!(bt.shape(), Shape::Set);
+//!
+//! let analysis = AnalysisType::try_from("op-3gram-set-jaccard")?;
+//! assert_eq!(analysis.birthmark(), &bt);
+//!
+//! // An algorithm pairs only with the shape it operates on.
+//! assert!(AnalysisType::try_from("op-3gram-set-levenshtein").is_err());
+//! # Ok(())
+//! # }
+//! ```
+
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
@@ -9,17 +37,42 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::time::Duration;
 
+/// Which birthmark to extract: the kind of element and the [`Shape`] it is
+/// kept in, named `{element}-{shape}` -- `op-seq`, `fc-set`, `op-3gram-freq`.
+///
+/// Read from that name by [`BirthmarkType::try_from`], in any case, and
+/// written back in it by `Display`.
+///
+/// `fc` elements are the names of the functions a function calls, as the
+/// lifted program's symbol table resolves them; a call that does not resolve
+/// to a name is left out. `op` elements are the function's operations in the
+/// lifted representation.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BirthmarkType {
+    /// The functions each function calls, in the order of the calls
+    /// (`fc-seq`).
     FcSeq,
+    /// The functions each function calls, each once (`fc-set`).
     FcSet,
+    /// The functions each function calls, with how often each is called
+    /// (`fc-freq`).
     FcFreq,
+    /// The operations of each function, with how often each occurs
+    /// (`op-freq`).
     OpFreq,
+    /// The operations of each function, in order (`op-seq`).
     OpSeq,
+    /// The operations each function uses, each once (`op-set`).
     OpSet,
+    /// Every run of `k` consecutive operations, in order
+    /// (`op-{k}gram-seq`). `k` is at least 1.
     OpKgramSeq(usize),
+    /// Every distinct run of `k` consecutive operations, with how often each
+    /// occurs (`op-{k}gram-freq`). `k` is at least 1.
     OpKgramFreq(usize),
+    /// Every distinct run of `k` consecutive operations, each once
+    /// (`op-{k}gram-set`). `k` is at least 1.
     OpKgramSet(usize),
 }
 
@@ -62,6 +115,7 @@ impl BirthmarkType {
         .collect()
     }
 
+    /// The shape its elements are kept in.
     pub fn shape(&self) -> Shape {
         match self {
             BirthmarkType::FcSeq | BirthmarkType::OpSeq | BirthmarkType::OpKgramSeq(_) => {
@@ -213,6 +267,9 @@ pub struct Birthmark {
 }
 
 impl Birthmark {
+    /// Records the file this birthmark was read from or written to, which
+    /// [`Birthmark::json_path`] then returns. Reading one does not record it
+    /// by itself.
     pub fn set_json_path(&mut self, path: PathBuf) {
         self.json_path = Some(path);
     }
@@ -245,22 +302,28 @@ impl Birthmark {
         Ok(())
     }
 
+    /// The program's name, as its lifted file recorded it: the binary's file
+    /// name.
     pub fn name(&self) -> &str {
         &self.metadata.file_name
     }
 
+    /// The path of the binary the program was lifted from.
     pub fn path(&self) -> &Path {
         &self.metadata.path
     }
 
+    /// When it was extracted.
     pub fn extracted_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.metadata.extracted_at
     }
 
+    /// How long the extraction took.
     pub fn duration(&self) -> std::time::Duration {
         self.metadata.duration
     }
 
+    /// Which birthmark this is.
     pub fn birthmark_type(&self) -> &BirthmarkType {
         &self.metadata.birthmark_type
     }
@@ -281,10 +344,13 @@ impl Birthmark {
         &self.functions
     }
 
+    /// How many functions it holds.
     pub fn len(&self) -> usize {
         self.functions.len()
     }
 
+    /// Whether it holds no functions. Two such birthmarks compare as
+    /// identical, a similarity of 1.0.
     pub fn is_empty(&self) -> bool {
         self.functions.is_empty()
     }
@@ -315,6 +381,7 @@ pub struct Function {
 }
 
 impl Function {
+    /// The function's name, as the lifter recorded it.
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -324,14 +391,20 @@ impl Function {
         &self.data
     }
 
+    /// Every operation or called function's name in it, with k-grams taken
+    /// apart into their operations. In order for a sequence; in no particular
+    /// order for a set or a frequency map, whose keys each appear once.
     pub fn ops(&self) -> impl Iterator<Item = &str> {
         self.data.iter()
     }
 
+    /// How many elements it has: its birthmark length. Distinct elements for
+    /// a set, and distinct keys for a frequency map.
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
+    /// Whether it has no elements.
     pub fn is_empty(&self) -> bool {
         self.data.len() == 0
     }
@@ -345,6 +418,8 @@ impl Function {
 /// [`Function::len`]; the number of functions is [`Birthmark::len`].
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Data {
+    /// Each element with how often it occurs (`freq`).
+    ///
     /// An operation named more than once is refused, for the reason
     /// [`Data::KgramFreq`] gives: serde's derived map deserializer takes the
     /// last of a repeated key without saying so, and a birthmark names each
@@ -353,9 +428,14 @@ pub enum Data {
         #[serde(serialize_with = "sorted_freq", deserialize_with = "no_repeated_key")]
         FxHashMap<String, usize>,
     ),
+    /// The elements in order, repeats included (`seq`).
     Seq(Vec<String>),
+    /// Each distinct element once, in no order (`set`).
     Set(#[serde(serialize_with = "sorted_set")] FxHashSet<String>),
+    /// The k-grams in order, repeats included (`op-{k}gram-seq`).
     KgramSeq(Vec<Kgram>),
+    /// Each k-gram with how often it occurs (`op-{k}gram-freq`).
+    ///
     /// Written as a list of `[kgram, count]` pairs rather than as a JSON
     /// object.
     ///
@@ -373,6 +453,7 @@ pub enum Data {
     /// their files would stop reading. It also needs no separator, so no
     /// mnemonic can ever contain one.
     KgramFreq(#[serde(with = "kgram_freq")] FxHashMap<Kgram, usize>),
+    /// Each distinct k-gram once, in no order (`op-{k}gram-set`).
     KgramSet(#[serde(serialize_with = "sorted_kgram_set")] FxHashSet<Kgram>),
 }
 
@@ -489,7 +570,7 @@ mod kgram_freq {
     }
 
     /// A repeated k-gram is refused rather than resolved, on the same terms
-    /// as [`no_repeated_key`]: every repeat, without comparing the counts.
+    /// as [`no_repeated_key`](super::no_repeated_key): every repeat, without comparing the counts.
     ///
     /// The list is a map on disk, and collecting it would let the last pair
     /// win silently — a file saying a k-gram occurred 3 times and again 5
@@ -516,10 +597,12 @@ mod kgram_freq {
     }
 }
 
+/// `k` consecutive operations, taken as one element.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct Kgram(Vec<String>);
 
 impl Kgram {
+    /// A k-gram of these operations, in this order.
     pub fn new(seq: Vec<String>) -> Self {
         Self(seq)
     }
@@ -560,6 +643,14 @@ impl Data {
     }
 }
 
+/// A birthmark type and the algorithm that compares it, named
+/// `{birthmark type}-{algorithm}` -- `op-set-jaccard`,
+/// `op-3gram-seq-levenshtein`.
+///
+/// Only the pairings in which the algorithm operates on the birthmark's
+/// [`Shape`] exist: [`AnalysisType::new`] and `try_from` refuse the rest with
+/// [`Error::IncompatibleAnalysis`], whose message names the pairing to use
+/// instead.
 pub struct AnalysisType {
     pub(crate) birthmark: BirthmarkType,
     pub(crate) comparator: Comparator,
@@ -584,6 +675,7 @@ impl AnalysisType {
         &self.birthmark
     }
 
+    /// The comparator that runs its algorithm.
     pub fn comparator(&self) -> &Comparator {
         &self.comparator
     }
@@ -649,12 +741,17 @@ impl TryFrom<String> for AnalysisType {
 /// the canonical pairing, or none at all.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Shape {
+    /// In order, repeats included.
     Seq,
+    /// Each distinct element once, in no order.
     Set,
+    /// Each distinct element once, with how often it occurs.
     Freq,
 }
 
 impl Shape {
+    /// The shape in words, plural, as messages use it: `sequences`, `sets`,
+    /// `frequency vectors`.
     pub fn description(&self) -> &'static str {
         match self {
             Shape::Seq => "sequences",

@@ -1,10 +1,42 @@
+//! Lifting: turning a binary into a [`Program`](crate::Program), with a
+//! decompiler doing the reading.
+//!
+//! An [`Ir`] names the intermediate representation to produce, which also
+//! picks the tool -- Ghidra, IDA or Binary Ninja. A [`LifterBuilder`] makes the
+//! [`Lifter`] for it, and [`Lifter::lift`] writes the lifted program as JSON,
+//! which [`Program::load`](crate::Program::load) reads.
+//!
+//! ```no_run
+//! use std::path::Path;
+//!
+//! use oinkie::lift::{Ir, Lifter, LifterBuilder};
+//!
+//! # fn main() -> oinkie::Result<()> {
+//! let lifter = LifterBuilder::new(Ir::GhidraPcode).build()?;
+//! if let Some(notice) = lifter.notice() {
+//!     eprintln!("{notice}");
+//! }
+//! lifter.lift(Path::new("hello"), Path::new("hello.json"))?;
+//! # Ok(())
+//! # }
+//! ```
+
 use crate::Result;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 pub(crate) mod headless;
 
+/// A tool that lifts binaries to one [`Ir`]. [`LifterBuilder::build`] makes
+/// one.
 pub trait Lifter {
+    /// Lifts the binary at `input` and writes the lifted program to `output`
+    /// as JSON.
+    ///
+    /// What was written is read back before the lift is called a success, so
+    /// `Ok` means a file [`Program::load`](crate::Program::load) can read.
+    /// The tools themselves report success even when their script failed;
+    /// such a lift is an error here, carrying what the tool printed.
     fn lift(&self, input: &Path, output: &Path) -> Result<()>;
 
     /// Something the user is owed before the first lift starts, or `None`.
@@ -371,6 +403,8 @@ impl HomeSpec {
     }
 }
 
+/// How to make a [`Lifter`]: the representation to produce, and optionally
+/// where the tool is, which script it runs and where it works.
 pub struct LifterBuilder {
     ir: Ir,
     home: Option<PathBuf>,
@@ -389,21 +423,34 @@ impl LifterBuilder {
         }
     }
 
+    /// The tool's installation directory.
+    ///
+    /// Without one -- the default -- the tool's environment variable is read
+    /// (`GHIDRA_HOME` for Ghidra), and then the usual installation directories
+    /// are looked in. [`Error::ToolNotFound`](crate::Error::ToolNotFound)
+    /// names both when neither finds it.
     pub fn home(mut self, home: Option<PathBuf>) -> Self {
         self.home = home;
         self
     }
 
+    /// A lifting script to run instead of the built-in one, in the tool's own
+    /// language: Java for Ghidra, Python for IDA and Binary Ninja. It must
+    /// write `{input file name}.json` into its working directory.
     pub fn script(mut self, script: Option<PathBuf>) -> Self {
         self.script = script;
         self
     }
 
+    /// The directory the tool works in, kept afterwards. Without one -- the
+    /// default -- a temporary directory is used and deleted.
     pub fn intermediate_dir(mut self, dir: Option<PathBuf>) -> Self {
         self.intermediate_dir = dir;
         self
     }
 
+    /// The lifter, or [`Error::ToolNotFound`](crate::Error::ToolNotFound)
+    /// when its tool cannot be found.
     pub fn build(self) -> Result<Box<dyn Lifter + Sync>> {
         // Every representation is spelled out rather than falling through to
         // one "not implemented" arm, so that adding a variant to `Ir` stops

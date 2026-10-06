@@ -1,3 +1,11 @@
+//! Ghidra's P-Code, as the lifting script writes it.
+//!
+//! One [`Op`] per operation of a function's high P-Code: its [`PcodeOp`]
+//! opcode, and its output and inputs as Ghidra spells varnodes,
+//! `(space, offset, size)`, which [`Value`] reads. The opcode set is a closed
+//! enum in [`pcode`], so an opcode Ghidra does not define is refused when the
+//! file is read.
+
 use std::str::FromStr;
 
 use crate::ghidra::pcode::PcodeOp;

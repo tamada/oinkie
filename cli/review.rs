@@ -1,3 +1,10 @@
+//! `oinkie review`: re-reading a finished comparison.
+//!
+//! Each pair's similarity is recomputed from the function similarities its
+//! pair CSV stored, under an aggregator and optionally without the functions
+//! shorter than `--min-elements` (#128). Nothing is compared again. The MCP
+//! server's `oinkie_review` runs the same [`review_all`].
+
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};

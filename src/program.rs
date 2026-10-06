@@ -1,3 +1,10 @@
+//! Lifted programs: what a lifter writes, read back.
+//!
+//! [`Program`] is the public face, and is opaque. Inside, a
+//! `TypedProgram<T>` holds the functions as operations of the type its
+//! representation uses -- Ghidra's P-Code, Binary Ninja's three ILs, IDA's
+//! microcode -- and the file's `ir` field decides which one is read.
+
 use std::path::{Path, PathBuf};
 
 use rustc_hash::FxHashMap;
@@ -65,8 +72,9 @@ where
 /// Which representation it is -- and so which operations it holds -- is
 /// decided by the `ir` field the file carries, not by the caller. The
 /// operations themselves are not exposed: what a caller does with a program
-/// is extract a birthmark from it ([`crate::extract::Extractor`]) or compare
-/// it ([`crate::compare::Comparator`]), and neither needs to see them.
+/// is extract a birthmark from it ([`crate::extract::Extractor`]) and compare
+/// the birthmark ([`crate::compare::Comparator`]), and neither needs to see
+/// them.
 ///
 /// Opaque on purpose. Adding a lifter adds a case inside, which is not a
 /// change for anyone outside the crate.
@@ -159,22 +167,29 @@ impl Program {
         dispatch!(&self.0, p => p.ir())
     }
 
+    /// The program's name, as the lifter recorded it: the binary's file name.
     pub fn name(&self) -> &str {
         dispatch!(&self.0, p => p.name())
     }
 
+    /// The path of the binary it was lifted from, as the lifter recorded it.
     pub fn path(&self) -> &Path {
         dispatch!(&self.0, p => p.path())
     }
 
+    /// How many functions it holds.
     pub fn len(&self) -> usize {
         dispatch!(&self.0, p => p.len())
     }
 
+    /// Whether it holds no functions.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Records the file this program was read from, which
+    /// [`Program::json_path`] then returns. [`Program::load`] does not record
+    /// it by itself.
     pub fn set_json_path(&mut self, path: PathBuf) {
         dispatch!(&mut self.0, p => p.set_json_path(path))
     }

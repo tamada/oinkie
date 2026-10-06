@@ -6,8 +6,43 @@
 //!
 //! - [`lift`] -- turning a binary into a lifted program, through a tool;
 //! - [`extract`] -- extracting a birthmark from a lifted program;
-//! - [`compare`] -- comparing two birthmarks, or two programs;
+//! - [`compare`] -- comparing two birthmarks;
 //! - [`birthmarks`] -- what a birthmark is, and what it holds.
+//!
+//! The terms -- birthmark, function, element, similarity -- are the ones the
+//! [glossary](https://tamada.github.io/oinkie/glossary/) defines.
+//!
+//! # Example
+//!
+//! Two lifted programs, compared under one analysis: extract the analysis's
+//! birthmark from each, then compare the birthmarks with its algorithm.
+//!
+//! ```
+//! use std::path::Path;
+//!
+//! use oinkie::Program;
+//! use oinkie::birthmarks::AnalysisType;
+//! use oinkie::compare::Aggregator;
+//! use oinkie::extract::Extractor;
+//!
+//! # fn main() -> oinkie::Result<()> {
+//! let analysis = AnalysisType::try_from("op-set-jaccard")?;
+//! let extractor = Extractor::new(analysis.birthmark().clone());
+//! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
+//! let b = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/udl.json"))?)?;
+//!
+//! let comparison = analysis
+//!     .comparator()
+//!     .compare_birthmarks(&a, &b, &Aggregator::Hungarian)?;
+//! let similarity = comparison.similarity();
+//! assert!((0.0..=1.0).contains(&similarity));
+//! # Ok(())
+//! # }
+//! ```
+
+// Every public item is documented, and stays so: CI runs clippy with
+// -D warnings, which makes this an error there (#173).
+#![warn(missing_docs)]
 
 use std::path::PathBuf;
 
@@ -26,8 +61,15 @@ mod program;
 
 pub use crate::program::Program;
 
+/// What every fallible function in this crate returns.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Everything that can go wrong in oinkie.
+///
+/// Each variant's message, its `Display`, is written for a person, and names
+/// the file or the value it is about. [`Error::is_caller_fault`] says whether
+/// asking differently could have avoided it.
+///
 /// The messages live on the variants rather than in a `Display` match, so
 /// that adding a variant and deciding how it reads are the same edit.
 ///
@@ -39,10 +81,16 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    /// Several failures from one batch, one per input that failed and in the
+    /// inputs' order, shown numbered from 1. [`Error::vec_result_to_result_vec`]
+    /// makes it.
     #[error("{}", render_group(.0))]
     Array(Vec<Self>),
+    /// A birthmark type name that does not parse, as it was given: an unknown
+    /// family, or a k-gram of size 0.
     #[error("{0}: unknown birthmark type")]
     BirthmarkType(String),
+    /// A CSV record could not be read or written.
     #[error("CSV error: {0}")]
     Csv(#[source] csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
@@ -89,18 +137,32 @@ pub enum Error {
     /// whose path it was decides whether asking differently could have helped.
     #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
     ToolIo(PathBuf, #[source] std::io::Error),
+    /// The file at the path is not JSON of the shape expected -- a lifted
+    /// program, a birthmark -- or could not be written as JSON.
     #[error("{path}: JSON error: {cause}", path = .0.display(), cause = .1)]
     Json(PathBuf, #[source] serde_json::Error),
+    /// The assignment the `hungarian` aggregator solves could not be solved.
     #[error("LapJV error: {0}")]
     LapJV(#[source] lapjv::LapJVError),
+    /// Two birthmarks of different types were compared. A birthmark compares
+    /// only with one of its own type.
     #[error("Mismatched birthmark types: {0} and {1}")]
     Mismatch(BirthmarkType, BirthmarkType),
+    /// Something that could not be read or done, with the reason: an
+    /// aggregator name, a file's contents, a lift that wrote nothing. A
+    /// catch-all, which is why [`Error::is_caller_fault`] does not count it
+    /// as the caller's.
     #[error("Parse error: {0}")]
     Parse(String),
+    /// Text that should have been a decimal number: the text, and why it is
+    /// not one.
     #[error("{0}: Parse float error {1}")]
     ParseFloat(String, #[source] std::num::ParseFloatError),
+    /// Text that should have been a whole number: the text, and why it is not
+    /// one.
     #[error("{0}: Parse int error {1}")]
     ParseInt(String, #[source] std::num::ParseIntError),
+    /// A matrix could not be built in the shape asked for.
     #[error("Shape error: {0}")]
     ShapeError(#[source] ShapeError),
     /// A lifting tool's installation could not be found: none was given, its
@@ -111,8 +173,11 @@ pub enum Error {
     /// library naming a way that only one caller has.
     #[error("{}", render_tool_not_found(.tool, .env, .candidates))]
     ToolNotFound {
+        /// The tool, as a person names it: `Ghidra`.
         tool: &'static str,
+        /// The environment variable that names its home: `GHIDRA_HOME`.
         env: &'static str,
+        /// The usual installation directories that were looked in.
         candidates: &'static [&'static str],
     },
 }
@@ -207,6 +272,11 @@ impl Error {
         }
     }
 
+    /// Every value, or every error: the results of a batch, one per input.
+    ///
+    /// All succeeding gives the values in the inputs' order. One failing gives
+    /// its error as it is, and several give an [`Error::Array`] of them in the
+    /// same order, so that no failure is dropped in favour of the first.
     pub fn vec_result_to_result_vec<T>(vec: Vec<Result<T>>) -> Result<Vec<T>> {
         let mut results = Vec::new();
         let mut errs = Vec::new();

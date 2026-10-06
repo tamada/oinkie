@@ -1,14 +1,37 @@
+//! Extraction: the birthmark of a lifted program.
+//!
+//! An [`Extractor`] is made for one [`BirthmarkType`] and extracts it from any
+//! [`Program`](crate::Program), whichever representation it was lifted to.
+//!
+//! ```
+//! use std::path::Path;
+//!
+//! use oinkie::Program;
+//! use oinkie::birthmarks::BirthmarkType;
+//! use oinkie::extract::Extractor;
+//!
+//! # fn main() -> oinkie::Result<()> {
+//! let program = Program::load(Path::new("testdata/lifted/pcodes/udl.json"))?;
+//! let birthmark = Extractor::new(BirthmarkType::OpSeq).extract(&program)?;
+//! assert_eq!(birthmark.len(), program.len(), "one function's birthmark per function");
+//! # Ok(())
+//! # }
+//! ```
+
 use rustc_hash::FxHashMap;
 
 use crate::birthmarks::{Birthmark, BirthmarkType, Data, Function, Kgram, Metadata};
 use crate::program::{TypedFunction, TypedProgram};
 use crate::{Iterable, Result};
 
+/// Extracts one [`BirthmarkType`] from lifted programs.
 pub struct Extractor {
     bt: BirthmarkType,
 }
 
 impl Extractor {
+    /// An extractor of `bt`. A k-gram of size 0 is refused when extracting,
+    /// with [`Error::BirthmarkType`](crate::Error::BirthmarkType).
     pub fn new(bt: BirthmarkType) -> Self {
         Self { bt }
     }

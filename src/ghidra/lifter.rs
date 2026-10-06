@@ -1,3 +1,10 @@
+//! Lifting with Ghidra: `analyzeHeadless`, running `HighPCodeLifter.java` as
+//! its post-script.
+//!
+//! The script is embedded at build time as [`DEFAULT_GHIDRA_SCRIPT`], and is
+//! what runs unless the caller gave one of their own. Running the process and
+//! collecting its output is [`crate::lift::headless`]'s.
+
 use crate::lift::Lifter;
 use crate::lift::headless::Headless;
 use crate::{Error, Result};

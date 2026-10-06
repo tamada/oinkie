@@ -1,3 +1,9 @@
+//! The command line's arguments, as clap derives them: one struct of options
+//! per subcommand, and the accessors the subcommands read them through.
+//!
+//! Also compiled into `gencomp`, which generates the shell completions from
+//! the same definitions.
+
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 

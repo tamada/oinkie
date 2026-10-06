@@ -1,3 +1,31 @@
+//! Comparing birthmarks.
+//!
+//! An [`Algorithm`] gives a [`Comparator`], which compares every function of
+//! one [`Birthmark`] with every function of another into a matrix of function
+//! similarities. An [`Aggregator`] turns the matrix into the pair's one
+//! similarity, and the [`Comparison`] holds both. A [`PairingStrategy`]
+//! chooses which pairs of a list to compare.
+//!
+//! ```
+//! use std::path::Path;
+//!
+//! use oinkie::Program;
+//! use oinkie::birthmarks::BirthmarkType;
+//! use oinkie::compare::{Aggregator, Algorithm};
+//! use oinkie::extract::Extractor;
+//!
+//! # fn main() -> oinkie::Result<()> {
+//! let extractor = Extractor::new(BirthmarkType::OpSet);
+//! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
+//!
+//! let comparison = Algorithm::Jaccard
+//!     .comparator()
+//!     .compare_birthmarks(&a, &a, &Aggregator::Hungarian)?;
+//! assert_eq!(comparison.similarity(), 1.0, "a birthmark is identical to itself");
+//! # Ok(())
+//! # }
+//! ```
+
 use crate::Iterable;
 use crate::birthmarks::{Birthmark, Data, Function, Shape};
 use crate::{Error, Result};
@@ -6,6 +34,7 @@ use ndarray::Array2;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::time::Instant;
 
+/// Which pairs of a list of birthmarks to compare.
 #[cfg_attr(doc, katexit::katexit)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -49,6 +78,7 @@ impl PairingStrategy {
         PairingStrategy::LastVsOthers,
     ];
 
+    /// How many pairs [`PairingStrategy::pairs`] gives for `targets`.
     pub fn compare_count<T>(&self, targets: &[T]) -> usize {
         match self {
             PairingStrategy::All => targets.len() * targets.len().saturating_sub(1) / 2,
@@ -60,6 +90,8 @@ impl PairingStrategy {
             PairingStrategy::AllAndSelf => targets.len() * (targets.len() + 1) / 2,
         }
     }
+    /// The pairs of `targets` this strategy compares, in the order they are
+    /// numbered.
     pub fn pairs<'a, T: std::marker::Sync>(
         &'a self,
         targets: &'a [T],
@@ -95,6 +127,8 @@ impl PairingStrategy {
     }
 }
 
+/// Two birthmarks compared: their function similarity matrix, the pair's one
+/// similarity, and how long it took.
 pub struct Comparison<'a, S> {
     columns: &'a S,
     rows: &'a S,
@@ -140,6 +174,11 @@ impl<'a, S> Comparison<'a, S> {
         &self.matrix
     }
 
+    /// The pair's similarity, between 0 and 1: the mean of what the
+    /// [`Aggregator`] kept of the matrix.
+    ///
+    /// Two birthmarks with no functions score 1.0, and one with none against
+    /// one with some, 0.0.
     pub fn similarity(&self) -> f64 {
         if self.similarities.is_empty() {
             return 0.0;
@@ -147,21 +186,35 @@ impl<'a, S> Comparison<'a, S> {
         self.similarities.iter().sum::<f64>() / self.similarities.len() as f64
     }
 
+    /// How long the comparison took.
     pub fn duration(&self) -> std::time::Duration {
         self.duration
     }
 }
 
+/// How many of each side's best matches [`Aggregator::TopN`] averages.
 #[derive(Debug, Clone)]
 pub enum Size {
+    /// This many from each side, at least 1.
     Num(usize),
+    /// Every function's.
     All,
 }
 
+/// How a pair's function similarities become its one similarity.
+///
+/// Read by `from_str` from `hungarian`, `topn:N`, `topn:all` or `topn`, in any
+/// case.
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub enum Aggregator {
+    /// Each function's best match in the other birthmark, on both sides and
+    /// not necessarily one-to-one; the [`Size`] best of those from each side
+    /// are averaged.
     TopN(Size),
+    /// The one-to-one matching of functions that maximises the total, by the
+    /// Hungarian algorithm; the matched pairs' similarities are averaged. The
+    /// default.
     #[default]
     Hungarian,
 }
@@ -194,6 +247,8 @@ impl std::str::FromStr for Aggregator {
 }
 
 impl Aggregator {
+    /// The similarities this aggregator keeps of `array`, a square matrix of
+    /// function similarities, which [`Comparison::similarity`] averages.
     pub fn aggregate(&self, array: &Array2<f64>) -> Result<Vec<f64>> {
         match self {
             Aggregator::Hungarian => hungarian_algorithm(array).map(|(sim, _matches)| sim),
@@ -303,6 +358,11 @@ fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec
     }
 }
 
+/// How two functions' elements are compared into a function similarity,
+/// between 0 and 1.
+///
+/// Each operates on one [`Shape`] ([`Algorithm::shape`]). Two empty functions
+/// score 1.0 under every one, and an empty one against one that is not, 0.0.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Algorithm {
@@ -416,6 +476,7 @@ impl Algorithm {
         self.spec().0
     }
 
+    /// The comparator that runs this algorithm.
     pub fn comparator(&self) -> Comparator {
         self.into()
     }
@@ -471,6 +532,13 @@ impl From<&Algorithm> for Comparator {
 }
 
 impl Comparator {
+    /// Compares every function of `b1`, the matrix's columns, with every
+    /// function of `b2`, its rows, and aggregates the matrix with
+    /// `aggregator`.
+    ///
+    /// Fails with [`Error::IrMismatch`] or [`Error::Mismatch`] unless both
+    /// were lifted to the same representation and are of the same type: a
+    /// birthmark is comparable only with one made the same way.
     pub fn compare_birthmarks<'a>(
         &self,
         b1: &'a Birthmark,

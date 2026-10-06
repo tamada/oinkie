@@ -1,3 +1,8 @@
+//! Lifting with Binary Ninja: its headless Python, running `BnilLifter.py` at
+//! one of LLIL, MLIL and HLIL.
+//!
+//! The script is embedded at build time as [`DEFAULT_BINARY_NINJA_SCRIPT`].
+
 use crate::lift::Lifter;
 use crate::lift::headless::{Headless, Invocation};
 use crate::{Error, Result};
@@ -9,7 +14,7 @@ pub const DEFAULT_BINARY_NINJA_SCRIPT: &str =
 
 /// Lifts with Binary Ninja's headless Python, at one of its three levels.
 ///
-/// The level is carried as an [`Ir`] rather than as a separate argument for
+/// The level is carried as an [`Ir`](crate::lift::Ir) rather than as a separate argument for
 /// the reason `lift` takes only one: a representation implies its tool, and
 /// the three levels share this installation.
 pub struct BinaryNinjaLifter {

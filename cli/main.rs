@@ -1,3 +1,11 @@
+//! The `oinkie` command: parses the command line and runs the subcommand.
+//!
+//! Each subcommand is a `perform_*` function here, or a module of its own
+//! where it grew one (`review`, `stats`, `mcp`). Where files go and what they
+//! are named -- the score CSV, the birthmark file names -- is the command
+//! line's business, not the library's, and lives in `score_csv` and
+//! `dest_name`.
+
 mod cli;
 mod dest_name;
 mod score_csv;

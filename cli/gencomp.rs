@@ -1,3 +1,6 @@
+//! `gencomp`: writes the shell completions in `assets/completions` from the
+//! command line's own definitions in `cli.rs`.
+
 // cli.rs is compiled into this binary as well as into oinkie, but only its
 // clap derives are used here; the accessors are exercised by the oinkie
 // binary, which still lints them.
