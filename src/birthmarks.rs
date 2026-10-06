@@ -533,17 +533,17 @@ impl Kgram {
 impl Data {
     fn iter(&self) -> Box<dyn Iterator<Item = &str> + '_> {
         match self {
-            Data::Freq(freq) => Box::new(freq.keys().map(|s| s.as_str())),
-            Data::Seq(seq) => Box::new(seq.iter().map(|s| s.as_str())),
-            Data::Set(set) => Box::new(set.iter().map(|s| s.as_str())),
+            Data::Freq(freq) => Box::new(freq.keys().map(String::as_str)),
+            Data::Seq(seq) => Box::new(seq.iter().map(String::as_str)),
+            Data::Set(set) => Box::new(set.iter().map(String::as_str)),
             Data::KgramSeq(seq) => {
-                Box::new(seq.iter().flat_map(|k| k.0.iter().map(|s| s.as_str())))
+                Box::new(seq.iter().flat_map(|k| k.0.iter().map(String::as_str)))
             }
             Data::KgramFreq(freq) => {
-                Box::new(freq.keys().flat_map(|k| k.0.iter().map(|s| s.as_str())))
+                Box::new(freq.keys().flat_map(|k| k.0.iter().map(String::as_str)))
             }
             Data::KgramSet(set) => {
-                Box::new(set.iter().flat_map(|k| k.0.iter().map(|s| s.as_str())))
+                Box::new(set.iter().flat_map(|k| k.0.iter().map(String::as_str)))
             }
         }
     }
@@ -1233,7 +1233,7 @@ mod tests {
     }
 
     fn kgram(ops: &[&str]) -> Kgram {
-        Kgram::new(ops.iter().map(|s| s.to_string()).collect())
+        Kgram::new(ops.iter().map(ToString::to_string).collect())
     }
 
     fn kgram_freq_birthmark() -> Birthmark {

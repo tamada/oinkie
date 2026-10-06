@@ -9,12 +9,13 @@
 //! holds its elements.
 
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::cli;
-use oinkie::birthmarks::{Birthmark, BirthmarkType, Data, Kgram};
+use oinkie::birthmarks::{Birthmark, BirthmarkType, Data, Function, Kgram};
 use oinkie::{Error, Result};
 use rayon::prelude::*;
 #[cfg(feature = "mcp")]
@@ -80,7 +81,7 @@ fn scan_directory(dir: &Path, recursive: bool, paths: &mut Vec<PathBuf>) -> Resu
             if recursive {
                 scan_directory(&path, recursive, paths)?;
             }
-        } else if path.extension().and_then(|s| s.to_str()) == Some("json") {
+        } else if path.extension().and_then(OsStr::to_str) == Some("json") {
             paths.push(path);
         }
     }
@@ -258,7 +259,7 @@ fn read_file(path: &Path, birthmark: &Birthmark) -> FileData {
     let lengths = birthmark
         .functions()
         .iter()
-        .map(|f| f.len())
+        .map(Function::len)
         .collect::<Vec<_>>();
     let mut counts = FxHashMap::default();
     let mut occurrences = None;
@@ -407,7 +408,7 @@ fn prefixed(prefix: &str) -> impl Iterator<Item = String> + '_ {
 }
 
 fn opt<T: ToString>(v: &Option<T>) -> String {
-    v.as_ref().map(|v| v.to_string()).unwrap_or_default()
+    v.as_ref().map(ToString::to_string).unwrap_or_default()
 }
 
 fn to_csv_summary(report: &Report) -> Result<String> {
@@ -495,7 +496,7 @@ fn md_row(cells: &[String]) -> String {
 }
 
 fn md_table(header: &[&str], right_from: usize, rows: &[Vec<String>]) -> String {
-    let mut s = md_row(&header.iter().map(|h| h.to_string()).collect::<Vec<_>>());
+    let mut s = md_row(&header.iter().map(ToString::to_string).collect::<Vec<_>>());
     let rule = (0..header.len())
         .map(|i| if i < right_from { "---" } else { "---:" }.to_string())
         .collect::<Vec<_>>();

@@ -650,9 +650,9 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.ir())
-        .home(opts.home().map(|p| p.to_path_buf()))
-        .script(opts.script().map(|p| p.to_path_buf()))
-        .intermediate_dir(opts.intermediate_dir().map(|p| p.to_path_buf()))
+        .home(opts.home().map(Path::to_path_buf))
+        .script(opts.script().map(Path::to_path_buf))
+        .intermediate_dir(opts.intermediate_dir().map(Path::to_path_buf))
         .build()
         .map_err(with_home_hint)?;
 

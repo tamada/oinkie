@@ -140,7 +140,7 @@ mod tests {
         for (pv, bt) in offered.iter().zip(expected) {
             assert_eq!(pv.get_name(), bt.to_string());
             // the help is what `--help` and the shells show beside the name
-            assert_eq!(pv.get_help().map(|h| h.to_string()), Some(describe(&bt)));
+            assert_eq!(pv.get_help().map(ToString::to_string), Some(describe(&bt)));
         }
     }
 

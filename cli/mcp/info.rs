@@ -146,7 +146,7 @@ mod tests {
             .collect::<Vec<_>>();
         let expected = advertised_birthmarks()
             .iter()
-            .map(|bt| bt.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>();
         assert_eq!(offered, expected);
         assert!(offered.contains(&"op-3gram-set".to_string()));

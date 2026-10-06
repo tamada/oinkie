@@ -67,7 +67,7 @@ fn test_every_level_finds_the_call_that_is_there() {
         let calls: Vec<String> = b
             .functions()
             .iter()
-            .flat_map(|e| e.ops().map(|s| s.to_string()))
+            .flat_map(|e| e.ops().map(ToString::to_string))
             .collect();
         assert!(
             calls.iter().any(|c| c == "_printf"),

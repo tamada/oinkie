@@ -56,7 +56,7 @@ pub trait Level {
     ///
     /// Kept beside the lifting script's own list, which has to agree; the
     /// fixtures are what say they do.
-    const CALL_OPS: &'static [&'static str];
+    const CALL_OPS: &[&str];
 
     /// Which rendered operand of a call names the callee.
     ///
@@ -78,7 +78,7 @@ pub struct Mlil;
 pub struct Hlil;
 
 impl Level for Llil {
-    const CALL_OPS: &'static [&'static str] = &[
+    const CALL_OPS: &[&str] = &[
         "LLIL_CALL",
         "LLIL_CALL_STACK_ADJUST",
         "LLIL_TAILCALL",
@@ -88,7 +88,7 @@ impl Level for Llil {
 }
 
 impl Level for Mlil {
-    const CALL_OPS: &'static [&'static str] = &[
+    const CALL_OPS: &[&str] = &[
         "MLIL_CALL",
         "MLIL_CALL_UNTYPED",
         "MLIL_TAILCALL",
@@ -100,7 +100,7 @@ impl Level for Mlil {
 }
 
 impl Level for Hlil {
-    const CALL_OPS: &'static [&'static str] = &["HLIL_CALL", "HLIL_TAILCALL", "HLIL_SYSCALL"];
+    const CALL_OPS: &[&str] = &["HLIL_CALL", "HLIL_TAILCALL", "HLIL_SYSCALL"];
     const CALL_TARGET: usize = 0;
 }
 
@@ -156,7 +156,7 @@ mod tests {
         Op {
             op: name.to_string(),
             out: None,
-            inputs: inputs.iter().map(|s| s.to_string()).collect(),
+            inputs: inputs.iter().map(ToString::to_string).collect(),
             level: PhantomData,
         }
     }

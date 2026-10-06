@@ -21,7 +21,7 @@
 //! to reintroduce them, so a lifter supplies its command line and its script
 //! and nothing else.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use crate::{Error, Result};
@@ -165,7 +165,7 @@ impl Headless<'_> {
         let invalid = |what: &str, p: &Path| Error::Parse(format!("Invalid {what} path: {p:?}"));
         let name = input
             .file_name()
-            .and_then(|n| n.to_str())
+            .and_then(OsStr::to_str)
             .ok_or_else(|| invalid("input", input))?
             .to_string();
         let script_dir = script

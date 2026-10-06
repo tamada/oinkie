@@ -89,7 +89,7 @@ impl FromStr for Value {
 
     fn from_str(s: &str) -> Result<Self> {
         let s = s.trim_matches(|c| c == '(' || c == ')'); // strip parentheses
-        let parts: Vec<&str> = s.split(',').map(|p| p.trim()).collect();
+        let parts: Vec<&str> = s.split(',').map(str::trim).collect();
 
         if parts.len() != 3 {
             return Err(Error::Parse("Invalid format".to_string()));

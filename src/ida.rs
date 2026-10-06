@@ -92,7 +92,7 @@ mod tests {
         Op {
             op: name.to_string(),
             out: None,
-            inputs: inputs.iter().map(|s| s.to_string()).collect(),
+            inputs: inputs.iter().map(ToString::to_string).collect(),
         }
     }
 
