@@ -24,6 +24,7 @@ it says the lifter that produced both sides reconciles them.
 """
 
 import json
+import os
 import sys
 
 import binaryninja as bn
@@ -139,6 +140,14 @@ def main(argv):
     if level not in LEVELS:
         sys.stderr.write("unknown level %r, expected one of %s\n" % (level, ", ".join(LEVELS)))
         return 2
+    # oinkie names the output `{input file name}.json` and collects it from
+    # the working directory it runs this in, so a name with a directory in it
+    # is not one oinkie gave. Refused rather than written wherever it points
+    # (SonarQube pythonsecurity:S8707, #169).
+    name = os.path.basename(output)
+    if name != output or name in ("", ".", ".."):
+        sys.stderr.write("output %r must be a file name, without a directory\n" % output)
+        return 2
 
     with bn.load(binary) as bv:
         functions, keys = lift(bv, level)
@@ -150,7 +159,7 @@ def main(argv):
             "functions": functions,
         }
 
-    with open(output, "w", encoding="utf-8") as out:
+    with open(os.path.join(os.getcwd(), name), "w", encoding="utf-8") as out:
         json.dump(document, out, ensure_ascii=False, indent=2)
         out.write("\n")
     return 0

@@ -53,6 +53,21 @@ CASES = [
     ("an external link is not ours", "[site](https://example.com/x.md)", []),
     ("an anchor names a place in this page", "[top](#heading)", []),
     (
+        "a span closes only at a run of its own length",
+        "``a ` [in](in-span.md) b`` [out](after-span.md)",
+        ["after-span.md"],
+    ),
+    (
+        "an unclosed run is text, not the start of a span",
+        "a stray ` then [b](after-stray.md)",
+        ["after-stray.md"],
+    ),
+    (
+        "a span may run over a line ending",
+        "`a\n[in](in-span.md)` [out](after-span.md)",
+        ["after-span.md"],
+    ),
+    (
         "an anchor on a file still names the file",
         "[a section](other.md#heading)",
         ["other.md"],
