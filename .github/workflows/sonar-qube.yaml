@@ -71,8 +71,30 @@ jobs:
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
 
-      # What is analysed is in sonar-project.properties.
+      # What is analysed is given here, in the workflow, rather than in a
+      # sonar-project.properties or the server's settings.
+      #
+      # - sources: the library, the command line, the lifting scripts and the
+      #   CI helpers. Unit tests inside src/ and cli/ are `#[cfg(test)]`
+      #   modules of the files they test; tests/ holds the integration tests.
+      # - exclusions: Java needs its compiled classes, through
+      #   sonar.java.binaries, or the analysis refuses to run, and the Ghidra
+      #   lifting script compiles only against Ghidra's jars. Left out until
+      #   that is wired up; its string handling is tested by
+      #   compile-check.sh --run in build.yaml (#138).
+      # - the two reports are the ones the steps above wrote.
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=tamada
+            -Dsonar.projectKey=tamada_oinkie
+            -Dsonar.projectName=oinkie
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.sources=src,cli,assets/lifters,.github/scripts
+            -Dsonar.tests=tests
+            -Dsonar.exclusions=**/*.java
+            -Dsonar.rust.lcov.reportPaths=coverage.lcov
+            -Dsonar.rust.clippyReport.reportPaths=clippy-report.json
