@@ -82,6 +82,12 @@ jobs:
       #   lifting script compiles only against Ghidra's jars. Left out until
       #   that is wired up; its string handling is tested by
       #   compile-check.sh --run in build.yaml (#138).
+      # - coverage.exclusions: the scripts are analysed but not counted for
+      #   coverage. Only Rust's coverage is measured, so any line changed in
+      #   them counted as uncovered and failed the gate's new-code coverage
+      #   (#172). The lifting scripts cannot run here at all -- IDA and Binary
+      #   Ninja are licensed -- and check_links.py is tested by
+      #   test_check_links.py without being measured.
       # - the two reports are the ones the steps above wrote.
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8
@@ -96,5 +102,6 @@ jobs:
             -Dsonar.sources=src,cli,assets/lifters,.github/scripts
             -Dsonar.tests=tests
             -Dsonar.exclusions=**/*.java
+            -Dsonar.coverage.exclusions=assets/lifters/**,.github/scripts/**
             -Dsonar.rust.lcov.reportPaths=coverage.lcov
             -Dsonar.rust.clippyReport.reportPaths=clippy-report.json
