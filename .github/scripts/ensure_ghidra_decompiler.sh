@@ -38,11 +38,11 @@
 set -euo pipefail
 
 home="${1:-${GHIDRA_INSTALL_DIR:-${GHIDRA_HOME:-}}}"
-if [ -z "$home" ]; then
+if [[ -z "$home" ]]; then
   echo "No Ghidra directory given, and neither GHIDRA_INSTALL_DIR nor GHIDRA_HOME is set." >&2
   exit 2
 fi
-if [ ! -d "$home" ]; then
+if [[ ! -d "$home" ]]; then
   echo "Not a directory: $home" >&2
   exit 2
 fi
@@ -62,7 +62,7 @@ cd "$home"
 built=$(find Ghidra/Features/Decompiler/build/os -type f -name 'decompile*' \
           -print 2>/dev/null | sort || true)
 
-if [ -z "$built" ]; then
+if [[ -z "$built" ]]; then
   echo "buildNatives finished without producing a decompiler for this platform." >&2
   echo "Every lift from this installation would report success and find no functions." >&2
   find Ghidra/Features/Decompiler -type d -name os \

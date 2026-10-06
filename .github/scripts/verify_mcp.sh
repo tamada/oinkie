@@ -25,9 +25,9 @@
 
 set -euo pipefail
 
-if [ "${1:-}" = "--image" ]; then
+if [[ "${1:-}" = "--image" ]]; then
     readonly IMAGE="${2:?usage: $0 --image <tag> [--no-args]}"
-    if [ "${3:-}" = "--no-args" ]; then
+    if [[ "${3:-}" = "--no-args" ]]; then
         readonly SUBJECT="image $IMAGE with no arguments"
         run() { docker run -i --rm "$IMAGE"; }
     else
@@ -35,8 +35,9 @@ if [ "${1:-}" = "--image" ]; then
         run() { docker run -i --rm "$IMAGE" mcp; }
     fi
 else
-    readonly SUBJECT="${1:?usage: $0 <path to oinkie> | --image <tag>}"
-    run() { "$1" mcp; }
+    readonly BINARY="${1:?usage: $0 <path to oinkie> | --image <tag>}"
+    readonly SUBJECT="$BINARY"
+    run() { "$BINARY" mcp; }
 fi
 
 readonly EXPECTED="oinkie_compare oinkie_extract oinkie_info oinkie_review oinkie_run oinkie_stats"
@@ -52,7 +53,7 @@ out=$(mktemp)
 err=$(mktemp)
 trap 'rm -f "$out" "$err"' EXIT
 
-session | run "$@" > "$out" 2> "$err" || {
+session | run > "$out" 2> "$err" || {
     echo "$0: $SUBJECT did not serve a session" >&2
     sed 's/^/  /' "$err" >&2
     exit 1
@@ -70,7 +71,7 @@ done < "$out"
 got=$(jq -r 'select(.id == 2) | .result.tools[].name' "$out" | sort | tr '\n' ' ')
 got="${got% }"
 
-if [ "$got" != "$EXPECTED" ]; then
+if [[ "$got" != "$EXPECTED" ]]; then
     echo "$0: $SUBJECT does not serve the expected tools" >&2
     echo "  got:  ${got:-<none>}" >&2
     echo "  want: $EXPECTED" >&2

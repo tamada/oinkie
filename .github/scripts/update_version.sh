@@ -43,6 +43,8 @@ usage() {
 TO_VERSION=$(printf '%s' "$1" | sed -E 's/^v//')
 case $TO_VERSION in
     *[!0-9.]* | *..* | .* | *. ) usage ;;
+    # Anything else goes on to the stricter check below.
+    *) ;;
 esac
 echo "$TO_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || usage
 

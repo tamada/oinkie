@@ -14,7 +14,7 @@ PROJ_NAME="$(basename $TARGET_BIN)"
 PROJ_DIR="$(echo "$TARGET_BIN" | sed 's|executables|ghidra|g')/"
 DEST_DIR="$(echo "$TARGET_BIN" | sed 's|executables|pcodes|g')/"
 
-if [ -z "$TARGET_BIN" ]; then
+if [[ -z "$TARGET_BIN" ]]; then
     echo "Usage: $0 <target_binary>"
     exit 1
 fi
