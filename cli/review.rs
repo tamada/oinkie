@@ -12,9 +12,8 @@ use std::time::{Duration, Instant};
 
 use crate::CompareResult;
 use crate::cli::{self, MinElements};
-use ndarray::{Array2, Axis};
 use oinkie::birthmarks::Birthmark;
-use oinkie::compare::Aggregator;
+use oinkie::compare::{Aggregator, Matrix};
 use oinkie::{Error, Result};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
@@ -231,7 +230,7 @@ fn review_pair(
             };
             let cols = f.keep(left, &stored.left.functions, &csv)?;
             let rows = f.keep(right, &stored.right.functions, &csv)?;
-            stored.matrix.select(Axis(0), &rows).select(Axis(1), &cols)
+            select(&stored.matrix, &rows, &cols)
         }
     };
     let similarity = score(&matrix, aggregator)?;
@@ -247,10 +246,20 @@ fn review_pair(
     ))
 }
 
+/// The cells of `matrix` in the given rows and columns, in their order.
+fn select(matrix: &Matrix, rows: &[usize], cols: &[usize]) -> Matrix {
+    let cells = rows
+        .iter()
+        .flat_map(|&i| cols.iter().map(move |&j| matrix[[i, j]]))
+        .collect();
+    Matrix::new((rows.len(), cols.len()), cells)
+        .expect("cells taken from a Matrix are finite, and as many as its new shape")
+}
+
 /// One pair's score from its function-to-function matrix, by the rule
 /// `compare` uses: two sides with no functions are identical, and one side
 /// with none shares nothing with the other.
-fn score(matrix: &Array2<f64>, aggregator: &Aggregator) -> Result<f64> {
+fn score(matrix: &Matrix, aggregator: &Aggregator) -> Result<f64> {
     let (rows, cols) = matrix.dim();
     if rows == 0 && cols == 0 {
         return Ok(1.0);
@@ -258,12 +267,7 @@ fn score(matrix: &Array2<f64>, aggregator: &Aggregator) -> Result<f64> {
     if rows == 0 || cols == 0 {
         return Ok(0.0);
     }
-    let size = std::cmp::max(rows, cols);
-    let mut square_matrix = Array2::zeros((size, size));
-    square_matrix
-        .slice_mut(ndarray::s![0..rows, 0..cols])
-        .assign(matrix);
-    let similarities = aggregator.aggregate(&square_matrix)?;
+    let similarities = aggregator.aggregate(matrix)?;
     if similarities.is_empty() {
         return Ok(0.0);
     }
@@ -340,9 +344,8 @@ pub(crate) struct Recorded {
 /// A pair CSV, read back.
 #[derive(Debug)]
 pub(crate) struct Stored {
-    /// One row per right-hand function and one column per left-hand one,
-    /// unpadded.
-    pub(crate) matrix: Array2<f64>,
+    /// One row per right-hand function and one column per left-hand one.
+    pub(crate) matrix: Matrix,
     pub(crate) left: Recorded,
     pub(crate) right: Recorded,
     pub(crate) duration: Duration,
@@ -443,8 +446,12 @@ pub(crate) fn load_comparison<P: AsRef<Path>>(path: P) -> Result<Stored> {
             col_names.len()
         )));
     }
-    let matrix =
-        Array2::from_shape_vec((rows.len(), col_names.len()), items).map_err(Error::ShapeError)?;
+    let matrix = Matrix::new((rows.len(), col_names.len()), items).ok_or_else(|| {
+        Error::Parse(format!(
+            "{}: the matrix holds a value that is not a finite number",
+            path.display()
+        ))
+    })?;
     let mut left = left.unwrap_or_else(|| recorded(&csv::StringRecord::new()));
     let mut right = right.unwrap_or_else(|| recorded(&csv::StringRecord::new()));
     left.functions = col_names;
@@ -525,10 +532,10 @@ mod tests {
     #[test]
     fn test_an_empty_side_scores_as_compare_scores_it() {
         let h = Aggregator::Hungarian;
-        assert_eq!(score(&Array2::zeros((0, 0)), &h).unwrap(), 1.0);
-        assert_eq!(score(&Array2::zeros((0, 3)), &h).unwrap(), 0.0);
-        assert_eq!(score(&Array2::zeros((3, 0)), &h).unwrap(), 0.0);
-        let one = Array2::from_elem((1, 1), 0.5);
+        assert_eq!(score(&Matrix::zeros((0, 0)), &h).unwrap(), 1.0);
+        assert_eq!(score(&Matrix::zeros((0, 3)), &h).unwrap(), 0.0);
+        assert_eq!(score(&Matrix::zeros((3, 0)), &h).unwrap(), 0.0);
+        let one = Matrix::new((1, 1), vec![0.5]).unwrap();
         assert_eq!(score(&one, &h).unwrap(), 0.5);
     }
 

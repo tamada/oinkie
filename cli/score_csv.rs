@@ -178,8 +178,11 @@ mod tests {
         let stored = crate::review::load_comparison(&dest).unwrap();
         let (loaded, left, right) = (stored.matrix, stored.left, stored.right);
         let written = c.matrix();
-        let side = b1.len().max(b2.len());
-        assert_eq!(written.dim(), (side, side), "padded to a square");
+        assert_eq!(
+            written.dim(),
+            (b1.len(), b2.len()),
+            "one index per function"
+        );
         assert_eq!(
             loaded.dim(),
             (b2.len(), b1.len()),

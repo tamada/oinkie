@@ -30,7 +30,6 @@ use crate::Iterable;
 use crate::birthmarks::{Birthmark, Data, Function, Shape};
 use crate::{Error, Result};
 use itertools::Itertools;
-use ndarray::Array2;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::time::Instant;
 
@@ -127,12 +126,66 @@ impl PairingStrategy {
     }
 }
 
+/// Function similarities, one for each function of one side against each of
+/// the other, indexed `[i, j]`.
+///
+/// Every cell is a finite number, which is what lets the assignment that
+/// aggregates a matrix always find a best pairing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Matrix {
+    dim: (usize, usize),
+    cells: Vec<f64>,
+}
+
+impl Matrix {
+    /// A matrix of `dim.0` by `dim.1` cells, `cells` laid out with the second
+    /// index running fastest.
+    ///
+    /// `None` when `cells` is not that many long or holds a number that is not
+    /// finite.
+    pub fn new(dim: (usize, usize), cells: Vec<f64>) -> Option<Matrix> {
+        (Some(cells.len()) == dim.0.checked_mul(dim.1) && cells.iter().all(|c| c.is_finite()))
+            .then_some(Matrix { dim, cells })
+    }
+
+    /// A matrix of `dim.0` by `dim.1` zeros.
+    pub fn zeros(dim: (usize, usize)) -> Matrix {
+        Matrix {
+            dim,
+            cells: vec![0.0; dim.0 * dim.1],
+        }
+    }
+
+    /// How many cells it has along each index.
+    pub fn dim(&self) -> (usize, usize) {
+        self.dim
+    }
+
+    /// The cells whose first index is `i`, in order of the second.
+    pub fn row(&self, i: usize) -> &[f64] {
+        &self.cells[i * self.dim.1..(i + 1) * self.dim.1]
+    }
+}
+
+impl std::ops::Index<[usize; 2]> for Matrix {
+    type Output = f64;
+
+    fn index(&self, [i, j]: [usize; 2]) -> &f64 {
+        assert!(
+            i < self.dim.0 && j < self.dim.1,
+            "[{i}, {j}] is outside {:?}",
+            self.dim
+        );
+        &self.cells[i * self.dim.1 + j]
+    }
+}
+
 /// Two birthmarks compared: their function similarity matrix, the pair's one
 /// similarity, and how long it took.
 pub struct Comparison<'a, S> {
     columns: &'a S,
     rows: &'a S,
-    matrix: Array2<f64>,
+    matrix: Matrix,
     duration: std::time::Duration,
     similarities: Vec<f64>,
 }
@@ -141,7 +194,7 @@ impl<'a, S> Comparison<'a, S> {
     pub(crate) fn new(
         columns: &'a S,
         rows: &'a S,
-        matrix: Array2<f64>,
+        matrix: Matrix,
         similarities: Vec<f64>,
         duration: std::time::Duration,
     ) -> Comparison<'a, S> {
@@ -164,13 +217,10 @@ impl<'a, S> Comparison<'a, S> {
         self.rows
     }
 
-    /// The function-to-function scores, indexed `[column, row]`.
-    ///
-    /// Square, because the assignment that aggregates it needs it to be: as
-    /// many rows and columns as the longer side has functions, with the cells
-    /// past the shorter side left at 0.0. Empty when either side has no
-    /// functions. The scores proper are the first `columns` x `rows` cells.
-    pub fn matrix(&self) -> &Array2<f64> {
+    /// The function-to-function scores, indexed `[column, row]`: one index
+    /// for each function of [`Comparison::columns`] and one for each of
+    /// [`Comparison::rows`].
+    pub fn matrix(&self) -> &Matrix {
         &self.matrix
     }
 
@@ -247,12 +297,17 @@ impl std::str::FromStr for Aggregator {
 }
 
 impl Aggregator {
-    /// The similarities this aggregator keeps of `array`, a square matrix of
-    /// function similarities, which [`Comparison::similarity`] averages.
-    pub fn aggregate(&self, array: &Array2<f64>) -> Result<Vec<f64>> {
+    /// The similarities this aggregator keeps of `matrix`, which
+    /// [`Comparison::similarity`] averages.
+    ///
+    /// The shorter side counts as though it had as many functions as the
+    /// longer, each sharing nothing with any function: a function left
+    /// without a counterpart lowers the pair's similarity rather than drop
+    /// out of it.
+    pub fn aggregate(&self, matrix: &Matrix) -> Result<Vec<f64>> {
         match self {
-            Aggregator::Hungarian => hungarian_algorithm(array).map(|(sim, _matches)| sim),
-            Aggregator::TopN(n) => top_n_selection(array, n),
+            Aggregator::Hungarian => Ok(hungarian_algorithm(matrix)),
+            Aggregator::TopN(n) => Ok(top_n_selection(matrix, n)),
         }
     }
 }
@@ -270,12 +325,11 @@ trait BirthmarkComparator {
         b1.check_comparable_with(b2)?;
         let p1_len = b1.functions.len();
         let p2_len = b2.functions.len();
-        let size = std::cmp::max(p1_len, p2_len);
         if p1_len == 0 && p2_len == 0 {
             Ok(Comparison::new(
                 b1,
                 b2,
-                Array2::<f64>::zeros((0, 0)),
+                Matrix::zeros((0, 0)),
                 vec![1.0],
                 std::time::Duration::from_millis(0),
             ))
@@ -283,13 +337,13 @@ trait BirthmarkComparator {
             Ok(Comparison::new(
                 b1,
                 b2,
-                Array2::<f64>::zeros((0, 0)),
+                Matrix::zeros((p1_len, p2_len)),
                 vec![0.0],
                 std::time::Duration::from_millis(0),
             ))
         } else {
             let start = Instant::now();
-            let r = build_matrix(b1, b2, size, |e1, e2| self.compare_functions(e1, e2))?;
+            let r = build_matrix(b1, b2, |e1, e2| self.compare_functions(e1, e2))?;
             aggregator
                 .aggregate(&r)
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
@@ -302,60 +356,68 @@ trait BirthmarkComparator {
 fn build_matrix<F, T>(
     p1: impl Iterable<Item = T>,
     p2: impl Iterable<Item = T>,
-    size: usize,
     compare_func: F,
-) -> Result<Array2<f64>>
+) -> Result<Matrix>
 where
     F: Fn(&T, &T) -> f64,
 {
-    // The matrix holds similarities; the conversion to costs for lapjv
-    // happens later in hungarian_algorithm. Cells beyond the shorter input
-    // stay 0.0 so that the matrix is always square (size x size).
-    let mut similarities = vec![0.0; size * size];
-    for (i, item1) in p1.iter().enumerate() {
-        for (j, item2) in p2.iter().enumerate() {
-            similarities[i * size + j] = compare_func(item1, item2);
+    let (n1, n2) = (p1.iter().count(), p2.iter().count());
+    let mut similarities = Vec::with_capacity(n1 * n2);
+    for item1 in p1.iter() {
+        for item2 in p2.iter() {
+            similarities.push(compare_func(item1, item2));
         }
     }
-    Array2::from_shape_vec((size, size), similarities).map_err(Error::ShapeError)
+    Matrix::new((n1, n2), similarities).ok_or_else(|| {
+        Error::Parse("a function similarity came out as a number that is not finite".to_string())
+    })
 }
 
-fn top_n_selection(array2d: &Array2<f64>, n: &Size) -> Result<Vec<f64>> {
-    let rows = array2d
-        .axis_iter(ndarray::Axis(0))
-        .map(|col| col.fold(0.0f64, |acc, &v| acc.max(v)))
-        .sorted_by(|a, b| b.total_cmp(a))
-        .collect::<Vec<_>>();
-    let cols = array2d
-        .axis_iter(ndarray::Axis(1))
-        .map(|col| col.fold(0.0f64, |acc, &v| acc.max(v)))
-        .sorted_by(|a, b| b.total_cmp(a))
-        .collect::<Vec<_>>();
-    match n {
-        Size::Num(k) => Ok(rows
-            .into_iter()
-            .take(*k)
-            .chain(cols.into_iter().take(*k))
-            .collect()),
-        Size::All => Ok(rows.into_iter().chain(cols).collect()),
-    }
-}
-
-fn hungarian_algorithm(similarity_matrix: &Array2<f64>) -> Result<(Vec<f64>, Vec<usize>)> {
-    let cost_matrix = 1.0 - similarity_matrix;
-    match lapjv::lapjv(&cost_matrix) {
-        Ok((rows, _cols)) => {
-            let mut similarities = vec![];
-            for (i, &j) in rows.iter().enumerate() {
-                if i < cost_matrix.nrows() && j < cost_matrix.ncols() {
-                    // Convert cost back to similarity by using (1.0 - cost).
-                    similarities.push(1.0 - cost_matrix[(i, j)]);
-                }
-            }
-            Ok((similarities, rows))
+/// Each function's best similarity, on both sides, the best `n` of each.
+///
+/// The shorter side's list is filled out with zeros to the longer's length,
+/// as [`Aggregator::aggregate`] says.
+fn top_n_selection(matrix: &Matrix, n: &Size) -> Vec<f64> {
+    let (n1, n2) = matrix.dim();
+    let size = n1.max(n2);
+    let best = |maxima: Vec<f64>| {
+        let mut maxima = maxima;
+        maxima.resize(size, 0.0);
+        maxima.sort_by(|a, b| b.total_cmp(a));
+        match n {
+            Size::Num(k) => maxima.truncate(*k),
+            Size::All => {}
         }
-        Err(e) => Err(Error::LapJV(e)),
+        maxima
+    };
+    let firsts = (0..n1)
+        .map(|i| matrix.row(i).iter().fold(0.0f64, |acc, &v| acc.max(v)))
+        .collect();
+    let mut seconds = vec![0.0f64; n2];
+    for i in 0..n1 {
+        for (best, &v) in seconds.iter_mut().zip(matrix.row(i)) {
+            *best = best.max(v);
+        }
     }
+    let mut kept = best(firsts);
+    kept.extend(best(seconds));
+    kept
+}
+
+/// The similarities of the one-to-one pairing that maximises their total,
+/// with a zero for each function of the longer side left unpaired, as
+/// [`Aggregator::aggregate`] says.
+fn hungarian_algorithm(matrix: &Matrix) -> Vec<f64> {
+    let (n1, n2) = matrix.dim();
+    let pairing = crate::assignment::assign(n1, n2, &matrix.cells)
+        .expect("a Matrix holds only finite cells, rows * cols of them");
+    let mut similarities: Vec<f64> = pairing
+        .iter()
+        .enumerate()
+        .filter_map(|(i, j)| j.map(|j| matrix[[i, j]]))
+        .collect();
+    similarities.resize(n1.max(n2), 0.0);
+    similarities
 }
 
 /// How two functions' elements are compared into a function similarity,
@@ -804,27 +866,6 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     1.0 - (distance as f64 / max_len as f64)
 }
 
-#[allow(dead_code)]
-fn levenshtein_distance_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
-    let mut dp = Array2::zeros((s1.len() + 1, s2.len() + 1));
-    for i in 0..=s1.len() {
-        dp[[i, 0]] = i;
-    }
-    for j in 0..=s2.len() {
-        dp[[0, j]] = j;
-    }
-    for i in 1..=s1.len() {
-        for j in 1..=s2.len() {
-            let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
-            let substitution = dp[[i - 1, j - 1]] + cost;
-            let insertion = dp[[i, j - 1]] + 1;
-            let deletion = dp[[i - 1, j]] + 1;
-            dp[[i, j]] = substitution.min(insertion).min(deletion);
-        }
-    }
-    1.0 - (dp[[s1.len(), s2.len()]] as f64 / (s1.len().max(s2.len()) as f64))
-}
-
 fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(
     f1: &FxHashMap<T, usize>,
     f2: &FxHashMap<T, usize>,
@@ -937,22 +978,6 @@ fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     // the previous row contains the final results since the last swap
     let lcs_length = prev[m];
     2.0 * lcs_length as f64 / (n + m) as f64
-}
-
-#[allow(dead_code)]
-fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
-    let mut dp = Array2::<usize>::zeros((s1.len() + 1, s2.len() + 1));
-    for i in 1..=s1.len() {
-        for j in 1..=s2.len() {
-            if s1[i - 1] == s2[j - 1] {
-                dp[[i, j]] = dp[[i - 1, j - 1]] + 1;
-            } else {
-                dp[[i, j]] = dp[[i - 1, j]].max(dp[[i, j - 1]]);
-            }
-        }
-    }
-    let lcs_length = dp[[s1.len(), s2.len()]];
-    2.0 * lcs_length as f64 / (s1.len() + s2.len()) as f64
 }
 
 #[cfg(test)]
@@ -1355,15 +1380,53 @@ mod tests {
     #[test]
     fn top_n_selection_limits_the_number_of_scores() {
         let matrix =
-            Array2::from_shape_vec((3, 3), vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0])
-                .unwrap();
+            Matrix::new((3, 3), vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]).unwrap();
         // Size::Num(k) keeps k row maxima plus k column maxima
-        let picked = top_n_selection(&matrix, &Size::Num(2)).unwrap();
+        let picked = top_n_selection(&matrix, &Size::Num(2));
         assert_eq!(picked.len(), 4);
         assert!(picked.iter().all(|v| (*v - 1.0).abs() < 1e-9));
         // Size::All keeps every row and column maximum
-        let all = top_n_selection(&matrix, &Size::All).unwrap();
+        let all = top_n_selection(&matrix, &Size::All);
         assert_eq!(all.len(), 6);
+    }
+
+    /// A matrix that is not square scores as it would padded with zeros to a
+    /// square: the shorter side's missing functions share nothing.
+    #[test]
+    fn a_matrix_that_is_not_square_scores_as_if_padded_with_zeros() {
+        let cells = vec![0.2, 0.9, 0.4, 0.7, 0.1, 0.3];
+        let wide = Matrix::new((2, 3), cells.clone()).unwrap();
+        let mut padded = cells;
+        padded.extend([0.0; 3]);
+        let square = Matrix::new((3, 3), padded).unwrap();
+        let mean = |v: Vec<f64>| v.iter().sum::<f64>() / v.len() as f64;
+        for aggregator in [
+            Aggregator::Hungarian,
+            Aggregator::TopN(Size::All),
+            Aggregator::TopN(Size::Num(1)),
+            Aggregator::TopN(Size::Num(3)),
+        ] {
+            let (got, want) = (
+                aggregator.aggregate(&wide).unwrap(),
+                aggregator.aggregate(&square).unwrap(),
+            );
+            assert_eq!(got.len(), want.len(), "{aggregator:?}");
+            assert!((mean(got) - mean(want)).abs() < 1e-12, "{aggregator:?}");
+        }
+        // the best pairing is 0.9 + 0.7, and the third column goes unpaired
+        let paired = Aggregator::Hungarian.aggregate(&wide).unwrap();
+        assert!((mean(paired) - 1.6 / 3.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_matrix_holds_only_finite_cells_and_as_many_as_its_shape() {
+        assert!(Matrix::new((1, 2), vec![0.5, f64::NAN]).is_none());
+        assert!(Matrix::new((1, 2), vec![0.5, f64::INFINITY]).is_none());
+        assert!(Matrix::new((2, 2), vec![0.5; 3]).is_none());
+        let m = Matrix::new((2, 3), vec![0.0, 0.1, 0.2, 1.0, 1.1, 1.2]).unwrap();
+        assert_eq!(m.dim(), (2, 3));
+        assert_eq!(m[[1, 2]], 1.2);
+        assert_eq!(m.row(1), &[1.0, 1.1, 1.2]);
     }
 
     #[test]
@@ -1372,7 +1435,7 @@ mod tests {
         let c = Comparison::new(
             &b,
             &b,
-            Array2::zeros((0, 0)),
+            Matrix::zeros((0, 0)),
             vec![],
             std::time::Duration::from_nanos(0),
         );
@@ -1406,6 +1469,42 @@ mod tests {
                 "algorithm: {algorithm}"
             );
         }
+    }
+
+    /// The textbook dynamic programme over the whole table, which the
+    /// two-row versions must agree with.
+    fn levenshtein_distance_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+        let mut dp = vec![vec![0usize; s2.len() + 1]; s1.len() + 1];
+        for (i, row) in dp.iter_mut().enumerate() {
+            row[0] = i;
+        }
+        for (j, cell) in dp[0].iter_mut().enumerate() {
+            *cell = j;
+        }
+        for i in 1..=s1.len() {
+            for j in 1..=s2.len() {
+                let cost = if s1[i - 1] == s2[j - 1] { 0 } else { 1 };
+                let substitution = dp[i - 1][j - 1] + cost;
+                let insertion = dp[i][j - 1] + 1;
+                let deletion = dp[i - 1][j] + 1;
+                dp[i][j] = substitution.min(insertion).min(deletion);
+            }
+        }
+        1.0 - (dp[s1.len()][s2.len()] as f64 / (s1.len().max(s2.len()) as f64))
+    }
+
+    fn longest_common_subsequence_full_memory<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
+        let mut dp = vec![vec![0usize; s2.len() + 1]; s1.len() + 1];
+        for i in 1..=s1.len() {
+            for j in 1..=s2.len() {
+                dp[i][j] = if s1[i - 1] == s2[j - 1] {
+                    dp[i - 1][j - 1] + 1
+                } else {
+                    dp[i - 1][j].max(dp[i][j - 1])
+                };
+            }
+        }
+        2.0 * dp[s1.len()][s2.len()] as f64 / (s1.len() + s2.len()) as f64
     }
 
     #[test]

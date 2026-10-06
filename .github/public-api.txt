@@ -133,7 +133,7 @@ pub mod oinkie::compare
 pub oinkie::compare::Aggregator::Hungarian
 pub oinkie::compare::Aggregator::TopN(oinkie::compare::Size)
 impl oinkie::compare::Aggregator
-pub fn oinkie::compare::Aggregator::aggregate(&self, &ndarray::aliases::Array2<f64>) -> oinkie::Result<alloc::vec::Vec<f64>>
+pub fn oinkie::compare::Aggregator::aggregate(&self, &oinkie::compare::Matrix) -> oinkie::Result<alloc::vec::Vec<f64>>
 impl core::clone::Clone for oinkie::compare::Aggregator
 pub fn oinkie::compare::Aggregator::clone(&self) -> Self
 impl core::default::Default for oinkie::compare::Aggregator
@@ -207,9 +207,25 @@ pub struct oinkie::compare::Comparison<'a, S>
 impl<'a, S> oinkie::compare::Comparison<'a, S>
 pub fn oinkie::compare::Comparison<'a, S>::columns(&self) -> &S
 pub fn oinkie::compare::Comparison<'a, S>::duration(&self) -> core::time::Duration
-pub fn oinkie::compare::Comparison<'a, S>::matrix(&self) -> &ndarray::aliases::Array2<f64>
+pub fn oinkie::compare::Comparison<'a, S>::matrix(&self) -> &oinkie::compare::Matrix
 pub fn oinkie::compare::Comparison<'a, S>::rows(&self) -> &S
 pub fn oinkie::compare::Comparison<'a, S>::similarity(&self) -> f64
+pub struct oinkie::compare::Matrix
+impl oinkie::compare::Matrix
+pub fn oinkie::compare::Matrix::dim(&self) -> (usize, usize)
+pub fn oinkie::compare::Matrix::new((usize, usize), alloc::vec::Vec<f64>) -> core::option::Option<oinkie::compare::Matrix>
+pub fn oinkie::compare::Matrix::row(&self, usize) -> &[f64]
+pub fn oinkie::compare::Matrix::zeros((usize, usize)) -> oinkie::compare::Matrix
+impl core::clone::Clone for oinkie::compare::Matrix
+pub fn oinkie::compare::Matrix::clone(&self) -> Self
+impl core::cmp::PartialEq for oinkie::compare::Matrix
+pub fn oinkie::compare::Matrix::eq(&self, &Self) -> bool
+impl core::fmt::Debug for oinkie::compare::Matrix
+pub fn oinkie::compare::Matrix::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::StructuralPartialEq for oinkie::compare::Matrix
+impl core::ops::index::Index<[usize; 2]> for oinkie::compare::Matrix
+pub type oinkie::compare::Matrix::Output = f64
+pub fn oinkie::compare::Matrix::index(&self, [usize; 2]) -> &f64
 pub mod oinkie::extract
 pub struct oinkie::extract::Extractor
 impl oinkie::extract::Extractor
@@ -265,12 +281,10 @@ pub oinkie::Error::InvalidPcode(u32)
 pub oinkie::Error::Io(std::path::PathBuf, core::io::error::Error)
 pub oinkie::Error::IrMismatch(oinkie::lift::Ir, oinkie::lift::Ir)
 pub oinkie::Error::Json(std::path::PathBuf, serde_json::error::Error)
-pub oinkie::Error::LapJV(lapjv::LapJVError)
 pub oinkie::Error::Mismatch(oinkie::birthmarks::BirthmarkType, oinkie::birthmarks::BirthmarkType)
 pub oinkie::Error::Parse(alloc::string::String)
 pub oinkie::Error::ParseFloat(alloc::string::String, core::num::float_parse::ParseFloatError)
 pub oinkie::Error::ParseInt(alloc::string::String, core::num::error::ParseIntError)
-pub oinkie::Error::ShapeError(ndarray::error::ShapeError)
 pub oinkie::Error::ToolIo(std::path::PathBuf, core::io::error::Error)
 pub oinkie::Error::ToolNotFound
 pub oinkie::Error::ToolNotFound::candidates: &'static [&'static str]

@@ -206,21 +206,13 @@ mod tests {
     }
 
     #[test]
-    fn matches_lapjv_on_larger_matrices() {
+    fn matches_brute_force_on_one_larger_matrix() {
+        // 8! pairings: large enough for several augmenting paths to cross
         let mut rng = XorShift(7);
-        for n in [10, 50, 200] {
-            let cells: Vec<f64> = (0..n * n).map(|_| rng.next_f64()).collect();
-            let pairing = assign(n, n, &cells).unwrap();
-            let costs = ndarray::Array2::from_shape_fn((n, n), |(i, j)| 1.0 - cells[i * n + j]);
-            let (lapjv_rows, _) = lapjv::lapjv(&costs).unwrap();
-            let lapjv_total: f64 = lapjv_rows
-                .iter()
-                .enumerate()
-                .map(|(i, &j)| cells[i * n + j])
-                .sum();
-            assert!(is_valid(n, n, &pairing));
-            assert!((total(&cells, n, &pairing) - lapjv_total).abs() < 1e-9);
-        }
+        let cells: Vec<f64> = (0..64).map(|_| rng.next_f64()).collect();
+        let pairing = assign(8, 8, &cells).unwrap();
+        assert!(is_valid(8, 8, &pairing));
+        assert!((total(&cells, 8, &pairing) - brute_force(8, 8, &cells)).abs() < 1e-9);
     }
 
     #[test]

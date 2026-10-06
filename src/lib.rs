@@ -46,11 +46,8 @@
 
 use std::path::PathBuf;
 
-use ndarray::ShapeError;
-
 use crate::birthmarks::BirthmarkType;
 
-#[allow(dead_code)]
 mod assignment;
 mod binaryninja;
 pub mod birthmarks;
@@ -140,9 +137,6 @@ pub enum Error {
     /// program, a birthmark -- or could not be written as JSON.
     #[error("{path}: JSON error: {cause}", path = .0.display(), cause = .1)]
     Json(PathBuf, #[source] serde_json::Error),
-    /// The assignment the `hungarian` aggregator solves could not be solved.
-    #[error("LapJV error: {0}")]
-    LapJV(#[source] lapjv::LapJVError),
     /// Two birthmarks of different types were compared. A birthmark compares
     /// only with one of its own type.
     #[error("Mismatched birthmark types: {0} and {1}")]
@@ -161,9 +155,6 @@ pub enum Error {
     /// one.
     #[error("{0}: Parse int error {1}")]
     ParseInt(String, #[source] std::num::ParseIntError),
-    /// A matrix could not be built in the shape asked for.
-    #[error("Shape error: {0}")]
-    ShapeError(#[source] ShapeError),
     /// A lifting tool's installation could not be found: none was given, its
     /// environment variable is unset, and it is in none of the usual places.
     ///
@@ -244,8 +235,6 @@ impl Error {
             | Error::ToolIo(_, _)
             | Error::Csv(_)
             | Error::InvalidPcode(_)
-            | Error::LapJV(_)
-            | Error::ShapeError(_)
             | Error::UnreadableOutput(_, _) => false,
 
             // `Parse` is a catch-all carrying a string, and the strings it
@@ -385,12 +374,10 @@ mod tests {
             Error::Io(_, _) => "Io",
             Error::ToolIo(_, _) => "ToolIo",
             Error::Json(_, _) => "Json",
-            Error::LapJV(_) => "LapJV",
             Error::Mismatch(_, _) => "Mismatch",
             Error::Parse(_) => "Parse",
             Error::ParseFloat(_, _) => "ParseFloat",
             Error::ParseInt(_, _) => "ParseInt",
-            Error::ShapeError(_) => "ShapeError",
             Error::ToolNotFound { .. } => "ToolNotFound",
         }
     }
@@ -398,8 +385,8 @@ mod tests {
     /// One of each variant, paired with what it has to read as.
     ///
     /// The foreign errors are obtained rather than constructed — `csv::Error`
-    /// and `lapjv::LapJVError` have no public constructor — so each is
-    /// produced by the smallest operation that fails that way.
+    /// has no public constructor — so each is produced by the smallest
+    /// operation that fails that way.
     ///
     /// Where a variant wraps one of them, the expectation is built from that
     /// error's own `to_string` rather than from its wording pasted in. What
@@ -414,24 +401,14 @@ mod tests {
             .nth(1)
             .unwrap()
             .unwrap_err();
-        let lapjv_err = lapjv::lapjv(&ndarray::Array2::<f64>::zeros((2, 3))).unwrap_err();
         let json_err = serde_json::from_str::<i32>("nope").unwrap_err();
         let float_err = "x".parse::<f64>().unwrap_err();
         let int_err = "x".parse::<i32>().unwrap_err();
-        let shape_err = ndarray::Array2::from_shape_vec((2, 2), vec![1.0]).unwrap_err();
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
         let tool_io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "no such file");
 
-        let (csv_msg, lapjv_msg, json_msg) = (
-            csv_err.to_string(),
-            lapjv_err.to_string(),
-            json_err.to_string(),
-        );
-        let (float_msg, int_msg, shape_msg) = (
-            float_err.to_string(),
-            int_err.to_string(),
-            shape_err.to_string(),
-        );
+        let (csv_msg, json_msg) = (csv_err.to_string(), json_err.to_string());
+        let (float_msg, int_msg) = (float_err.to_string(), int_err.to_string());
         let io_msg = io_err.to_string();
 
         vec![
@@ -487,7 +464,6 @@ mod tests {
                 Error::Json(PathBuf::from("broken.json"), json_err),
                 format!("broken.json: JSON error: {json_msg}"),
             ),
-            (Error::LapJV(lapjv_err), format!("LapJV error: {lapjv_msg}")),
             (
                 Error::Mismatch(BirthmarkType::OpSeq, BirthmarkType::OpKgramSet(3)),
                 "Mismatched birthmark types: op-seq and op-3gram-set".to_string(),
@@ -504,7 +480,6 @@ mod tests {
                 Error::ParseInt("x".to_string(), int_err),
                 format!("x: Parse int error {int_msg}"),
             ),
-            (Error::ShapeError(shape_err), format!("Shape error: {shape_msg}")),
             (
                 Error::ToolNotFound {
                     tool: "Ghidra",
