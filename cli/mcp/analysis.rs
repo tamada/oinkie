@@ -67,7 +67,7 @@ fn store(results: Vec<CompareResult>, dest: &Path, start: Instant) -> Result<()>
     crate::store_and_get_durations(results, &results_file(dest), start).map(|_| ())
 }
 
-/// Where `run` and `compare` write the element-wise scores of pair `index`.
+/// Where `run` and `compare` write the function similarities of pair `index`.
 pub fn pair_file(dest: &Path, index: usize) -> PathBuf {
     dest.join(format!("{index:05}.csv"))
 }

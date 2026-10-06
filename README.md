@@ -44,6 +44,8 @@ To examine the birthmarks, we apply the following steps:
 4. Compares the birthmarks to calculate the similarities.
 5. Analyze the results to determine if software theft is suspected.
 
+The terms used here and in the documentation are defined in the [Glossary](https://tamada.github.io/oinkie/glossary/).
+
 ![Overview of the process of software theft detection using birthmarks](.github/assets/procedures.png)
 
 ### 1️⃣ Collects the binary files to be examined

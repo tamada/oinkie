@@ -56,15 +56,15 @@ pub struct Vocabulary {
 const AGGREGATORS: &[(&str, &str)] = &[
     (
         "hungarian",
-        "Optimal one-to-one matching between the elements of the two birthmarks, maximising the total score. The default.",
+        "Optimal one-to-one matching between the functions of the two birthmarks, maximising the total similarity. The default.",
     ),
     (
         "topn:all",
-        "For each element on the left, take its best match on the right, without requiring the matching to be one-to-one. \"topn\" alone means the same.",
+        "Each function's best match in the other birthmark, on both sides, without requiring the matching to be one-to-one. \"topn\" alone means the same.",
     ),
     (
         "topn:5",
-        "As topn:all, but considering only the 5 most similar. Any count of at least 1 works: \
+        "As topn:all, but averaging only the 5 best matches from each side. Any count of at least 1 works: \
          the name is topn: followed by the number, and 5 here is only an example.",
     ),
 ];

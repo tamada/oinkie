@@ -259,10 +259,10 @@ pub(crate) struct Statistics {
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct ReviewParams {
-    /// Directory holding the element-wise similarity CSVs that `compare` or
+    /// Directory holding the pair CSVs of function similarities that `compare` or
     /// `run` wrote -- the one they were given as their destination.
     pub score_directory: String,
-    /// How to combine element-wise scores into one score per pair:
+    /// How to combine a pair's function similarities into its similarity:
     /// "hungarian" (the default), "topn:all", or "topn:" and a count.
     /// Call oinkie_info for what these mean.
     #[serde(default)]
@@ -468,7 +468,7 @@ impl Oinkie {
 
     #[tool(
         name = "oinkie_review",
-        description = "Recompute the score for every pair in a directory of element-wise \
+        description = "Recompute the similarity of every pair in a directory of pair CSVs \
                        similarity CSVs, using a different aggregator, without comparing \
                        anything again. Use this to ask what the same comparison would have \
                        scored under 'topn' rather than 'hungarian', or without the functions \

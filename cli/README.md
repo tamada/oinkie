@@ -10,15 +10,15 @@ Detects software theft by comparing birthmarks extracted from binaries
 Usage: oinkie [OPTIONS] <COMMAND>
 
 Commands:
-  info         Display information about the application
-  lift         Lift binary files to JSON files of an intermediate representation, using a specified lifter
-  extract      Extract birthmarks from a lifted binary file (JSON format)
-  compare      Compare birthmarks and output the similarity score
-  review       Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores
-  stats        Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
-  run          Extract birthmarks and compare them in one command
-  mcp          Serve oinkie over the Model Context Protocol, on stdin and stdout
-  help         Print this message or the help of the given subcommand(s)
+  info     Display information about the application
+  lift     Lift binary files to JSON files of an intermediate representation, using a specified lifter
+  extract  Extract birthmarks from a lifted binary file (JSON format)
+  compare  Compare birthmarks and output the similarity score
+  review   Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities
+  stats    Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
+  run      Extract birthmarks and compare them in one command
+  mcp      Serve oinkie over the Model Context Protocol, on stdin and stdout
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
   -l, --level <LEVEL>  Log level for the application [default: warn] [possible values: error, warn, info, debug, trace, off]
@@ -39,14 +39,14 @@ Arguments:
   [FILES]...  Path to the binary or intermediate files to lift
 
 Options:
-  -d, --dest <DIRECTORY>           Specify the directory for putting the resultant JSON files of the lifted programs (default: './pcodes' directory) [default: pcodes]
-  -r, --ir <IR>                    Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool. [default: ghidra-pcode] [possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]
-  -H, --home <HOME>                Path to the installation directory of the tool behind --ir. If not specified, that tool's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
-  -i, --intermediate <DIRECTORY>   Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.
-      --script <SCRIPT>            Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory.
-  -j, --jobs <N>                   Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in. [default: 1]
-  -S, --skip                       Skip if the resultant JSON file already exists
-  -h, --help                       Print help
+  -d, --dest <DIRECTORY>          Specify the directory for putting the resultant JSON files of the lifted programs (default: './pcodes' directory) [default: pcodes]
+  -r, --ir <IR>                   Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool. [default: ghidra-pcode] [possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]
+  -H, --home <HOME>               Path to the installation directory of the tool behind --ir. If not specified, that tool's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
+  -i, --intermediate <DIRECTORY>  Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.
+      --script <SCRIPT>           Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory.
+  -j, --jobs <N>                  Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in. [default: 1]
+  -S, --skip                      Skip if the resultant JSON file already exists
+  -h, --help                      Print help (see more with '--help')
 ```
 
 ### `extract` command
@@ -107,13 +107,13 @@ Options:
           [default: jaccard]
 
   -A, --aggregator <METHOD>
-          Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+          Specify the aggregator for combining the function similarities of a pair into its similarity.
           Available:
-          - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
-                       maximizing the total similarity score.
-          - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
-                       second birthmark when calculating the overall similarity score. This can reduce noise from less
-                       relevant matches and focus on the most significant similarities.
+          - hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+                       two birthmarks, maximizing the total similarity.
+          - topn:N     Take each function's best match in the other birthmark, and average the N best of those from
+                       each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+                       and focus on the most significant similarities.
           
           [default: hungarian]
 
@@ -147,23 +147,27 @@ Options:
 Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores.
 
 ```sh
-Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores
+Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities
 
 Usage: oinkie review [OPTIONS] <SCORE_DIRECTORY>
 
 Arguments:
-  <SCORE_DIRECTORY>  Path to the directory containing the element-wise similarity scores
+  <SCORE_DIRECTORY>  Path to the score directory: the pair CSVs that compare or run wrote, holding the function similarities
 
 Options:
-  -A, --aggregator <METHOD>     Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+  -A, --aggregator <METHOD>     Specify the aggregator for combining the function similarities of a pair into its similarity.
                                 Available:
-                                - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
-                                             maximizing the total similarity score.
-                                - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
-                                             second birthmark when calculating the overall similarity score. This can reduce noise from less
-                                             relevant matches and focus on the most significant similarities. [default: hungarian]
+                                - hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+                                             two birthmarks, maximizing the total similarity.
+                                - topn:N     Take each function's best match in the other birthmark, and average the N best of those from
+                                             each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+                                             and focus on the most significant similarities. [default: hungarian]
   -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to review.
-                                The file contains the birthmark-wise similarity score list. [default: review.csv]
+                                The file lists the similarity of each pair. [default: review.csv]
+      --min-elements <N|Rx>     Drop the functions with fewer elements than this before aggregating.
+                                N is a count of elements; Rx is R times the mean count over every function of every birthmark
+                                in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is
+                                recorded on the last line of the summary.
   -h, --help                    Print help
 ```
 
@@ -246,13 +250,13 @@ Options:
           [default: similarities]
 
   -A, --aggregator <METHOD>
-          Specify the aggregator for combining element-wise similarity scores into a birthmark-wise similarity score.
+          Specify the aggregator for combining the function similarities of a pair into its similarity.
           Available:
-          - hungarian  Use the Hungarian algorithm to find the optimal matching between elements of two birthmarks,
-                       maximizing the total similarity score.
-          - topn:N     For each element in the first birthmark, consider only the top N most similar elements in the
-                       second birthmark when calculating the overall similarity score. This can reduce noise from less
-                       relevant matches and focus on the most significant similarities. available topn:N or topn:all (same as topn).
+          - hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+                       two birthmarks, maximizing the total similarity.
+          - topn:N     Take each function's best match in the other birthmark, and average the N best of those from
+                       each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+                       and focus on the most significant similarities. available topn:N or topn:all (same as topn).
           
           [default: hungarian]
 

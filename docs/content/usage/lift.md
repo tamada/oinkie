@@ -21,10 +21,12 @@ oinkie lift [OPTIONS] [FILES]...
 ```
 
 ### Arguments
+
 * `<FILES>...`  
   Path to the binary or intermediate files to lift.
 
 ### Options
+
 * `-d, --dest <DIRECTORY>`  
   Specify the directory to place the resulting JSON files of the lifted P-code. Defaults to the `./pcodes` directory. `[default: pcodes]`
 * `-r, --ir <IR>`  
@@ -228,6 +230,7 @@ Here is an example of the generated JSON file:
 ```
 
 ### JSON Property Descriptions
+
 * **`program`**: The name of the lifted program.
 * **`path`**: The absolute path to the generated JSON file.
 * **`symbols`**: A mapping of instruction memory addresses to resolved function/external API names.
