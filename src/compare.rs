@@ -773,10 +773,13 @@ fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(
         .sum::<f64>();
     let magnitude1 = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     let magnitude2 = f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
-    if magnitude1 > 0.0 && magnitude2 > 0.0 {
-        dot_product / (magnitude1 * magnitude2)
-    } else {
-        1.0
+    // A zero magnitude is an empty function. Two of them agree, as with every
+    // other algorithm; one against a function that is not empty does not. It
+    // used to score 1.0 as well, so an empty function matched anything (#162).
+    match (magnitude1 > 0.0, magnitude2 > 0.0) {
+        (true, true) => dot_product / (magnitude1 * magnitude2),
+        (false, false) => 1.0,
+        _ => 0.0,
     }
 }
 
@@ -793,9 +796,15 @@ fn euclidean_distance<T: std::cmp::Eq + std::hash::Hash>(
             (v1 - v2).powi(2)
         })
         .sum::<f64>();
-    1.0 - (sum_of_squares.sqrt()
-        / (f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()
-            + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()))
+    let scale = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()
+        + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
+    // Zero only when both functions are empty, where the quotient below is
+    // 0/0. That came out as NaN and went into the assignment, and from there
+    // into the pair's similarity (#162).
+    if scale == 0.0 {
+        return 1.0;
+    }
+    1.0 - (sum_of_squares.sqrt() / scale)
 }
 
 fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(
@@ -829,6 +838,11 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(
 fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let n = s1.len();
     let m = s2.len();
+    // Two empty functions agree, as with every other algorithm; this alone
+    // called them different (#162).
+    if n == 0 && m == 0 {
+        return 1.0;
+    }
     if n == 0 || m == 0 {
         return 0.0;
     }
@@ -1122,6 +1136,72 @@ mod tests {
             assert!((Cosine.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
             assert!((WeightedJaccard.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
             assert!((Euclidean.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+        }
+    }
+
+    /// Builds one function's data from its elements, in one representation.
+    type Build = fn(&[&str]) -> Data;
+
+    /// An algorithm, the comparator behind it, and the representations it
+    /// accepts.
+    type Case = (Algorithm, Box<dyn BirthmarkComparator>, Vec<Build>);
+
+    /// Every algorithm, with its comparator and the representations it
+    /// accepts. An exhaustive `match`, so that a new algorithm does not
+    /// compile until it says which it takes -- and is then held to the rule
+    /// below.
+    fn each_algorithm() -> Vec<Case> {
+        let sets: Vec<Build> = vec![seq, set, freq, kgram_seq, kgram_set, kgram_freq];
+        let seqs: Vec<Build> = vec![seq, kgram_seq];
+        let freqs: Vec<Build> = vec![seq, freq, kgram_seq, kgram_freq];
+        Algorithm::ALL
+            .iter()
+            .map(|a| -> Case {
+                match a {
+                    Algorithm::Cosine => (a.clone(), Box::new(Cosine), freqs.clone()),
+                    Algorithm::Dice => (a.clone(), Box::new(Dice), sets.clone()),
+                    Algorithm::Euclidean => (a.clone(), Box::new(Euclidean), freqs.clone()),
+                    Algorithm::Jaccard => (a.clone(), Box::new(Jaccard), sets.clone()),
+                    Algorithm::Levenshtein => (a.clone(), Box::new(Levenshtein), seqs.clone()),
+                    Algorithm::Lcs => (a.clone(), Box::new(Lcs), seqs.clone()),
+                    Algorithm::Simpson => (a.clone(), Box::new(Simpson), sets.clone()),
+                    Algorithm::WeightedJaccard => {
+                        (a.clone(), Box::new(WeightedJaccard), freqs.clone())
+                    }
+                }
+            })
+            .collect()
+    }
+
+    /// The rule the birthmark-level comparison already follows, for every
+    /// algorithm and every representation it takes: two empty functions agree
+    /// (1.0), and an empty one against one that is not does not (0.0), in
+    /// either order. Cosine scored the second 1.0, Euclidean the first NaN,
+    /// and LCS the first 0.0 (#162).
+    #[test]
+    fn every_algorithm_scores_empty_functions_by_the_same_rule() {
+        for (algorithm, comparator, builders) in each_algorithm() {
+            for build in builders {
+                let empty = function("e", build(&[]));
+                let other = function("o", build(&[]));
+                let full = function("f", build(&["A", "B"]));
+                let label = format!("{algorithm:?} over {:?}", build(&["A"]));
+                assert_eq!(
+                    comparator.compare_functions(&empty, &other),
+                    1.0,
+                    "{label}: both empty"
+                );
+                assert_eq!(
+                    comparator.compare_functions(&empty, &full),
+                    0.0,
+                    "{label}: empty against not"
+                );
+                assert_eq!(
+                    comparator.compare_functions(&full, &empty),
+                    0.0,
+                    "{label}: not against empty"
+                );
+            }
         }
     }
 
