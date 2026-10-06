@@ -1,3 +1,9 @@
+//! The command line's arguments, as clap derives them: one struct of options
+//! per subcommand, and the accessors the subcommands read them through.
+//!
+//! Also compiled into `gencomp`, which generates the shell completions from
+//! the same definitions.
+
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -388,7 +394,7 @@ impl ReviewOpts {
 }
 
 /// The smallest function `--min-elements` keeps: a count of elements, or a
-/// multiple of the mean count over the directory (#128).
+/// multiple of the mean count over the directory.
 ///
 /// One option with two spellings rather than two options, so that there is no
 /// state in which both are given. A bare `0.3` is refused rather than read

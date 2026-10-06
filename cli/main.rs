@@ -1,3 +1,11 @@
+//! The `oinkie` command: parses the command line and runs the subcommand.
+//!
+//! Each subcommand is a `perform_*` function here, or a module of its own
+//! where it grew one (`review`, `stats`, `mcp`). Where files go and what they
+//! are named -- the score CSV, the birthmark file names -- is the command
+//! line's business, not the library's, and lives in `score_csv` and
+//! `dest_name`.
+
 mod cli;
 mod dest_name;
 mod score_csv;
@@ -47,14 +55,13 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
     let aggregator = opts.aggregator();
     // The analysis names a birthmark and an algorithm, and both are used: each
     // program's birthmark is extracted and the birthmarks are compared, which is
-    // what `extract` followed by `compare` does. Comparing the programs directly
-    // would score their operations whatever birthmark was named (#150).
+    // what `extract` followed by `compare` does.
     let extractor = Extractor::new(atype.birthmark().clone());
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     // Each input once, rather than once per pair it is in, and written down:
     // the score directory then holds the birthmarks its scores came from, which
-    // is what `review` re-reads a comparison from (#128).
+    // is what `review` re-reads a comparison from.
     let birthmarks_dir = dest.join("birthmarks");
     std::fs::create_dir_all(&birthmarks_dir).map_err(|e| Error::Io(birthmarks_dir.clone(), e))?;
     pbar.set_message("Extracting birthmarks");
@@ -76,10 +83,10 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
             let dest_file = dest.join(format!("{i:05}.csv"));
             let (e1, e2) = (&by_input[path1], &by_input[path2]);
             // A score is kept only if both birthmarks it came from are still
-            // the ones there. One extracted now replaced whatever the score
-            // was computed from -- a birthmark of another type, or none, in a
-            // directory an earlier release wrote -- and keeping the score
-            // would leave it naming a birthmark it did not compare.
+            // the ones there. A birthmark extracted in this run replaced
+            // whatever the score was computed from -- one of another type, or
+            // none -- and keeping the score would leave it naming a birthmark
+            // it did not compare.
             if dest_file.exists() && opts.is_skip() && !e1.fresh && !e2.fresh {
                 log::info!(
                     "Similarity file for {:?} and {:?} already exists. Skipping comparison.",
@@ -136,10 +143,9 @@ fn read_result_file(
     let mut original_path1 = PathBuf::new();
     let mut original_path2 = PathBuf::new();
     // An Option rather than a zeroed pair, so that "the file never said" is
-    // not spelled the same way as "the score was zero". It used to be the
-    // latter: a file holding the pair but no result line came back as a
-    // successful comparison scoring 0.0, which is what an interrupted run
-    // leaves behind and what --skip then reads.
+    // not spelled the same way as "the score was zero": a file holding the
+    // pair but no result line is what an interrupted run leaves behind, and
+    // what --skip then reads.
     let mut scored: Option<(u64, f64)> = None;
 
     for result in reader.records() {
@@ -241,11 +247,11 @@ fn perform_compare(opts: cli::CompareOpts) -> Result<Vec<Duration>> {
 /// Writes a summary, one row per pair, and returns each pair's duration.
 ///
 /// The rows are written in index order. The comparisons run in parallel and
-/// arrive in the order they finish, which differs between runs of the same
-/// binary; sorted, two runs over the same input write the same rows, and the
-/// file can be read top to bottom (#146). The results are all in memory by
-/// now, so sorting them in place costs no allocation, and an index is unique,
-/// so a stable sort would buy nothing.
+/// arrive in the order they finish, which differs between runs; sorted, two
+/// runs over the same input write the same rows, and the file can be read top
+/// to bottom. The results are all in memory here, so sorting them in place
+/// costs no allocation, and an index is unique, so a stable sort would buy
+/// nothing.
 pub(crate) fn store_and_get_durations(
     mut results: Vec<CompareResult>,
     destcsv: &Path,
@@ -350,10 +356,8 @@ fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
     let inputs = opts.iter().collect::<Vec<_>>();
     let r = extract_each(&inputs, dest, &extractor, opts.is_skip(), || pb.inc(1));
     let duration = start.elapsed();
-    // Only on success. This used to print unconditionally and then return the
-    // error, so a failed run announced that it had completed and the failure
-    // came immediately below it -- which is the same thing #83 is about, one
-    // layer up.
+    // Only on success, so that a failed run does not announce that it
+    // completed with the failure immediately below it.
     if r.is_ok() {
         // The inputs that named a file another had already claimed were not
         // extracted, and still count as done.
@@ -613,10 +617,7 @@ fn parallel_lift_notice(jobs: usize) -> Option<String> {
 }
 
 /// The library says a tool was not found and what to set; this is where the
-/// way to give its home on the command line is added.
-///
-/// The wording is what `lift` has always said, so the library's change of
-/// shape is not something a person at a terminal sees.
+/// way to give its home on the command line, `--home`, is added.
 fn with_home_hint(e: Error) -> Error {
     match e {
         Error::ToolNotFound {
@@ -686,8 +687,8 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
             lifter.lift(path, &dest_file)?;
         }
         // Counted whether it was lifted or skipped: the bar measures inputs
-        // dealt with, and a --skip run that left it short of the total looked
-        // like it had stopped early.
+        // dealt with, and a --skip run that left it short of the total would
+        // look as though it had stopped early.
         pb.inc(1);
         Ok(e1.elapsed())
     };
@@ -716,10 +717,8 @@ fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
         })
     };
     let duration = start.elapsed();
-    // Only on success. This used to print unconditionally and then return the
-    // error, so a failed run announced that it had completed and the failure
-    // came immediately below it -- which is the same thing #83 is about, one
-    // layer up.
+    // Only on success, so that a failed run does not announce that it
+    // completed with the failure immediately below it.
     if r.is_ok() {
         println!(
             "Lifting completed in {} nsec ({})",
@@ -812,17 +811,15 @@ impl CompareResult {
 /// What a run of the command line can end in, besides success.
 ///
 /// A usage error is clap's, and is reported the way clap reports it. Anything
-/// else is the library's. The two used to share one type because the library's
-/// `Error` had a variant for clap's; the library does not know about the
-/// command line, so the command line keeps the distinction itself.
+/// else is the library's. The library does not know about the command line,
+/// so the command line keeps the distinction itself.
 enum CliError {
     Usage(clap::Error),
     Failed(Error),
 }
 
-/// What `reaggregate` says now: it was renamed, not removed, so it names the
-/// new spelling and exits non-zero rather than doing the work under the old
-/// name (#132).
+/// What `reaggregate` says: the command is `review`, so the old name says so
+/// and exits non-zero rather than doing the work under it.
 fn renamed_to_review() -> clap::Error {
     clap::Error::raw(
         clap::error::ErrorKind::InvalidSubcommand,
@@ -846,16 +843,14 @@ fn main() {
                 || e.kind() == clap::error::ErrorKind::DisplayVersion
             {
                 // clap's own printing, which colours only a terminal and
-                // honours NO_COLOR. `render().ansi()` coloured
-                // unconditionally, so a pipe or a file got the escape codes
-                // as text (#163).
+                // honours NO_COLOR, so a pipe or a file gets text rather than
+                // escape codes.
                 let _ = e.print();
                 0
             } else {
                 // No "Error: " in front: clap's own message already begins
-                // "error: ", and prefixing it gave "Error: error: ..." (#62).
-                // The other arm keeps its prefix, since oinkie's own errors
-                // carry none.
+                // "error: ". The other arm keeps its prefix, since oinkie's
+                // own errors carry none.
                 //
                 // Display rather than `render().ansi()`, which would put
                 // colour codes into a redirected stderr.
@@ -945,8 +940,8 @@ mod tests {
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
     }
 
-    /// A tool that is nowhere is reported the way `lift` always reported it,
-    /// with `--home` offered first; anything else passes through untouched.
+    /// A tool that is nowhere is reported with `--home` offered first;
+    /// anything else passes through untouched.
     #[test]
     fn test_a_missing_tool_is_reported_with_the_flag_that_supplies_it() {
         let missing = Error::ToolNotFound {
@@ -974,15 +969,8 @@ mod tests {
         );
     }
 
-    /// Every representation names its tool, which is what let the tool stop
-    /// being a separate argument.
-    ///
-    /// This replaced a test that asked for a representation nothing could
-    /// write and checked that the refusal named it. There is no such
-    /// representation any more -- Ghidra, Binary Ninja and IDA Pro cover all
-    /// twelve -- so the refusal it asserted cannot be produced, and a test
-    /// that cannot fail is not a test. `Ir::tool` is what that one was really
-    /// about, and `src/lift.rs` asserts it over every variant.
+    /// Every representation names its tool, which is what makes naming the
+    /// representation enough.
     #[test]
     fn test_a_representation_that_is_not_binary_ninjas_has_no_level() {
         assert_eq!(oinkie::lift::Ir::GhidraPcode.tool(), "Ghidra");
@@ -994,9 +982,8 @@ mod tests {
     /// that `read_result_file` can be exercised directly.
     ///
     /// Through the CLI it is only reachable with `--skip` over a directory
-    /// left by an earlier run, which is why every one of its error paths was
-    /// uncovered (#28): the end-to-end tests never take the branch, and none
-    /// of them arranges a *malformed* leftover.
+    /// left by an earlier run, and the end-to-end tests do not arrange a
+    /// *malformed* leftover, so its error paths are exercised here.
     fn read_result(body: &str) -> Result<CompareResult> {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("00000.csv");
@@ -1012,9 +999,9 @@ mod tests {
 
     /// A summary's rows are in index order, whatever order the results arrive
     /// in. The comparisons run in parallel and finish in any order, and a
-    /// summary in finishing order differs from one run to the next of the same
-    /// binary (#146). Fed a fixed scramble rather than a parallel run, so the
-    /// test does not depend on the scheduler coming out unsorted.
+    /// summary in finishing order would differ from one run to the next. Fed a
+    /// fixed scramble rather than a parallel run, so the test does not depend
+    /// on the scheduler coming out unsorted.
     #[test]
     fn test_a_summary_is_written_in_index_order() {
         let scrambled = [5usize, 0, 7, 2, 9, 1, 8, 3, 6, 4];
@@ -1150,11 +1137,8 @@ mod tests {
         Ok(())
     }
 
-    /// The CLI used to spell these its own way -- `op3gram-set-dice` for an
-    /// analysis and `op-tri-gram-set` for a birthmark -- because each was a
-    /// hand-written `ValueEnum` whose clap names were derived from Rust
-    /// identifiers. Neither spelling is what the library parses, and the
-    /// library is the parser now (#25).
+    /// The command line takes the names the library parses -- `op-3gram-set`,
+    /// `op-3gram-set-dice` -- since the library is the parser.
     #[test]
     fn test_a_kgram_is_named_the_way_the_library_names_it() {
         let at = run_analysis("op-3gram-set-dice").expect("the library spelling should parse");
@@ -1174,9 +1158,8 @@ mod tests {
         );
     }
 
-    /// The k ceiling was a property of the hand-written list, not of the
-    /// grammar. The list still stops -- a completion list has to -- but the
-    /// option does not.
+    /// The list offered for completion stops at a k -- a completion list has to
+    /// -- but the grammar does not, so the option does not either.
     #[test]
     fn test_a_k_past_the_advertised_list_is_still_accepted() {
         let beyond = vocabulary::MAX_ADVERTISED_K + 1;
@@ -1217,7 +1200,7 @@ mod tests {
 
     /// Lifting is serial unless asked otherwise: it runs a whole decompiler
     /// process per file, and several of them against a Ghidra installation
-    /// whose language cache has not been built yet corrupt it (#54).
+    /// whose language cache has not been built yet can corrupt it.
     #[test]
     fn test_lift_is_serial_by_default() {
         let opts = cli::OinkieOpts::try_parse_from(vec!["oinkie", "lift", "bin1"]).unwrap();

@@ -79,15 +79,15 @@ jobs:
       #   modules of the files they test; tests/ holds the integration tests.
       # - exclusions: Java needs its compiled classes, through
       #   sonar.java.binaries, or the analysis refuses to run, and the Ghidra
-      #   lifting script compiles only against Ghidra's jars. Left out until
-      #   that is wired up; its string handling is tested by
-      #   compile-check.sh --run in build.yaml (#138).
+      #   lifting script compiles only against Ghidra's jars, so it is left
+      #   out; its string handling is tested by compile-check.sh --run in
+      #   build.yaml.
       # - coverage.exclusions: the scripts are analysed but not counted for
-      #   coverage. Only Rust's coverage is measured, so any line changed in
-      #   them counted as uncovered and failed the gate's new-code coverage
-      #   (#172). The lifting scripts cannot run here at all -- IDA and Binary
-      #   Ninja are licensed -- and check_links.py is tested by
-      #   test_check_links.py without being measured.
+      #   coverage. Only Rust's coverage is measured, so any changed line in
+      #   them would count as uncovered against the gate's new-code coverage.
+      #   The lifting scripts cannot run here at all -- IDA and Binary Ninja
+      #   are licensed -- and check_links.py is tested by test_check_links.py
+      #   without being measured.
       # - the two reports are the ones the steps above wrote.
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8

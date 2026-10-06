@@ -1,3 +1,10 @@
+//! Lifted programs: what a lifter writes, read back.
+//!
+//! [`Program`] is the public face, and is opaque. Inside, a
+//! `TypedProgram<T>` holds the functions as operations of the type its
+//! representation uses -- Ghidra's P-Code, Binary Ninja's three ILs, IDA's
+//! microcode -- and the file's `ir` field decides which one is read.
+
 use std::path::{Path, PathBuf};
 
 use rustc_hash::FxHashMap;
@@ -13,16 +20,11 @@ pub(crate) struct TypedProgram<T> {
     path: PathBuf,
     /// Which intermediate representation the operations below are written in.
     ///
-    /// Defaulted rather than required, so that files lifted before the field
-    /// existed still load. Every such file was produced by Ghidra, since no
-    /// other lifter has been implemented, so the default is right for all of
-    /// them.
-    ///
-    /// It is a fallback, not a deduction: nothing here can tell a historical
-    /// Ghidra file from a hand-written or third-party one that simply omits
-    /// the field, and both will read as Ghidra's. Anything written by this
-    /// crate carries the field, so the fallback only has to cover files it
-    /// did not write.
+    /// Defaulted to Ghidra's P-Code rather than required, so that a file
+    /// without the field still loads: Ghidra's lifting script is the one that
+    /// wrote such files. It is a fallback, not a deduction -- a hand-written
+    /// file that omits the field reads as Ghidra's too -- and this crate always
+    /// writes the field.
     #[serde(default)]
     ir: crate::lift::Ir,
     symbols: FxHashMap<String, String>,
@@ -37,11 +39,10 @@ where
 {
     type Error = Error;
 
-    /// Reads the file whole and parses the bytes, for the reason
-    /// [`Program::load`] already did it that way: serde_json's `IoRead`
-    /// takes one byte at a time, so `from_reader` on an unbuffered `File` is
-    /// one `read` syscall per byte — 3.3 s against 25 ms on a 10 MB lifted
-    /// file (#51).
+    /// Reads the file whole and parses the bytes, as [`Program::load`] does:
+    /// serde_json reads a reader one byte at a time, so `from_reader` on an
+    /// unbuffered `File` costs a system call per byte -- seconds for a large
+    /// lifted file.
     fn try_from(path: PathBuf) -> Result<Self> {
         let bytes = std::fs::read(&path).map_err(|e| Error::Io(path.clone(), e))?;
         serde_json::from_slice(&bytes).map_err(|e| Error::Json(path, e))
@@ -65,8 +66,9 @@ where
 /// Which representation it is -- and so which operations it holds -- is
 /// decided by the `ir` field the file carries, not by the caller. The
 /// operations themselves are not exposed: what a caller does with a program
-/// is extract a birthmark from it ([`crate::extract::Extractor`]) or compare
-/// it ([`crate::compare::Comparator`]), and neither needs to see them.
+/// is extract a birthmark from it ([`crate::extract::Extractor`]) and compare
+/// the birthmark ([`crate::compare::Comparator`]), and neither needs to see
+/// them.
 ///
 /// Opaque on purpose. Adding a lifter adds a case inside, which is not a
 /// change for anyone outside the crate.
@@ -75,13 +77,10 @@ pub struct Program(pub(crate) Lifted);
 
 /// The program inside a [`Program`], typed by its representation's operations.
 ///
-/// [`TypedProgram`] is generic over its operation type, but nothing was
-/// deciding that type: every caller wrote `TypedProgram<ghidra::Op>` and a file
-/// lifted by anything else would have been read against P-Code's vocabulary.
-/// The decision belongs to the `ir` field the file carries, and this is where
-/// it is made. Adding a lifter adds a variant, and the compiler then points at
-/// every place that has to account for it -- which is the property the enum
-/// exists for.
+/// [`TypedProgram`] is generic over its operation type, and the type is not
+/// the caller's to choose: it belongs to the `ir` field the file carries, and
+/// this is where that decision is made. Adding a lifter adds a variant, and
+/// the compiler then points at every place that has to account for it.
 #[derive(Debug)]
 pub(crate) enum Lifted {
     GhidraPcode(TypedProgram<crate::ghidra::Op>),
@@ -123,11 +122,11 @@ impl Program {
     /// Reads a lifted program, choosing the operation type from the file's own
     /// `ir` field.
     ///
-    /// A representation with no reader is refused by name. Read as P-Code it
-    /// would fail anyway, since the opcode enum is closed — but on the first
-    /// foreign opcode it happened to meet, reported as an unknown variant
-    /// among seventy-five alternatives rather than as the one fact that
-    /// matters.
+    /// The representation is read first so that each file is read by its own
+    /// representation's reader. Read as P-Code, a file of another
+    /// representation would fail on the first foreign opcode, reported as an
+    /// unknown variant among seventy-five alternatives rather than as the one
+    /// fact that matters.
     pub fn load(path: &Path) -> Result<Self> {
         // Read once and deserialize twice from the same bytes: the probe has
         // to see the file before the reader can be chosen, and reading it
@@ -159,22 +158,29 @@ impl Program {
         dispatch!(&self.0, p => p.ir())
     }
 
+    /// The program's name, as the lifter recorded it: the binary's file name.
     pub fn name(&self) -> &str {
         dispatch!(&self.0, p => p.name())
     }
 
+    /// The path of the binary it was lifted from, as the lifter recorded it.
     pub fn path(&self) -> &Path {
         dispatch!(&self.0, p => p.path())
     }
 
+    /// How many functions it holds.
     pub fn len(&self) -> usize {
         dispatch!(&self.0, p => p.len())
     }
 
+    /// Whether it holds no functions.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Records the file this program was read from, which
+    /// [`Program::json_path`] then returns. [`Program::load`] does not record
+    /// it by itself.
     pub fn set_json_path(&mut self, path: PathBuf) {
         dispatch!(&mut self.0, p => p.set_json_path(path))
     }
@@ -259,9 +265,7 @@ mod tests {
     use super::*;
     use crate::lift::Ir;
 
-    /// A file lifted before the field existed still loads, and is understood
-    /// as Ghidra's — which is not a guess, since no other lifter has ever
-    /// produced one.
+    /// A file without the `ir` field loads, and is understood as Ghidra's.
     #[test]
     fn test_ir_defaults_to_ghidra_pcode_when_absent() {
         let json = r#"{
@@ -317,8 +321,8 @@ mod tests {
         assert_eq!(program.len(), 1);
     }
 
-    /// A file written before the `ir` field existed carries no representation
-    /// to dispatch on, and must still reach the reader it was written for.
+    /// A file without the `ir` field carries no representation to dispatch on,
+    /// and still reaches Ghidra's reader.
     #[test]
     fn test_any_program_reads_a_file_without_the_field() {
         let dir = tempfile::tempdir().unwrap();
@@ -332,15 +336,9 @@ mod tests {
         assert_eq!(program.ir(), Ir::GhidraPcode);
     }
 
-    /// An `ir` this build does not know is refused by the deserializer rather
-    /// than read as something else.
-    ///
-    /// This used to be a different test. While one representation was declared
-    /// without a reader, loading it reported `UnsupportedIr`, and that error
-    /// existed to name it. Every representation has a reader now, so nothing
-    /// constructs it and it is gone; what remains is a name that is not a
-    /// representation at all, which is what a file from a future version looks
-    /// like.
+    /// An `ir` this build does not know -- what a file from a future version
+    /// looks like -- is refused by the deserializer rather than read as
+    /// something else.
     #[test]
     fn test_any_program_refuses_a_representation_it_does_not_know() {
         let dir = tempfile::tempdir().unwrap();
@@ -378,10 +376,9 @@ mod tests {
         assert!(matches!(Program::load(&path), Err(Error::Json(_, _))));
     }
 
-    /// The loader reads the file whole and parses the bytes (#51). Reading it
-    /// whole is where a change of error semantics could hide, so the three
-    /// ways it fails are pinned: the file not being there is an IO error, and
-    /// both ways its *content* can be wrong are JSON errors.
+    /// The loader reads the file whole and parses the bytes. The three ways it
+    /// fails are pinned: the file not being there is an IO error, and both ways
+    /// its *content* can be wrong are JSON errors.
     ///
     /// The last of the three is the one worth having. `read_to_string` +
     /// `from_str` would look like the same thing and report `Error::Io` for

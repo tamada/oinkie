@@ -2,9 +2,8 @@
 //!
 //! `Cargo.toml`'s `exclude` decides what is left out of the `.crate`, and a
 //! file compiled in with `include_str!` that it drops produces a crate that
-//! fails to build for whoever ran `cargo add` while building perfectly here.
-//! That is #91 again -- a reference no link check can see -- in the one place
-//! where the person who finds it is a stranger.
+//! fails to build for whoever ran `cargo add` while building perfectly here --
+//! a broken reference no link check can see, found by a stranger.
 //!
 //! These assertions are about paths rather than content, so they cost nothing
 //! and run everywhere.

@@ -1,3 +1,9 @@
+//! Lifting with IDA Pro: its headless `idat`, running `MicrocodeLifter.py`.
+//!
+//! The script is embedded at build time as [`DEFAULT_IDA_SCRIPT`]. IDA may
+//! send code to Hex-Rays' cloud decompiler, so this lifter has a
+//! [`Lifter::notice`] to show before the first lift.
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 

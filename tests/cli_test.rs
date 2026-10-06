@@ -10,7 +10,7 @@ use tempfile::tempdir;
 // runs against an installation nobody has used yet write the same file at the
 // same time and the loser reads a half-written one. analyzeHeadless exits
 // successfully regardless, so it arrives as a missing output rather than an
-// error (#54).
+// error.
 //
 // The group is named for what is shared rather than left anonymous, so that a
 // future test needing the same exclusion knows which one to join.
@@ -48,12 +48,12 @@ fn test_lift_command() {
 }
 
 /// Nothing inside the library can check that the environment variable is
-/// actually read: the search takes its environment as a parameter now, so
-/// that the tests stop writing to the process' own (#24), and a test that
-/// injects the lookup cannot also prove the real one is wired to it.
+/// actually read: the search takes its environment as a parameter, so that
+/// tests do not write to the process' own, and a test that injects the lookup
+/// cannot also prove the real one is wired to it.
 ///
 /// A child process can. `GHIDRA_HOME` is set for that process alone, which is
-/// hermetic in the way `set_var` never was, and pointing it at a directory
+/// hermetic in a way `set_var` cannot be, and pointing it at a directory
 /// with no `support/analyzeHeadless` makes the run fail while naming the path
 /// it was given -- so the assertion is that the value reached Ghidra's home,
 /// not merely that the run failed. No Ghidra starts, so this does not join
@@ -71,7 +71,7 @@ fn test_lift_command() {
 /// The two halves are asserted separately rather than as the joined path,
 /// because both the separator and the entry point's name belong to the
 /// platform: `join` writes a backslash on Windows, `{:?}` then escapes it, and
-/// the entry point there is `analyzeHeadless.bat` (#136). What the test is
+/// the entry point there is `analyzeHeadless.bat`. What the test is
 /// about is that the value arrived -- the home in the message -- and that
 /// Ghidra is what was looked for, and neither of those is a question about
 /// path syntax.
@@ -95,13 +95,12 @@ fn test_the_lifter_home_is_read_from_the_environment() {
         );
 }
 
-/// clap's own message begins "error: ", and `main` used to print it behind
-/// "Error: " -- so a mistyped flag came back as "Error: error: ..." (#62).
-/// oinkie's own errors carry no prefix of their own and keep theirs.
+/// clap's own message begins "error: ", so `main` prints it as it is rather
+/// than behind "Error: ", which would read "Error: error: ...". oinkie's own
+/// errors carry no prefix of their own and keep theirs.
 ///
-/// End to end because the doubling was in `main`, which no unit test reaches:
-/// fixing only the `Display` arm of `Error::Clap` would have changed nothing
-/// a user sees.
+/// End to end because the prefix is added in `main`, which no unit test
+/// reaches.
 #[test]
 fn test_a_usage_error_is_not_prefixed_twice() {
     Command::cargo_bin("oinkie")
@@ -154,10 +153,8 @@ fn test_extract_command() {
     );
 }
 
-/// `-b` names a birthmark the way the library does now. It used to be a
-/// `ValueEnum` whose clap names came from Rust identifiers, so a 3-gram was
-/// `op-tri-gram-set` on the command line, `op-3gram-set` everywhere else, and
-/// neither the docs' spelling nor the library's parsed (#25).
+/// `-b` names a birthmark the way the library does: `op-3gram-set`, the
+/// spelling the docs use and the library parses.
 ///
 /// End to end rather than at the parser, because this is the half a user
 /// types: the new spelling has to reach an extracted file, and the old one
@@ -192,16 +189,14 @@ fn test_extract_names_a_kgram_the_way_the_library_does() {
         .stderr(predicate::str::contains("unknown birthmark type"));
 }
 
-/// `op-*gram-freq` birthmarks could not be written at all: a k-gram is a list
-/// of operations, a JSON object's keys are strings, and `serde_json` refused
-/// the map outright (#59). Eight of the thirty birthmark types the CLI
-/// advertises — `op-1gram-freq` through `op-8gram-freq` — could not produce a
-/// file, and with them twenty-four of its eighty analyses.
+/// An `op-*gram-freq` birthmark can be written and read back: a k-gram is a
+/// list of operations and a JSON object's keys are strings, so the map cannot
+/// be written as an object.
 ///
-/// `op-2gram-freq` on this fixture rather than a larger k, because the bug
-/// hid behind emptiness: the fixture's one function has four operations, so
-/// k >= 5 yields an empty map and an empty map has no key to refuse. A test
-/// that happened to pick k = 5 would have passed against the bug.
+/// `op-2gram-freq` on this fixture rather than a larger k, because the
+/// fixture's one function has four operations, so k >= 5 yields an empty map,
+/// and an empty map has no key to write -- a test picking k = 5 would pass
+/// whatever the map's form.
 ///
 /// The score is checked against `run`, which computes the same analysis
 /// without ever writing a birthmark. Equal scores say the file round trip is
@@ -359,9 +354,9 @@ fn first_score(summary: &std::path::Path) -> f64 {
 }
 
 /// `run` is `extract` followed by `compare`, so the two give the same score --
-/// for every birthmark family and shape. `run` once compared the programs'
-/// operations whatever birthmark the analysis named, so every `fc-*` and
-/// k-gram analysis reported an `op-*` score under the wrong name (#150).
+/// for every birthmark family and shape, since a `run` that compared the
+/// programs' operations whatever birthmark the analysis named would agree on
+/// `op-*` alone.
 #[test]
 fn test_run_scores_what_extract_and_compare_score() {
     let inputs = [
@@ -424,8 +419,8 @@ fn test_run_scores_what_extract_and_compare_score() {
     }
 }
 
-/// A k-gram of size zero is a usage error, not a panic -- `run` reached
-/// extraction with it once `run` extracted at all (#150).
+/// A k-gram of size zero is a usage error, refused before it reaches
+/// extraction, not a panic there.
 #[test]
 fn test_a_zero_gram_analysis_is_refused_not_a_panic() {
     let dir = tempdir().unwrap();
@@ -457,8 +452,7 @@ fn side_birthmark(pair_csv: &std::path::Path, side: &str) -> std::path::PathBuf 
 
 /// `run` writes the birthmarks it compares into the score directory, one per
 /// input, and each pair's CSV names the two it used -- so the directory holds
-/// everything `review` needs to re-read the comparison, as `compare`'s does
-/// (#128).
+/// everything `review` needs to re-read the comparison, as `compare`'s does.
 #[test]
 fn test_run_writes_the_birthmarks_it_compares() {
     let dir = tempdir().unwrap();
@@ -619,7 +613,7 @@ fn review(scores: &std::path::Path, min: Option<&str>) -> (f64, Option<String>) 
 }
 
 /// Functions with fewer elements than the threshold are dropped before the
-/// pair is aggregated, and the summary says which threshold it was (#128).
+/// pair is aggregated, and the summary says which threshold it was.
 #[test]
 fn test_review_drops_the_functions_with_too_few_elements() {
     let dir = tempdir().unwrap();
@@ -840,7 +834,7 @@ fn test_review_reads_back_a_comparison_with_an_empty_birthmark() {
 }
 
 /// Help and the version go to a pipe as text: no colour codes, which a
-/// terminal would turn into colour and anything else keeps as `^[[1m` (#163).
+/// terminal would turn into colour and anything else keeps as `^[[1m`.
 /// The test's captured stdout is such a pipe. And they still succeed.
 #[test]
 fn test_help_written_to_a_pipe_has_no_colour_codes() {
@@ -944,19 +938,16 @@ fn test_review_command() {
 ///
 /// A path given to `-i` is created rather than required to exist, as every
 /// other destination directory in the CLI is and as the temporary directory
-/// used without `-i` is by construction. And it is resolved once: it used to
-/// be resolved twice, by us and again by Ghidra against its own working
-/// directory, so `-i irs` went looking for `irs/irs`.
+/// used without `-i` is by construction. And it is resolved once, by oinkie,
+/// not again by Ghidra against its own working directory.
 ///
 /// A relative path that does not exist yet covers both at once, and being
 /// nested covers creating intermediate levels rather than just the last.
 ///
-/// Either regression makes the run itself fail here, which is how #36 was
-/// reported -- Ghidra complaining that `irs/irs` did not exist -- rather than
-/// showing up as a stray directory. Both were checked by reverting each fix in
-/// turn. The explicit assertions below still earn their place: they name which
-/// of the two broke, and they catch a variant that doubles the path without
-/// failing outright.
+/// Getting either wrong makes the run itself fail here -- Ghidra complaining
+/// that `irs/irs` does not exist. The explicit assertions below still earn
+/// their place: they name which of the two broke, and they catch a variant
+/// that doubles the path without failing outright.
 #[test]
 #[serial(ghidra)]
 fn test_lift_command_intermediate_dir_is_created_and_resolved_once() {
@@ -992,16 +983,13 @@ fn test_lift_command_intermediate_dir_is_created_and_resolved_once() {
 
 /// A function name can hold a double quote. A C++ user-defined literal
 /// operator is the everyday way to get one: Ghidra demangles `operator""_km`
-/// as `operator""__km`, and the lifting script used to paste names into the
-/// JSON unescaped, so the file it produced could not be read back.
+/// as `operator""__km`, and a name pasted into the JSON unescaped makes a file
+/// that cannot be read back -- while `lift` still reports success, since
+/// analyzeHeadless exits 0 regardless.
 ///
-/// `lift` reported success either way -- the script wrote its bytes and
-/// returned, and analyzeHeadless exits 0 regardless (#54) -- so the failure
-/// only appeared later, at `extract` (#77).
-///
-/// Both halves are asserted. That the output parses is the bug; that the name
-/// survives is what stops the fix from being "strip the quote", which would
-/// parse and would then compare a name the program does not have.
+/// Both halves are asserted. That the output parses is the escaping; that the
+/// name survives rules out "strip the quote", which would parse and would then
+/// compare a name the program does not have.
 #[test]
 #[serial(ghidra)]
 fn test_lift_escapes_a_quote_in_a_function_name() {
@@ -1019,7 +1007,7 @@ fn test_lift_escapes_a_quote_in_a_function_name() {
 
     let out_file = dest.join("udl.json");
     // through oinkie's own reader rather than a parser of the test's
-    // choosing: this is the operation that used to fail
+    // choosing: this is the operation an unescaped name breaks
     oinkie::Program::load(&out_file).expect("oinkie cannot read the file it just wrote");
 
     let body = fs::read_to_string(&out_file).unwrap();
@@ -1037,13 +1025,12 @@ fn test_lift_escapes_a_quote_in_a_function_name() {
 }
 
 /// A lifting script can write bytes, return normally, and leave behind a file
-/// nothing can read. `analyzeHeadless` exits 0 either way, so before #83 that
-/// was a successful lift, and the failure surfaced at `extract` as a parse
-/// error naming a line and column in a file the reader had never seen.
+/// nothing can read. `analyzeHeadless` exits 0 either way, so the lift is
+/// checked by reading its output, or the failure would surface at `extract`
+/// as a parse error in a file the reader had never seen.
 ///
-/// Driven through `--script`, which is the path that cannot be fixed by
-/// correcting the built-in script: a replacement is arbitrary Java that oinkie
-/// never inspects, so the check has to be on the output.
+/// Driven through `--script`, because a replacement is arbitrary Java that
+/// oinkie never inspects: the check has to be on the output.
 #[test]
 #[serial(ghidra)]
 fn test_a_lift_whose_output_cannot_be_read_is_not_a_successful_lift() {
@@ -1092,11 +1079,10 @@ fn birthmarks_in(dir: &std::path::Path) {
         .success();
 }
 
-/// `--per-file` with `-f csv` is a whole output function of its own, and
-/// nothing ran it: `cli/stats.rs` has unit tests for the arithmetic and none
-/// of the tests started the command, so the formatters and the driver that
-/// picks between them were never executed. A renamed column or a row built in
-/// the wrong order would have shipped.
+/// `--per-file` with `-f csv` is a whole output function of its own, and only
+/// starting the command runs the formatters and the driver that picks between
+/// them: `cli/stats.rs`'s unit tests cover the arithmetic. A renamed column
+/// or a row built in the wrong order would otherwise ship.
 ///
 /// The header is asserted in full rather than by one column, because what
 /// breaks silently here is a swap: every name still present, in the wrong
@@ -1265,8 +1251,7 @@ fn test_stats_writes_to_the_named_file_and_not_to_stdout() {
 }
 
 /// JSON is the third format, and the one an agent or a script reads, so its
-/// shape is a promise rather than a rendering. It was as unexercised as the
-/// other two: `to_json` was never called by anything.
+/// shape is a promise rather than a rendering.
 ///
 /// `occurrences` is asserted null here and counted in the test below, because
 /// that field is the one thing in the report that depends on the birthmark's
@@ -1438,7 +1423,7 @@ fn test_stats_counts_what_it_could_not_read() {
 ///
 /// The quieter counterpart of the test above. `EmptyLifter` writes a file
 /// oinkie reads without complaint and that holds nothing, which is what a
-/// Ghidra missing its decompiler native binary produces (#126) -- and also
+/// Ghidra missing its decompiler native binary produces -- and also
 /// what a binary with genuinely no functions would produce. oinkie cannot tell
 /// the two apart, so it says what it sees and goes on.
 ///

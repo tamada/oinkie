@@ -1,3 +1,10 @@
+//! Lifting with Ghidra: `analyzeHeadless`, running `HighPCodeLifter.java` as
+//! its post-script.
+//!
+//! The script is embedded at build time as [`DEFAULT_GHIDRA_SCRIPT`], and is
+//! what runs unless the caller gave one of their own. Running the process and
+//! collecting its output is [`crate::lift::headless`]'s.
+
 use crate::lift::Lifter;
 use crate::lift::headless::Headless;
 use crate::{Error, Result};
@@ -36,8 +43,7 @@ impl GhidraLifter {
 ///
 /// `windows` is a parameter rather than a `cfg!` read in here, so both
 /// spellings can be asserted from either platform. A `cfg!` would compile one
-/// branch away, and an unexercised branch is how the Unix spelling came to be
-/// the only one (#136).
+/// branch away, and leave it unexercised everywhere else.
 fn headless_entry_point(home: &Path, windows: bool) -> PathBuf {
     home.join(if windows {
         "support/analyzeHeadless.bat"
@@ -104,9 +110,9 @@ mod tests {
         );
     }
 
-    /// The two differ, which is the whole of #136: a lift on Windows looked
-    /// for the bash script, found nothing, and reported Ghidra as missing from
-    /// an installation that had it.
+    /// The two differ: a lift on Windows that looked for the bash script would
+    /// find nothing, and report Ghidra as missing from an installation that has
+    /// it.
     #[test]
     fn test_the_two_spellings_are_not_the_same_file() {
         let home = Path::new("ghidra_home");

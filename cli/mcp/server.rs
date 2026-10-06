@@ -575,7 +575,7 @@ impl Oinkie {
 
 // `router = self.tool_router` rather than the default. The default expands to
 // `Self::tool_router()`, which builds the router afresh on every request and
-// leaves the stored one unread -- the dead-code warning was telling the truth.
+// leaves the stored one unread.
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for Oinkie {
     fn get_info(&self) -> InitializeResult {

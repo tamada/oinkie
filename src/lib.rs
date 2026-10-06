@@ -6,8 +6,43 @@
 //!
 //! - [`lift`] -- turning a binary into a lifted program, through a tool;
 //! - [`extract`] -- extracting a birthmark from a lifted program;
-//! - [`compare`] -- comparing two birthmarks, or two programs;
+//! - [`compare`] -- comparing two birthmarks;
 //! - [`birthmarks`] -- what a birthmark is, and what it holds.
+//!
+//! The terms -- birthmark, function, element, similarity -- are the ones the
+//! [glossary](https://tamada.github.io/oinkie/glossary/) defines.
+//!
+//! # Example
+//!
+//! Two lifted programs, compared under one analysis: extract the analysis's
+//! birthmark from each, then compare the birthmarks with its algorithm.
+//!
+//! ```
+//! use std::path::Path;
+//!
+//! use oinkie::Program;
+//! use oinkie::birthmarks::AnalysisType;
+//! use oinkie::compare::Aggregator;
+//! use oinkie::extract::Extractor;
+//!
+//! # fn main() -> oinkie::Result<()> {
+//! let analysis = AnalysisType::try_from("op-set-jaccard")?;
+//! let extractor = Extractor::new(analysis.birthmark().clone());
+//! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
+//! let b = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/udl.json"))?)?;
+//!
+//! let comparison = analysis
+//!     .comparator()
+//!     .compare_birthmarks(&a, &b, &Aggregator::Hungarian)?;
+//! let similarity = comparison.similarity();
+//! assert!((0.0..=1.0).contains(&similarity));
+//! # Ok(())
+//! # }
+//! ```
+
+// Every public item is documented, and stays so: CI runs clippy with
+// -D warnings, which makes this an error there.
+#![warn(missing_docs)]
 
 use std::path::PathBuf;
 
@@ -26,23 +61,34 @@ mod program;
 
 pub use crate::program::Program;
 
+/// What every fallible function in this crate returns.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// The messages live on the variants rather than in a `Display` match, so
-/// that adding a variant and deciding how it reads are the same edit.
+/// Everything that can go wrong in oinkie.
 ///
-/// The wrapped errors are `#[source]` but not `#[from]`. `Io` and `Json`
-/// carry the path beside the error — which path failed is the useful half —
-/// so they could not be `#[from]` anyway, and for the rest an explicit
-/// `map_err(Error::Csv)` at the call site says more than a conversion hidden
-/// inside a `?`.
+/// Each variant's message, its `Display`, is written for a person, and names
+/// the file or the value it is about. A wrapped error is reachable as the
+/// `source`. [`Error::is_caller_fault`] says whether asking differently could
+/// have avoided it.
+//
+// Each message sits on its variant, so that adding a variant and deciding how
+// it reads are one edit. The wrapped errors are `#[source]` but not
+// `#[from]`: `Io` and `Json` carry the path beside the error, since which path
+// failed is the useful half, and for the rest an explicit `map_err` at the
+// call site says what failed where a `?` would hide it.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 pub enum Error {
+    /// Several failures from one batch, one per input that failed and in the
+    /// inputs' order, shown numbered from 1. [`Error::vec_result_to_result_vec`]
+    /// makes it.
     #[error("{}", render_group(.0))]
     Array(Vec<Self>),
+    /// A birthmark type name that does not parse, as it was given: an unknown
+    /// family, or a k-gram of size 0.
     #[error("{0}: unknown birthmark type")]
     BirthmarkType(String),
+    /// A CSV record could not be read or written.
     #[error("CSV error: {0}")]
     Csv(#[source] csv::Error),
     /// A birthmark shape paired with an algorithm that does not operate on it.
@@ -63,16 +109,15 @@ pub enum Error {
     /// indistinguishable from one that works until something reads what it
     /// wrote.
     ///
-    /// The output's path is not repeated here: every error
-    /// [`crate::Program::load`] can return carries it already, and
-    /// naming it twice put the same long path in the message twice.
+    /// The output's path is not repeated: every error
+    /// [`crate::Program::load`] returns names it already.
     #[error(
         "{binary}: the lifter reported success, but what it wrote cannot be read back: {cause}",
         binary = .0.display(),
         cause = .1
     )]
     UnreadableOutput(PathBuf, #[source] Box<Error>),
-    /// A lifted file naming a representation this build cannot read.
+    /// A P-Code operation given by a number Ghidra does not define.
     #[error("invalid pcode: {0}")]
     InvalidPcode(u32),
     /// An I/O failure on a path the caller gave: a file to read, a destination
@@ -89,18 +134,32 @@ pub enum Error {
     /// whose path it was decides whether asking differently could have helped.
     #[error("IO error for {path}: {cause}", path = .0.display(), cause = .1)]
     ToolIo(PathBuf, #[source] std::io::Error),
+    /// The file at the path is not JSON of the shape expected -- a lifted
+    /// program, a birthmark -- or could not be written as JSON.
     #[error("{path}: JSON error: {cause}", path = .0.display(), cause = .1)]
     Json(PathBuf, #[source] serde_json::Error),
+    /// The assignment the `hungarian` aggregator solves could not be solved.
     #[error("LapJV error: {0}")]
     LapJV(#[source] lapjv::LapJVError),
+    /// Two birthmarks of different types were compared. A birthmark compares
+    /// only with one of its own type.
     #[error("Mismatched birthmark types: {0} and {1}")]
     Mismatch(BirthmarkType, BirthmarkType),
+    /// Something that could not be read or done, with the reason: an
+    /// aggregator name, a file's contents, a lift that wrote nothing. A
+    /// catch-all, which is why [`Error::is_caller_fault`] does not count it
+    /// as the caller's.
     #[error("Parse error: {0}")]
     Parse(String),
+    /// Text that should have been a decimal number: the text, and why it is
+    /// not one.
     #[error("{0}: Parse float error {1}")]
     ParseFloat(String, #[source] std::num::ParseFloatError),
+    /// Text that should have been a whole number: the text, and why it is not
+    /// one.
     #[error("{0}: Parse int error {1}")]
     ParseInt(String, #[source] std::num::ParseIntError),
+    /// A matrix could not be built in the shape asked for.
     #[error("Shape error: {0}")]
     ShapeError(#[source] ShapeError),
     /// A lifting tool's installation could not be found: none was given, its
@@ -111,8 +170,11 @@ pub enum Error {
     /// library naming a way that only one caller has.
     #[error("{}", render_tool_not_found(.tool, .env, .candidates))]
     ToolNotFound {
+        /// The tool, as a person names it: `Ghidra`.
         tool: &'static str,
+        /// The environment variable that names its home: `GHIDRA_HOME`.
         env: &'static str,
+        /// The usual installation directories that were looked in.
         candidates: &'static [&'static str],
     },
 }
@@ -150,11 +212,10 @@ impl Error {
     /// Whether the caller could have avoided this by asking differently: a
     /// name, a pairing or a number they supplied, or a file they named.
     ///
-    /// Decided here, by an exhaustive match, because this is the one place the
-    /// match can stay exhaustive. `Error` is `#[non_exhaustive]`, so a crate
-    /// that matches on it has to have a wildcard arm, and a new variant would
-    /// fall into that arm unclassified. Inside the crate that defines it, a
-    /// new variant stops the build here until someone decides which it is.
+    /// Answered by the crate that defines `Error`, because only it can match
+    /// every variant. `Error` is `#[non_exhaustive]`, so a match elsewhere
+    /// needs a wildcard arm, where a new variant would go unclassified; here a
+    /// new variant stops the build until it is classified.
     pub fn is_caller_fault(&self) -> bool {
         match self {
             // A name, a pairing or a number that the caller supplied.
@@ -170,8 +231,7 @@ impl Error {
 
             // Something went wrong inside, or in a file oinkie itself
             // produced; or in the machine it runs on, which no argument can
-            // change. A missing tool was never the caller's fault either, back
-            // when it arrived as a `Parse`.
+            // change. No argument installs a missing tool either.
             //
             // `ToolIo` is on a path oinkie chose: the tool it found, or a
             // scratch file. The tool's path can come from a home the caller
@@ -207,6 +267,11 @@ impl Error {
         }
     }
 
+    /// Every value, or every error: the results of a batch, one per input.
+    ///
+    /// All succeeding gives the values in the inputs' order. One failing gives
+    /// its error as it is, and several give an [`Error::Array`] of them in the
+    /// same order, so that no failure is dropped in favour of the first.
     pub fn vec_result_to_result_vec<T>(vec: Vec<Result<T>>) -> Result<Vec<T>> {
         let mut results = Vec::new();
         let mut errs = Vec::new();
@@ -275,16 +340,14 @@ pub(crate) trait Op {
     /// table keys it, so that [`crate::program::TypedProgram::symbol`] can resolve
     /// it, or `None` when that operand cannot name a symbol.
     ///
-    /// Callers choose which operations to ask — the only caller today asks
-    /// calls, to build the `fc-*` birthmarks — so an implementation need not
-    /// inspect the opcode itself.
+    /// It is asked of calls, to build the `fc-*` birthmarks, so an
+    /// implementation need not inspect the opcode itself.
     ///
     /// Returning `None` for a target no symbol could name is the part that
     /// matters. An indirect call through a register or a temporary is
     /// resolved at run time and has no name to find; a key that cannot match
     /// would be indistinguishable from a lookup that legitimately found
-    /// nothing, which is how the `fc-*` family came to be silently empty
-    /// before this method existed.
+    /// nothing.
     ///
     /// The operand notation is the lifter's own — Ghidra writes
     /// `"(ram, 0x100000480, 8)"` while its symbol table is keyed
@@ -555,9 +618,8 @@ mod tests {
         assert!(!rendered.contains("0."), "numbered from zero: {rendered}");
     }
 
-    /// `impl std::error::Error for Error {}` was empty, so `source()` was
-    /// `None` even for the variants holding a cause. Nothing called it —
-    /// there was nothing to get (#62).
+    /// A variant holding a cause reports it as its `source`, so that a caller
+    /// walking the chain reaches the I/O or JSON error underneath.
     #[test]
     fn test_a_wrapped_error_is_reachable_as_a_source() {
         use std::error::Error as _;

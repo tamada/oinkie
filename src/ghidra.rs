@@ -1,3 +1,11 @@
+//! Ghidra's P-Code, as the lifting script writes it.
+//!
+//! One [`Op`] per operation of a function's high P-Code: its [`PcodeOp`]
+//! opcode, and its output and inputs as Ghidra spells varnodes,
+//! `(space, offset, size)`, which [`Value`] reads. The opcode set is a closed
+//! enum in [`pcode`], so an opcode Ghidra does not define is refused when the
+//! file is read.
+
 use std::str::FromStr;
 
 use crate::ghidra::pcode::PcodeOp;
@@ -35,8 +43,8 @@ impl crate::Op for Op {
         //
         // CALLIND is, because it is a call. Its target lives in a register or
         // a temporary, so `symbol_key` yields nothing for it and it
-        // contributes to no birthmark today; including it keeps the predicate
-        // an answer about P-Code rather than about what happens to resolve.
+        // contributes to no birthmark; including it keeps the predicate an
+        // answer about P-Code rather than about what happens to resolve.
         matches!(self.op, PcodeOp::Call | PcodeOp::Callind)
     }
 
@@ -174,8 +182,8 @@ mod tests {
 
     #[test]
     fn parse_pcode_json() {
-        // Through the loader rather than `from_reader` on a bare `File`, so
-        // that the pattern #51 removed is not left here to be copied.
+        // Through the loader rather than `from_reader` on a bare `File`, which
+        // reads one byte per system call.
         let path = std::path::PathBuf::from("testdata/lifted/pcodes/hello_clang.json");
         let r: TypedProgram<super::Op> = path.try_into().expect("Failed to parse JSON");
         assert_eq!(r.name(), "hello_clang");
@@ -230,8 +238,8 @@ mod tests {
 
     #[test]
     fn parse_pcode_json2() {
-        // Through the loader rather than `from_reader` on a bare `File`, so
-        // that the pattern #51 removed is not left here to be copied.
+        // Through the loader rather than `from_reader` on a bare `File`, which
+        // reads one byte per system call.
         let path = std::path::PathBuf::from("testdata/lifted/pcodes/hello_gcc.json");
         let _r: TypedProgram<super::Op> = path.try_into().expect("Failed to parse JSON");
     }

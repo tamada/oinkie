@@ -123,8 +123,7 @@ mod tests {
         dir
     }
 
-    /// The installation this was written against: two cloud decompilers and no
-    /// local one.
+    /// An installation with two cloud decompilers and no local one.
     #[test]
     fn test_only_cloud_plugins_warns() {
         let dir = install(&["hexcx64.dylib", "hexcarm.dylib", "dbg.dylib"]);
@@ -148,10 +147,10 @@ mod tests {
     /// each covers its own architectures: `hexcx64` next to `hexarm64`
     /// decompiles x64 in the cloud whatever the ARM64 plugin does.
     ///
-    /// This is the case the first version got wrong. It returned on the first
-    /// local plugin it saw and reported that a local decompiler would run,
-    /// which for an x64 binary on this installation is false -- and the cost of
-    /// being wrong that way is a function that has already left the machine.
+    /// Stopping at the first local plugin would report that a local
+    /// decompiler runs, which for an x64 binary on this installation is false
+    /// -- and the cost of being wrong that way is a function that has already
+    /// left the machine.
     #[test]
     fn test_a_local_plugin_for_another_architecture_does_not_silence_the_warning() {
         let dir = install(&["hexcx64.dylib", "hexarm64.dylib"]);

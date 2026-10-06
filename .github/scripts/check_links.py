@@ -17,8 +17,8 @@ do with this repository -- a site down for ten minutes would fail a push -- and
 they rot on their own schedule. `link-rot.yaml` looks at those weekly and opens
 an issue.
 
-What this exists for: `cli/mcp/README.md` pointed at `lifter/README.md` for the
-whole of v0.5.0, after #91 moved that directory, and nothing noticed.
+What this exists for: a directory that moves leaves every link to it pointing
+at nothing, and nothing else would notice.
 """
 
 import os
@@ -74,8 +74,8 @@ def without_spans(text):
     same length; a run with none after it is literal text, as in CommonMark.
 
     Walked once over the runs rather than matched with a backreference, which
-    retried from every later position after an unclosed run and so took time
-    growing with the square of the file (SonarQube python:S8786, #169).
+    would retry from every later position after an unclosed run and so take
+    time growing with the square of the file.
     """
     runs = [(m.start(), m.end()) for m in TICKS.finditer(text)]
     # For each run, the next one of the same length, found from the end.

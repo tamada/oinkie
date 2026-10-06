@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 /// Compares two programs the way the command line does: the `op-set`
 /// birthmark of each, by Jaccard. There is no comparing of programs as such --
-/// a comparison is of birthmarks, which say what is compared (#150).
+/// a comparison is of birthmarks, which say what is compared.
 fn compare(a: &Program, b: &Program) -> oinkie::Result<f64> {
     let extractor = Extractor::new(BirthmarkType::OpSet);
     let (ba, bb) = (extractor.extract(a)?, extractor.extract(b)?);
@@ -39,19 +39,16 @@ fn test_the_fixture_reads_back_as_the_representation_it_names() {
     assert_eq!(p.name(), "hello_clang");
 }
 
-/// The failure this exists for is silent, and it happened twice.
+/// The failure this exists for is silent, and there are two ways to reach it.
 ///
-/// The microcode renders a global as `$name`, and the symbol table was first
-/// keyed by the resolved name instead, so it was empty. Separately, the
-/// optimiser folds a call into whatever consumes its result, so a call can sit
-/// inside another instruction's operand; walking only the block's list missed
-/// it.
+/// The microcode renders a global as `$name`, so a symbol table keyed by the
+/// resolved name would find nothing. And the optimiser folds a call into
+/// whatever consumes its result, so a call can sit inside another
+/// instruction's operand, where walking only the block's list misses it.
 ///
-/// Neither failed loudly. `m_call` is still a call wherever it is, so the check
-/// that refuses a program in which nothing is a call passed in the first case,
-/// and every `fc-*` birthmark simply came out empty — two of which score as a
-/// perfect match. So this asserts that the call is *resolved*, not that one is
-/// present.
+/// Neither would fail loudly: every `fc-*` birthmark would simply come out
+/// empty -- two of which score as a perfect match. So this asserts that the
+/// call is *resolved*, not that one is present.
 #[test]
 fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
     let p = Program::load(&fixture("hello_clang.json")).unwrap();

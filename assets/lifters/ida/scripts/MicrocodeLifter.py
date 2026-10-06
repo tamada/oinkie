@@ -17,17 +17,16 @@ decompiler is the cloud one, that sends each function to Hex-Rays' servers;
 
 Three things here are contracts rather than choices.
 
-The output is built with `json.dumps` and never by concatenating strings. The
-Ghidra script did the latter and produced files that could not be parsed once a
-symbol held a quote, and files that parsed into the wrong name once one held a
-backslash (#77).
+The output is built with `json.dumps` and never by concatenating strings.
+Concatenated, a symbol holding a quote makes a file that cannot be parsed, and
+one holding a backslash a file that parses into the wrong name.
 
 The symbol table is keyed by the callee as the first operand renders it,
 because that is what the Rust side looks up.
 
 Everything iterated is sorted or written in the order IDA gives it, never out
-of a set. The Binary Ninja script collected keys in a set and so wrote a
-different byte order on every run.
+of a set, whose order differs between runs, so that one binary always gives the
+same bytes.
 """
 
 import json

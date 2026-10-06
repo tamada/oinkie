@@ -1,11 +1,10 @@
 //! The vocabulary the server advertises.
 //!
 //! Every list here is *generated* from the library. None of it is written out
-//! a second time, for the reason `cli/values.rs` gives at length: the CLI once
-//! kept hand-written copies of these names -- 31 birthmarks and 64 analyses --
-//! and they went stale in three directions at once (#25). A model guessing at
-//! `op-3gram-freq-cosine` has no `--help` to fall back on, so a list that has
-//! drifted is worse here than it was there.
+//! a second time, because a hand-written copy of a vocabulary drifts from the
+//! parser that owns it. A model guessing at `op-3gram-freq-cosine` has no
+//! `--help` to fall back on, so a list that has drifted would be worse here
+//! than anywhere.
 //!
 //! The one exception is the aggregators, which the library does not enumerate.
 //! They are listed by hand and the tests check every name against
@@ -135,8 +134,7 @@ mod tests {
 
     /// The whole point of this module: what it advertises is what the library
     /// generates, not a copy of it. `cli/values.rs` asserts the same thing for
-    /// clap's lists, after two hand-written ones went stale in three
-    /// directions at once (#25).
+    /// clap's lists.
     #[test]
     fn test_the_birthmarks_are_the_ones_the_library_generates() {
         let offered = vocabulary()
@@ -174,8 +172,8 @@ mod tests {
     /// The algorithm list and the analysis list do not spell every algorithm
     /// the same way, and that is correct rather than a slip: an `algorithm`
     /// argument is parsed by clap, which knows `weighted-jaccard`, while an
-    /// analysis name is parsed by the library's own split, which produced
-    /// `weightedjaccard` from `name`. Both parse inside an analysis (#71).
+    /// analysis name is parsed by the library's own split, which gives
+    /// `weightedjaccard` from `name`. Both parse inside an analysis.
     ///
     /// Asserted rather than merely written down, because the two lists sit
     /// next to each other in one tool result and a reader will notice.
@@ -228,10 +226,9 @@ mod tests {
     /// one is the closest substitute: the list cannot advertise a name the
     /// parser would refuse.
     ///
-    /// Verbatim, with nothing standing in. The list used to carry `topn:N` and
-    /// this test replaced the `N` with a 3 before parsing -- so it asserted
-    /// that *some* name parsed, not the one being advertised, and `topn:N`
-    /// reached a reader as though it were a value they could send.
+    /// Verbatim, with nothing standing in: each advertised name is a value a
+    /// reader can send, and the test parses exactly that, not a stand-in for
+    /// it.
     #[test]
     fn test_every_advertised_aggregator_parses_verbatim() {
         for agg in vocabulary().aggregators {

@@ -13,7 +13,7 @@
 #
 # With --run, CLASS is then run from what was compiled, against the same jars,
 # and its exit status is this script's. That is how the script's own string
-# handling is tested without starting Ghidra (#138):
+# handling is tested without starting Ghidra:
 #
 #   compile-check.sh --run HighPCodeLifterTest \
 #       assets/lifters/ghidra/scripts/HighPCodeLifter.java \

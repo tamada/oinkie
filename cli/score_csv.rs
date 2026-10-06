@@ -2,7 +2,7 @@
 //!
 //! The format is the command line's, so it lives here rather than in the
 //! library, which hands over a [`Comparison`] and the two things it compared
-//! and has no opinion on how they are written down (#133).
+//! and has no opinion on how they are written down.
 //!
 //! ```text
 //! result,{nanoseconds},{similarity}
@@ -236,9 +236,9 @@ mod tests {
     }
 
     /// A function name that needs quoting -- a C++ template's, with a comma --
-    /// comes back whole, as a column and as a row. Each row once wrote its
-    /// name after a space, which hid the quotes from the reader, so the
-    /// name split and the next field was read as a score.
+    /// comes back whole, as a column and as a row. A space before a row's name
+    /// would hide its quotes from the reader, so the name would split and the
+    /// next field be read as a score.
     #[test]
     fn test_a_function_name_that_needs_quoting_survives_the_round_trip() {
         let name = "foo<int, \"q\">";

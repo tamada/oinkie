@@ -1,3 +1,6 @@
+//! The P-Code operations Ghidra defines, by the numbers and names Ghidra
+//! gives them.
+
 use crate::{Error, Result};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;

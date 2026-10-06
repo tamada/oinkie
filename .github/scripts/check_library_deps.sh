@@ -1,5 +1,5 @@
 #!/bin/sh
-# The library does not depend on the command line (#133).
+# The library does not depend on the command line.
 #
 # `cargo add oinkie --no-default-features` builds the library alone, and none
 # of the crates below belongs in that build: they are the command line's

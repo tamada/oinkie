@@ -8,9 +8,9 @@ import java.nio.file.Path;
  *
  * This is the shape every lifting script can fail in and none can detect for
  * itself: the script writes bytes, returns normally, and analyzeHeadless exits
- * 0 whether or not anything downstream can read what it wrote. Before #83, a
- * lift like this one succeeded, and the failure surfaced at `extract` as a
- * parse error naming a line and column in a file the reader had never seen.
+ * 0 whether or not anything downstream can read what it wrote. Unless the lift
+ * reads its output back, the failure surfaces at `extract` as a parse error
+ * naming a line and column in a file the reader had never seen.
  *
  * Used by tests/cli_test.rs through `--script`, which is also the point: a
  * replacement script is arbitrary Java that oinkie never inspects, so the

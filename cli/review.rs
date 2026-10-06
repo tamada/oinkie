@@ -1,3 +1,10 @@
+//! `oinkie review`: re-reading a finished comparison.
+//!
+//! Each pair's similarity is recomputed from the function similarities its
+//! pair CSV stored, under an aggregator and optionally without the functions
+//! shorter than `--min-elements`. Nothing is compared again. The MCP
+//! server's `oinkie_review` runs the same [`review_all`].
+
 use std::ffi::OsStr;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -48,10 +55,9 @@ pub(crate) fn store(review: Review, dest: &Path, start: Instant) -> Result<Vec<D
 
 /// Recomputes every score in a directory, and hands them back.
 ///
-/// Split out of [`perform`], which now only decides where to write them,
-/// because the MCP tool wants the scores themselves rather than a CSV. Both
-/// callers get the same numbers by construction rather than by two
-/// implementations agreeing.
+/// Apart from [`perform`], which decides where to write them, because the MCP
+/// tool wants the scores themselves rather than a CSV. Both callers get the
+/// same numbers by construction rather than by two implementations agreeing.
 ///
 /// Given `min_elements`, each pair's functions with fewer elements than the
 /// threshold are dropped before aggregating -- a row and a column of the
@@ -150,7 +156,7 @@ impl Filter {
 
     /// The indices of the functions to keep, after checking that the
     /// birthmark is still the one the matrix was computed from: one extracted
-    /// again since would hand its counts to another's functions.
+    /// again since would lend its counts to another's functions.
     fn keep(&self, birthmark: &Path, names: &[String], csv: &Path) -> Result<Vec<usize>> {
         let functions = &self.birthmarks[birthmark];
         let matches =
@@ -307,9 +313,9 @@ fn load_results_impl(score_dir: &Path) -> Result<Vec<CompareResult>> {
         std::fs::File::open(result_file.clone()).map_err(|e| Error::Io(result_file.clone(), e))?;
     let mut results = Vec::new();
     let bufr = BufReader::new(&mut reader);
-    // A line that cannot be read is an error, not the end of the list. It
-    // used to end it quietly, so a summary unreadable part-way through came
-    // back as one with fewer pairs, and `review` rescored only those.
+    // A line that cannot be read is an error, not the end of the list: ending
+    // it quietly would review only the pairs before it, and say nothing about
+    // the rest.
     for line in bufr.lines() {
         let line = line.map_err(|e| Error::Io(result_file.clone(), e))?;
         if line.to_lowercase().starts_with("total duration,") {
@@ -358,9 +364,9 @@ fn recorded(record: &csv::StringRecord) -> Recorded {
     }
 }
 
-/// A row's function name. Files before v0.8.0 wrote a space after the row's
-/// number, which kept the reader from seeing a quoted name as quoted; such a
-/// name is unquoted here. One with a comma in it was split by the reader and
+/// A row's function name. A score CSV may have a space after the row's
+/// number, which keeps the reader from seeing a quoted name as quoted, so such
+/// a name is unquoted here. One with a comma in it is split by the reader and
 /// cannot be recovered.
 fn row_name(field: &str) -> String {
     match field.strip_prefix(' ') {
@@ -527,8 +533,8 @@ mod tests {
     }
 
     /// `compare` writes a side with no functions as `matrix,,` and rows with
-    /// no values, or no rows at all. Both used to fail to load, so a
-    /// directory holding one empty birthmark could not be reviewed.
+    /// no values, or no rows at all. Both load, so that a directory holding an
+    /// empty birthmark can be reviewed.
     #[test]
     fn test_a_comparison_with_an_empty_side_loads() {
         let head = "result,0,0\nleft,program,a,a,1,1,\nright,program,b,b,1,1,\n";
@@ -679,9 +685,8 @@ mod tests {
         assert_eq!(results[0].similarity, 0.75);
     }
 
-    /// A summary unreadable part-way through is an error. It used to end the
-    /// list there, so `review` rescored the pairs before the bad line and
-    /// reported nothing about the rest.
+    /// A summary unreadable part-way through is an error, rather than a
+    /// review of only the pairs before the bad line.
     #[test]
     fn test_a_summary_that_cannot_be_read_to_the_end_is_refused() {
         let d = dir_with(&[("00000.csv", A_COMPARISON), ("00001.csv", A_COMPARISON)]);

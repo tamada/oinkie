@@ -1,11 +1,9 @@
 //! The two `--` options whose values are names from the birthmark vocabulary.
 //!
-//! Both used to be `ValueEnum`s that hand-listed what the library already
-//! parses: `BType` with 31 variants, `Analysis` with 64, at two different
-//! k ceilings and in two spellings that were each different from the
-//! library's (#25). The parsing is the library's now. What is kept here is
-//! the part clap genuinely needs and the library cannot supply: a value
-//! parser, and a finite list of names for completion and `--help`.
+//! The parsing is the library's: a hand-written list of what the library
+//! parses would drift from it, in its names and in where it stops. What is
+//! kept here is the part clap genuinely needs and the library cannot supply:
+//! a value parser, and a finite list of names for completion and `--help`.
 //!
 //! clap uses `possible_values` for help, completion and its "did you mean"
 //! suggestions, and leaves validation to `parse_ref`. That is what lets the
@@ -118,10 +116,8 @@ mod tests {
             .collect()
     }
 
-    /// What clap advertises is what the library generated, not a copy of it.
-    /// The two hand-written lists this replaced went stale in three
-    /// directions at once (#25), so the assertion is that nothing is
-    /// restated here.
+    /// What clap advertises is what the library generated, not a copy of it:
+    /// the assertion is that nothing is restated here.
     #[test]
     fn test_the_offered_analyses_are_the_ones_the_library_generates() {
         let offered = advertised(&AnalysisParser)
@@ -198,9 +194,8 @@ mod tests {
     }
 
     /// Both parsers refuse a non-UTF-8 value through the same helper, so the
-    /// message has to name the vocabulary the value failed to be. It said
-    /// "birthmark name" for both until a review caught it, which sent an
-    /// `--analysis` reader looking in the wrong place.
+    /// message has to name the vocabulary the value failed to be, or an
+    /// `--analysis` reader is sent looking in the wrong place.
     #[cfg(unix)]
     #[test]
     fn test_a_non_utf8_value_is_refused_as_what_the_option_takes() {

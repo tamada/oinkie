@@ -10,11 +10,9 @@ value the file carries.
 
 Two things about this file are contracts rather than choices.
 
-The output is built with `json.dumps` and never by concatenating strings. The
-Ghidra script did the latter and produced files that could not be parsed once
-a symbol held a quote, and files that parsed into the wrong name once one held
-a backslash (#77). A second lifter in a second language is a second chance to
-make that mistake.
+The output is built with `json.dumps` and never by concatenating strings.
+Concatenated, a symbol holding a quote makes a file that cannot be parsed, and
+one holding a backslash a file that parses into the wrong name.
 
 The symbol table is keyed by whatever this level renders a call target as,
 because that is what the Rust side will look up. LLIL and MLIL render it as a
@@ -142,8 +140,7 @@ def main(argv):
         return 2
     # oinkie names the output `{input file name}.json` and collects it from
     # the working directory it runs this in, so a name with a directory in it
-    # is not one oinkie gave. Refused rather than written wherever it points
-    # (SonarQube pythonsecurity:S8707, #169).
+    # is not one oinkie gave. Refused rather than written wherever it points.
     name = os.path.basename(output)
     if name != output or name in ("", ".", ".."):
         sys.stderr.write("output %r must be a file name, without a directory\n" % output)
