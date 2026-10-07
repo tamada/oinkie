@@ -3,8 +3,8 @@
 #
 # `cargo add oinkie --no-default-features` builds the library alone, and none
 # of the crates below belongs in that build: they are the command line's
-# argument parser, its output naming, its logger, progress bar and thread
-# pool, its MCP server, and its completion generator. Rust already stops the
+# argument parser, its output naming, its logger and progress bar, its MCP
+# server, and its completion generator. Rust already stops the
 # library from `use`-ing the binary's modules; what it does not stop is one of
 # these creeping back in as a dependency of the library itself.
 #
@@ -15,7 +15,7 @@
 # reporting a clean library it never looked at.
 set -eu
 
-readonly CLI_ONLY="clap clap_complete env_logger indicatif rayon rmcp sha2 tokio"
+readonly CLI_ONLY="clap clap_complete env_logger indicatif rmcp sha2 tokio"
 
 # Prints the crates of $CLI_ONLY that `cargo tree` lists, one per line.
 # `--prefix none` puts each crate's name first on its line, so the name is

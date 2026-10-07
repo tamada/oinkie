@@ -105,12 +105,9 @@ fn test_the_package_carries_every_compiled_in_file() {
 /// using one of them -- `cargo add oinkie --no-default-features` would be the
 /// only thing that failed, and only for someone else. Grepping is enough to
 /// say so, and costs nothing.
-///
-/// The parallelism is the surprising one: `cli/main.rs` owns its thread pool,
-/// and nothing under `src/` mentions rayon at all.
 #[test]
 fn test_the_library_does_not_use_the_cli_only_dependencies() {
-    for crate_name in ["env_logger", "indicatif", "rayon"] {
+    for crate_name in ["env_logger", "indicatif"] {
         let module = crate_name.replace('-', "_");
         for file in walk(Path::new("src")) {
             let text = std::fs::read_to_string(&file).unwrap();
