@@ -8,17 +8,18 @@
 
 mod cli;
 mod dest_name;
+mod progress;
 mod score_csv;
 mod values;
 mod vocabulary;
 
 use clap::Parser;
-use indicatif::ProgressBar;
 use oinkie::birthmarks::Birthmark;
 use oinkie::compare::{Aggregator, Comparator};
 use oinkie::extract::Extractor;
 use oinkie::lift::{Lifter, LifterBuilder};
 use oinkie::{Error, Oinkie, Program, Result};
+use progress::{Bars, Comparing, Kind};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::io::Write;
@@ -46,13 +47,19 @@ fn load_program(path: &Path) -> Result<Program> {
     Ok(program)
 }
 
-fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
+fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie, bars: &Bars) -> Result<Vec<Duration>> {
     let start = Instant::now();
     let atype = opts.analysis_type()?;
     let comparator = oinkie.comparator(atype.algorithm());
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
-    let pbar = new_progress_bar(opts.files.len() + comparing_count);
+    let progress = bars.comparing(
+        Kind::Run,
+        opts.files.len() + comparing_count,
+        comparing_count,
+        "Extracting",
+    );
+    let pbar = &progress.overall;
     let aggregator = opts.aggregator();
     // The analysis names a birthmark and an algorithm, and both are used: each
     // program's birthmark is extracted and the birthmarks are compared, which is
@@ -65,7 +72,6 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
     // is what `review` re-reads a comparison from.
     let birthmarks_dir = dest.join("birthmarks");
     std::fs::create_dir_all(&birthmarks_dir).map_err(|e| Error::Io(birthmarks_dir.clone(), e))?;
-    pbar.set_message("Extracting birthmarks");
     let by_input = extract_all(
         &opts.files,
         &birthmarks_dir,
@@ -75,6 +81,7 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
     )?;
     // Duplicates were extracted once, so they never reach the bar.
     pbar.inc((opts.files.len() - by_input.len()) as u64);
+    pbar.set_message("Comparing");
 
     let results = opts
         .iter()
@@ -98,12 +105,9 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
                 read_result_file(&dest_file, i, path1, path2)
             } else {
                 let (b1, b2) = (&e1.birthmark, &e2.birthmark);
-                pbar.set_message(format!(
-                    "Comparing two birthmarks ({}/{})",
-                    i + 1,
-                    comparing_count
-                ));
-                let result = comparator.compare_birthmarks(b1, b2, aggregator)?;
+                let pair = progress.pair(i);
+                let result = comparator.compare_birthmarks_with(b1, b2, aggregator, &pair)?;
+                drop(pair);
                 pbar.inc(1);
                 score_csv::store(&result, &dest_file)?;
                 Ok(CompareResult::new(
@@ -116,7 +120,7 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
             }
         })
         .collect::<Vec<_>>();
-    pbar.finish();
+    progress.finish();
     let results = Error::vec_result_to_result_vec(results)?;
     let dest_file = dest.join("results.csv");
     store_and_get_durations(results, &dest_file, start)
@@ -207,21 +211,12 @@ fn read_result_file(
     ))
 }
 
-fn new_progress_bar(len: usize) -> ProgressBar {
-    ProgressBar::new(len as u64).with_style(
-        indicatif::ProgressStyle::with_template(
-            "[{elapsed_precise}/({per_sec})] {bar:40} {pos:>7}/{len:7} {msg}",
-        )
-        .unwrap(),
-    )
-}
-
-fn perform_compare(opts: cli::CompareOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
+fn perform_compare(opts: cli::CompareOpts, oinkie: &Oinkie, bars: &Bars) -> Result<Vec<Duration>> {
     let start = Instant::now();
     let comparator = opts.comparator(oinkie);
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
-    let pbar = new_progress_bar(comparing_count * 3);
+    let progress = bars.comparing(Kind::Compare, comparing_count, comparing_count, "Comparing");
     let aggregator = opts.aggregator();
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
     let r = opts
@@ -233,14 +228,14 @@ fn perform_compare(opts: cli::CompareOpts, oinkie: &Oinkie) -> Result<Vec<Durati
                 (i, (path1, path2)),
                 &comparator,
                 dest,
-                &pbar,
+                &progress,
                 comparing_count,
                 opts.is_skip(),
                 aggregator,
             )
         })
         .collect::<Vec<_>>();
-    pbar.finish();
+    progress.finish();
     let result_file = dest.join("results.csv");
     Error::vec_result_to_result_vec(r).and_then(|r| store_and_get_durations(r, &result_file, start))
 }
@@ -285,12 +280,13 @@ fn compare_impl(
     tuple: (usize, (&Path, &Path)),
     comparator: &Comparator,
     dest: &Path,
-    pbar: &ProgressBar,
+    progress: &Comparing,
     comparing_count: usize,
     skip: bool,
     aggregator: &Aggregator,
 ) -> Result<CompareResult> {
     let (i, (path1, path2)) = tuple;
+    let pbar = &progress.overall;
     let dest_file = dest.join(format!("{i:05}.csv"));
     log::info!(
         "compare_impl(dest: {} (exists: {}), skip: {skip})",
@@ -303,32 +299,24 @@ fn compare_impl(
             path1,
             path2
         );
-        pbar.inc(3);
+        pbar.inc(1);
         read_result_file(&dest_file, i, path1, path2)
     } else {
-        log::info!("Loading birthmark from {:?}", path2.display());
-        pbar.set_message(format!("Loading birthmark from {:?}", path1.display()));
+        log::info!("Loading birthmark from {:?}", path1.display());
         let mut b1: Birthmark = load(path1.to_path_buf())?;
         b1.set_json_path(path1.to_path_buf());
-        pbar.inc(1);
         log::info!("Loading birthmark from {:?}", path2.display());
-        pbar.set_message(format!("Loading birthmark from {:?}", path2.display()));
         let mut b2: Birthmark = load(path2.to_path_buf())?;
         b2.set_json_path(path2.to_path_buf());
-        pbar.inc(1);
         log::info!(
             "Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}",
             b1.len(),
             b2.len(),
             i + 1
         );
-        pbar.set_message(format!(
-            "Comparing birthmarks (len: {} x {}) progress: {}/{comparing_count}",
-            b1.len(),
-            b2.len(),
-            i + 1
-        ));
-        let result = comparator.compare_birthmarks(&b1, &b2, aggregator)?;
+        let pair = progress.pair(i);
+        let result = comparator.compare_birthmarks_with(&b1, &b2, aggregator, &pair)?;
+        drop(pair);
         pbar.inc(1);
         score_csv::store(&result, &dest_file)?;
         Ok(CompareResult::new(
@@ -341,16 +329,9 @@ fn compare_impl(
     }
 }
 
-fn perform_extract(opts: cli::ExtractOpts) -> Result<Vec<Duration>> {
+fn perform_extract(opts: cli::ExtractOpts, bars: &Bars) -> Result<Vec<Duration>> {
     let dest = opts.dest();
-    let pb = ProgressBar::new(opts.len() as u64)
-        .with_style(
-            indicatif::ProgressStyle::with_template(
-                "[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}",
-            )
-            .unwrap(),
-        )
-        .with_message("Extracting birthmarks...");
+    let pb = bars.overall(Kind::Extract, opts.len(), "Extracting");
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
     let extractor = opts.extractor();
     let start = Instant::now();
@@ -567,6 +548,7 @@ mod mcp;
 
 fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
     opts.init()?;
+    let bars = Bars::new(!opts.no_progress);
     use cli::OinkieCommand::*;
     // Every command that computes in-process runs on the threads of one
     // Oinkie, its own loops over pairs and files included, so that --threads
@@ -575,25 +557,24 @@ fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
         Run(opts) => opts
             .threads
             .oinkie()
-            .and_then(|o| o.install(|| perform_run(opts, &o))),
+            .and_then(|o| o.install(|| perform_run(opts, &o, &bars))),
         Compare(opts) => opts
             .threads
             .oinkie()
-            .and_then(|o| o.install(|| perform_compare(opts, &o))),
-        Extract(opts) => opts
-            .threads
-            .oinkie()
-            .and_then(|o| o.install(|| validate_extract_opts(opts).and_then(perform_extract))),
+            .and_then(|o| o.install(|| perform_compare(opts, &o, &bars))),
+        Extract(opts) => opts.threads.oinkie().and_then(|o| {
+            o.install(|| validate_extract_opts(opts).and_then(|opts| perform_extract(opts, &bars)))
+        }),
         Review(opts) => opts
             .threads
             .oinkie()
-            .and_then(|o| o.install(|| review::perform(opts))),
+            .and_then(|o| o.install(|| review::perform(opts, &bars))),
         Reaggregate { .. } => unreachable!("rs_main refuses the old name before perform"),
         Stats(opts) => opts
             .threads
             .oinkie()
             .and_then(|o| o.install(|| stats::perform(opts))),
-        Lift(opts) => perform_lift(opts),
+        Lift(opts) => perform_lift(opts, &bars),
         Info => perform_info(),
         #[cfg(feature = "mcp")]
         Mcp(opts) => mcp::perform(&opts),
@@ -657,16 +638,9 @@ fn with_home_hint(e: Error) -> Error {
     }
 }
 
-fn perform_lift(opts: cli::LiftOpts) -> Result<Vec<Duration>> {
+fn perform_lift(opts: cli::LiftOpts, bars: &Bars) -> Result<Vec<Duration>> {
     let dest = opts.dest();
-    let pb = ProgressBar::new(opts.len() as u64)
-        .with_style(
-            indicatif::ProgressStyle::with_template(
-                "[{elapsed_precise}] {bar:40.magenta/blue} {pos:>7}/{len:7} {msg}",
-            )
-            .unwrap(),
-        )
-        .with_message("Lifting binaries...");
+    let pb = bars.overall(Kind::Lift, opts.len(), "Lifting");
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.ir())

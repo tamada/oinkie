@@ -26,6 +26,12 @@ pub struct OinkieOpts {
 
     #[clap(short, long, value_enum, default_value_t = LogLevel::Warn, value_name = "LEVEL", ignore_case = true, help = "Log level for the application")]
     pub level: LogLevel,
+
+    #[clap(
+        long,
+        help = "Draw no progress bars, as when stderr is kept in a log or a CI output"
+    )]
+    pub no_progress: bool,
 }
 
 /// Separated from [`OinkieOpts::init`] so that it can be tested. `init`

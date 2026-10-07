@@ -36,6 +36,7 @@ Commands:
 Options:
   -l, --level <LEVEL>  Log level for the application [default: warn]
                        [possible values: error, warn, info, debug, trace, off]
+      --no-progress    Draw no progress bars, as when stderr is kept in a log or a CI output
   -h, --help           Print help
   -V, --version        Print version
 ```

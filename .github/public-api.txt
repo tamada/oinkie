@@ -188,6 +188,21 @@ pub fn oinkie::compare::PairingStrategy::eq(&self, &Self) -> bool
 impl core::fmt::Debug for oinkie::compare::PairingStrategy
 pub fn oinkie::compare::PairingStrategy::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::marker::StructuralPartialEq for oinkie::compare::PairingStrategy
+#[non_exhaustive] pub enum oinkie::compare::Progress
+pub oinkie::compare::Progress::Aggregating
+pub oinkie::compare::Progress::MatrixStarted
+pub oinkie::compare::Progress::MatrixStarted::columns: usize
+pub oinkie::compare::Progress::MatrixStarted::rows: usize
+pub oinkie::compare::Progress::RowFilled
+impl core::clone::Clone for oinkie::compare::Progress
+pub fn oinkie::compare::Progress::clone(&self) -> Self
+impl core::cmp::Eq for oinkie::compare::Progress
+impl core::cmp::PartialEq for oinkie::compare::Progress
+pub fn oinkie::compare::Progress::eq(&self, &Self) -> bool
+impl core::fmt::Debug for oinkie::compare::Progress
+pub fn oinkie::compare::Progress::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+impl core::marker::Copy for oinkie::compare::Progress
+impl core::marker::StructuralPartialEq for oinkie::compare::Progress
 pub enum oinkie::compare::Size
 pub oinkie::compare::Size::All
 pub oinkie::compare::Size::Num(usize)
@@ -198,6 +213,7 @@ pub fn oinkie::compare::Size::fmt(&self, &mut core::fmt::Formatter<'_>) -> core:
 pub struct oinkie::compare::Comparator
 impl oinkie::compare::Comparator
 pub fn oinkie::compare::Comparator::compare_birthmarks<'a>(&self, &'a oinkie::birthmarks::Birthmark, &'a oinkie::birthmarks::Birthmark, &oinkie::compare::Aggregator) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::birthmarks::Birthmark>>
+pub fn oinkie::compare::Comparator::compare_birthmarks_with<'a>(&self, &'a oinkie::birthmarks::Birthmark, &'a oinkie::birthmarks::Birthmark, &oinkie::compare::Aggregator, &dyn oinkie::compare::Observer) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::birthmarks::Birthmark>>
 pub struct oinkie::compare::Comparison<'a, S>
 impl<'a, S> oinkie::compare::Comparison<'a, S>
 pub fn oinkie::compare::Comparison<'a, S>::columns(&self) -> &S
@@ -221,6 +237,10 @@ impl core::marker::StructuralPartialEq for oinkie::compare::Matrix
 impl core::ops::index::Index<[usize; 2]> for oinkie::compare::Matrix
 pub type oinkie::compare::Matrix::Output = f64
 pub fn oinkie::compare::Matrix::index(&self, [usize; 2]) -> &f64
+pub trait oinkie::compare::Observer: core::marker::Sync
+pub fn oinkie::compare::Observer::notify(&self, oinkie::compare::Progress)
+impl<F: core::ops::function::Fn(oinkie::compare::Progress) + core::marker::Sync> oinkie::compare::Observer for F
+pub fn F::notify(&self, oinkie::compare::Progress)
 pub mod oinkie::extract
 pub struct oinkie::extract::Extractor
 impl oinkie::extract::Extractor

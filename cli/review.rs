@@ -12,19 +12,21 @@ use std::time::{Duration, Instant};
 
 use crate::CompareResult;
 use crate::cli::{self, MinElements};
+use crate::progress::{Bars, Kind};
 use oinkie::birthmarks::Birthmark;
 use oinkie::compare::{Aggregator, Matrix};
 use oinkie::{Error, Result};
 use rayon::prelude::*;
 use rustc_hash::FxHashMap;
 
-pub(crate) fn perform(opts: cli::ReviewOpts) -> Result<Vec<Duration>> {
+pub(crate) fn perform(opts: cli::ReviewOpts, bars: &Bars) -> Result<Vec<Duration>> {
     let start = Instant::now();
     let review = review_all(
         opts.score_directory(),
         opts.aggregator(),
         opts.min_elements(),
         &|_| Ok(()),
+        bars,
     )?;
     store(review, opts.dest_file(), start)
 }
@@ -64,11 +66,15 @@ pub(crate) fn store(review: Review, dest: &Path, start: Instant) -> Result<Vec<D
 /// birthmarks the pair CSVs name, each passed to `confine` before it is read:
 /// the paths come from the files rather than from whoever asked, and the MCP
 /// server reads only under its roots.
+///
+/// The pairs are counted on a bar of `bars`, which the MCP server passes
+/// hidden.
 pub(crate) fn review_all(
     score_dir: &Path,
     aggregator: &Aggregator,
     min_elements: Option<&MinElements>,
     confine: &(dyn Fn(&Path) -> Result<()> + Sync),
+    bars: &Bars,
 ) -> Result<Review> {
     let start = Instant::now();
     let crs = load_results(score_dir)?;
@@ -76,10 +82,16 @@ pub(crate) fn review_all(
     let filter = min_elements
         .map(|m| Filter::new(&crs, score_dir, m, confine))
         .transpose()?;
+    let pbar = bars.overall(Kind::Review, crs.len(), "Reviewing");
     let results = crs
         .iter()
-        .map(|cr| review_pair(cr, score_dir, aggregator, filter.as_ref()))
+        .map(|cr| {
+            let r = review_pair(cr, score_dir, aggregator, filter.as_ref());
+            pbar.inc(1);
+            r
+        })
         .collect::<Vec<_>>();
+    pbar.finish();
     let results = Error::vec_result_to_result_vec(results)?;
     Ok(Review {
         results: results.into_iter().map(|(cr, _)| cr).collect(),
