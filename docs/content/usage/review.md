@@ -32,6 +32,8 @@ oinkie review [OPTIONS] <SCORE_DIRECTORY>
   Specify the aggregator method to combine the function similarities of a pair into its single similarity. `[default: hungarian]`
   * **`hungarian`**: Optimal overall bipartite matching between functions.
   * **`topn:N`**: Average the \\(N\\) best of each function's best matches, from each side.
+  * **`containment`**: The `hungarian` pairing, averaged over the smaller side's functions: how much of the smaller is found in the larger.
+  * **`matched:T`**: The proportion of functions the `hungarian` pairing matches with a similarity of at least \\(T\\).
 * `-d, --dest-file <RESULT.CSV>`  
   The path to the destination CSV file where the recomputed similarity of each pair is saved. `[default: review.csv]`
 * `--min-elements <N|Rx>`  
