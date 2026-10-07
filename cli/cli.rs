@@ -132,12 +132,15 @@ pub enum OinkieCommand {
     Mcp(McpOpts),
 }
 
-/// How many threads a command computes on.
-///
-/// One option shared by every command that computes in-process, so that it
-/// is spelled and explained the same in each. `lift` does not take it: its
-/// parallelism is the number of decompilers, which `--jobs` bounds by their
-/// memory.
+// How many threads a command computes on.
+//
+// One option shared by every command that computes in-process, so that it is
+// spelled and explained the same in each. `lift` does not take it: its
+// parallelism is the number of decompilers, which `--jobs` bounds by their
+// memory.
+//
+// A plain comment rather than a doc comment: clap's derive takes a flattened
+// struct's doc comment as the long help of every command it is flattened into.
 #[derive(Debug, Clone, clap::Args)]
 pub struct Threads {
     #[clap(
@@ -736,6 +739,31 @@ impl RunOpts {
 mod tests {
     use super::*;
     use clap::Parser;
+
+    /// Every command's `--help` opens with that command's description. A
+    /// flattened `clap::Args` struct's doc comment would otherwise take its
+    /// place in the long help, which `-h` does not show, so only `--help`
+    /// tells the two apart.
+    #[test]
+    fn test_long_help_opens_with_the_commands_own_description() {
+        use clap::CommandFactory;
+        let mut root = OinkieOpts::command();
+        root.build();
+        // A hidden command has no help to read: `reaggregate` refuses whatever
+        // it is given.
+        for sub in root.get_subcommands_mut().filter(|s| !s.is_hide_set()) {
+            let name = sub.get_name().to_string();
+            let Some(about) = sub.get_about().map(ToString::to_string) else {
+                continue;
+            };
+            let help = sub.render_long_help().to_string();
+            assert_eq!(
+                help.lines().next(),
+                Some(about.as_str()),
+                "`oinkie {name} --help` opens with something else:\n{help}"
+            );
+        }
+    }
 
     #[test]
     fn test_every_log_level_maps_to_a_filter() {
