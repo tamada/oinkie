@@ -102,9 +102,11 @@ Options:
           - dice:             Dice coefficient. Available: seq, set and freq
           - euclidean:        Euclidean distance between term frequency vectors. Available: seq and freq
           - jaccard:          Jaccard index. Available: seq, set and freq
+          - jensen-shannon:   Jensen-Shannon divergence between element distributions, as 1 - sqrt(JSD). Available: seq and freq
           - levenshtein:      Levenshtein distance. Available: seq
           - lcs:              Longest Common Subsequence (LCS). Available: seq
           - simpson:          Simpson's coefficient. Available: seq, set and freq
+          - tanimoto:         Tanimoto coefficient over term frequency vectors. Available: seq and freq
           - weighted-jaccard: Weighted Jaccard index based on term frequency vectors. Available: seq and freq
           
           [default: jaccard]

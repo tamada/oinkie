@@ -77,7 +77,7 @@ A function with no elements, and a birthmark with no functions. Both still compa
 
 ### Algorithm
 
-How two functions' elements are compared into a number between 0 and 1: `jaccard`, `dice`, `simpson`, `cosine`, `euclidean`, `levenshtein`, `lcs`, `weighted-jaccard` (`-a`, `--algorithm`). Each works on some [shapes](#shape) and not others; `oinkie info` lists which.
+How two functions' elements are compared into a number between 0 and 1: `jaccard`, `dice`, `simpson`, `cosine`, `euclidean`, `levenshtein`, `lcs`, `weighted-jaccard`, `jensen-shannon`, `tanimoto` (`-a`, `--algorithm`). Each works on some [shapes](#shape) and not others; `oinkie info` lists which.
 
 ### Analysis
 
