@@ -19,7 +19,7 @@ use oinkie::{Oinkie, Result};
 use std::num::NonZeroUsize;
 
 #[derive(Debug, clap::Parser)]
-#[command(version, about)]
+#[command(version, about, max_term_width = 100)]
 pub struct OinkieOpts {
     #[clap(subcommand)]
     pub command: OinkieCommand,
@@ -169,11 +169,11 @@ pub struct McpOpts {
         short = 'r',
         long = "root",
         value_name = "DIRECTORY",
-        help = "Directory the tools may read and write under. May be given more than once.
-Every path a tool is handed, input and output alike, has to resolve inside one of
-these; anything else is refused. Defaults to the working directory.
-The paths the tools receive are written by a language model rather than by you,
-which is the whole reason this exists."
+        help = "Directory the tools may read and write under. May be given more than once",
+        long_help = "Directory the tools may read and write under. May be given more than once. \
+Every path a tool is handed, input and output alike, has to resolve inside one of these; anything \
+else is refused. Defaults to the working directory. The paths the tools receive are written by a \
+language model rather than by you, which is the whole reason this exists."
     )]
     roots: Vec<PathBuf>,
     #[clap(flatten)]
@@ -316,12 +316,12 @@ pub struct ExtractOpts {
     )]
     dest: PathBuf,
 
-    #[clap(short, long, value_name = "BIRTHMARK_TYPE", value_parser = BirthmarkTypeParser, default_value = "op-seq", hide_possible_values = true, help = "Type of birthmark to extract.
-fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported.
-For example, 'op-seq' extracts the sequence of operations as a birthmark,
-while 'fc-freq' extracts the frequency of function calls.
-k-grams are written with the k in the name: 'op-3gram-set'. Any k parses, not
-only the ones 'oinkie info' lists.
+    #[clap(short, long, value_name = "BIRTHMARK_TYPE", value_parser = BirthmarkTypeParser, default_value = "op-seq", hide_possible_values = true, help = "Type of birthmark to extract, such as 'op-seq' or 'fc-freq'; 'oinkie info' lists them", long_help = "Type of birthmark to extract. \
+fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported. \
+For example, 'op-seq' extracts the sequence of operations as a birthmark, \
+while 'fc-freq' extracts the frequency of function calls. \
+k-grams are written with the k in the name: 'op-3gram-set'. Any k parses, not \
+only the ones 'oinkie info' lists. \
 The full birthmark types can be found by running 'oinkie info'.")]
     birthmark_type: BirthmarkType,
 
@@ -377,21 +377,14 @@ pub struct ReviewOpts {
         default_value = "hungarian",
         value_name = "METHOD",
         ignore_case = true,
-        help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
-Available:
-- hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-               two birthmarks, maximizing the total similarity.
-- topn:N       Take each function's best match in the other birthmark, and average the N best of those from
-               each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-               and focus on the most significant similarities.
-- containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
-               how much of the smaller is found in the larger. A program copied whole into a larger one
-               scores 1.0. It says the smaller is contained, not that the two are alike.
-- matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-               similarity of at least T, where 0 < T <= 1.
-- weighted     As hungarian, but each function counts by its number of elements, so that short functions,
-               which agree by chance, count for little. review reads the sizes from the birthmarks the
-               comparison names."
+        help = "Aggregator combining a pair's function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted",
+        long_help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
+
+- hungarian: use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.
+- topn:N: take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.
+- containment: as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.
+- matched:T: as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.
+- weighted: as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names."
     )]
     aggregator: Aggregator,
 
@@ -399,7 +392,7 @@ Available:
         short,
         long,
         value_name = "RESULT.CSV",
-        help = "Specify the result CSV file of the comparing results to review.
+        help = "Specify the result CSV file of the comparing results to review. \
 The file lists the similarity of each pair.",
         default_value = "review.csv"
     )]
@@ -415,9 +408,10 @@ The file lists the similarity of each pair.",
     #[clap(
         long,
         value_name = "N|Rx",
-        help = "Drop the functions with fewer elements than this before aggregating.
-N is a count of elements; Rx is R times the mean count over every function of every birthmark
-in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is
+        help = "Drop the functions with fewer elements than this before aggregating: N elements, or R times the mean (Rx)",
+        long_help = "Drop the functions with fewer elements than this before aggregating. \
+N is a count of elements; Rx is R times the mean count over every function of every birthmark \
+in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is \
 recorded on the last line of the summary."
     )]
     min_elements: Option<MinElements>,
@@ -550,7 +544,7 @@ pub struct StatsOpts {
         index = 1,
         required = true,
         value_name = "PATHS",
-        help = "Birthmark files, or directories holding them. A directory contributes the *.json directly inside it;
+        help = "Birthmark files, or directories holding them. A directory contributes the *.json directly inside it; \
 a file that does not read as a birthmark is skipped with a warning and counted."
     )]
     inputs: Vec<PathBuf>,
@@ -595,32 +589,25 @@ pub struct CompareOpts {
         default_value = "hungarian",
         value_name = "METHOD",
         ignore_case = true,
-        help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
-Available:
-- hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-               two birthmarks, maximizing the total similarity.
-- topn:N       Take each function's best match in the other birthmark, and average the N best of those from
-               each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-               and focus on the most significant similarities.
-- containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
-               how much of the smaller is found in the larger. A program copied whole into a larger one
-               scores 1.0. It says the smaller is contained, not that the two are alike.
-- matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-               similarity of at least T, where 0 < T <= 1.
-- weighted     As hungarian, but each function counts by its number of elements, so that short functions,
-               which agree by chance, count for little. review reads the sizes from the birthmarks the
-               comparison names."
+        help = "Aggregator combining a pair's function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted",
+        long_help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
+
+- hungarian: use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.
+- topn:N: take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.
+- containment: as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.
+- matched:T: as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.
+- weighted: as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names."
     )]
     aggregator: Aggregator,
 
-    #[clap(short, long, value_parser = strategy_parser(), default_value = "all-and-self", value_name = "STRATEGY", ignore_case = true, help = "Specify the pairing strategy for comparing files.")]
+    #[clap(short, long, value_parser = strategy_parser(), default_value = "all-and-self", value_name = "STRATEGY", ignore_case = true, help = "Pairing strategy for comparing files")]
     strategy: PairingStrategy,
 
     #[clap(
         short,
         long,
         value_name = "DIRECTORY",
-        help = "Specify the destination directory for the comparing results",
+        help = "Destination directory for the results",
         default_value = "similarities"
     )]
     dest: PathBuf,
@@ -675,8 +662,8 @@ impl CompareOpts {
 
 #[derive(Debug, clap::Parser)]
 pub struct RunOpts {
-    #[clap(short, long, value_name = "ANALYSIS", value_parser = AnalysisParser, default_value = "op-set-jaccard", hide_possible_values = true, help = "Analysis to run, as '{birthmark}-{algorithm}' -- for example 'op-set-jaccard' or 'op-3gram-freq-cosine'.
-Run 'oinkie info' for the birthmarks and the algorithms they pair with. Any k
+    #[clap(short, long, value_name = "ANALYSIS", value_parser = AnalysisParser, default_value = "op-set-jaccard", hide_possible_values = true, help = "Analysis to run, as '{birthmark}-{algorithm}' -- for example 'op-set-jaccard' or 'op-3gram-freq-cosine'", long_help = "Analysis to run, as '{birthmark}-{algorithm}' -- for example 'op-set-jaccard' or 'op-3gram-freq-cosine'. \
+Run 'oinkie info' for the birthmarks and the algorithms they pair with. Any k \
 parses in a k-gram name, not only the ones listed.")]
     pub(crate) analysis: Analysis,
 
@@ -697,21 +684,14 @@ parses in a k-gram name, not only the ones listed.")]
         default_value = "hungarian",
         value_name = "METHOD",
         ignore_case = true,
-        help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
-Available:
-- hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-               two birthmarks, maximizing the total similarity.
-- topn:N       Take each function's best match in the other birthmark, and average the N best of those from
-               each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-               and focus on the most significant similarities. available topn:N or topn:all (same as topn).
-- containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
-               how much of the smaller is found in the larger. A program copied whole into a larger one
-               scores 1.0. It says the smaller is contained, not that the two are alike.
-- matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-               similarity of at least T, where 0 < T <= 1.
-- weighted     As hungarian, but each function counts by its number of elements, so that short functions,
-               which agree by chance, count for little. review reads the sizes from the birthmarks the
-               comparison names."
+        help = "Aggregator combining a pair's function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted",
+        long_help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
+
+- hungarian: use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.
+- topn:N: take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.
+- containment: as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.
+- matched:T: as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.
+- weighted: as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names."
     )]
     aggregator: Aggregator,
 
@@ -781,9 +761,15 @@ mod tests {
                 continue;
             };
             let help = sub.render_long_help().to_string();
+            // The opening paragraph, its lines rejoined: help is wrapped to
+            // the terminal, so a long description spans several.
+            let opening = help
+                .lines()
+                .take_while(|l| !l.trim().is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
             assert_eq!(
-                help.lines().next(),
-                Some(about.as_str()),
+                opening, about,
                 "`oinkie {name} --help` opens with something else:\n{help}"
             );
         }

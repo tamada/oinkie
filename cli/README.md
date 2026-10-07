@@ -11,17 +11,21 @@ Usage: oinkie [OPTIONS] <COMMAND>
 
 Commands:
   info     Display information about the application
-  lift     Lift binary files to JSON files of an intermediate representation, using a specified lifter
+  lift     Lift binary files to JSON files of an intermediate representation, using a specified
+           lifter
   extract  Extract birthmarks from a lifted binary file (JSON format)
   compare  Compare birthmarks and output the similarity score
-  review   Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities
-  stats    Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
+  review   Re-read a finished comparison: recompute the similarity of each pair from the stored
+           function similarities
+  stats    Summarise a set of birthmarks: how many of each type, how many functions each holds, and
+           how long each function's birthmark is
   run      Extract birthmarks and compare them in one command
   mcp      Serve oinkie over the Model Context Protocol, on stdin and stdout
   help     Print this message or the help of the given subcommand(s)
 
 Options:
-  -l, --level <LEVEL>  Log level for the application [default: warn] [possible values: error, warn, info, debug, trace, off]
+  -l, --level <LEVEL>  Log level for the application [default: warn] [possible values: error, warn,
+                       info, debug, trace, off]
       --no-progress    Draw no progress bars, as when stderr is kept in a log or a CI output
   -h, --help           Print help
   -V, --version        Print version
@@ -40,12 +44,29 @@ Arguments:
   [FILES]...  Path to the binary or intermediate files to lift
 
 Options:
-  -d, --dest <DIRECTORY>          Specify the directory for putting the resultant JSON files of the lifted programs (default: './pcodes' directory) [default: pcodes]
-  -r, --ir <IR>                   Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool. [default: ghidra-pcode] [possible values: ghidra-pcode, ida-microcode, binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]
-  -H, --home <HOME>               Path to the installation directory of the tool behind --ir. If not specified, that tool's own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.
-  -i, --intermediate <DIRECTORY>  Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.
-      --script <SCRIPT>           Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir: Java for Ghidra. It must write {input file name}.json into its working directory.
-  -j, --jobs <N>                  Lift up to N files at a time (default: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in. [default: 1]
+  -d, --dest <DIRECTORY>          Specify the directory for putting the resultant JSON files of the
+                                  lifted programs (default: './pcodes' directory) [default: pcodes]
+  -r, --ir <IR>                   Intermediate representation to produce. This also picks the tool,
+                                  since a representation is only produced by one of them; several
+                                  representations can come from the same tool. [default:
+                                  ghidra-pcode] [possible values: ghidra-pcode, ida-microcode,
+                                  binary-ninja-llil, binary-ninja-mlil, binary-ninja-hlil]
+  -H, --home <HOME>               Path to the installation directory of the tool behind --ir. If not
+                                  specified, that tool's own environment variable (GHIDRA_HOME for
+                                  Ghidra) is read, then the usual install locations are searched.
+                                  The error names which variable to set.
+  -i, --intermediate <DIRECTORY>  Directory for the lifter to work in, kept rather than discarded.
+                                  Every lifter runs in one, since that is where its script writes;
+                                  Ghidra also keeps its project there. If not specified, a temporary
+                                  directory is used and deleted.
+      --script <SCRIPT>           Path to a custom lifting script, replacing the built-in one. The
+                                  language is that of the tool behind --ir: Java for Ghidra. It must
+                                  write {input file name}.json into its working directory.
+  -j, --jobs <N>                  Lift up to N files at a time (default: 1, one after another).
+                                  Lifting runs a whole decompiler process per file, and several of
+                                  them against a Ghidra installation whose language cache has not
+                                  been built yet can corrupt it, so parallelism is opt-in. [default:
+                                  1]
   -S, --skip                      Skip if the resultant JSON file already exists
   -h, --help                      Print help (see more with '--help')
 ```
@@ -65,21 +86,17 @@ Arguments:
 
 Options:
   -d, --dest <DIRECTORY>
-          Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: './birthmarks' directory) [default: birthmarks]
+          Specify the directory for putting the resultant JSON files for the extracted birthmarks
+          (default: './birthmarks' directory) [default: birthmarks]
   -b, --birthmark-type <BIRTHMARK_TYPE>
-          Type of birthmark to extract.
-          fc (Function Calls) and op (Opcode) with set, seq, and freq variants are supported.
-          For example, 'op-seq' extracts the sequence of operations as a birthmark,
-          while 'fc-freq' extracts the frequency of function calls.
-          k-grams are written with the k in the name: 'op-3gram-set'. Any k parses, not
-          only the ones 'oinkie info' lists.
-          The full birthmark types can be found by running 'oinkie info'. [default: op-seq]
+          Type of birthmark to extract, such as 'op-seq' or 'fc-freq'; 'oinkie info' lists them
+          [default: op-seq]
   -S, --skip
           Skip the resultant birthmark file is already exists
       --threads <N>
           Number of threads to compute on [default: one per core]
   -h, --help
-          Print help
+          Print help (see more with '--help')
 ```
 
 ### `compare` command
@@ -98,53 +115,68 @@ Options:
           Specify the similarity calculation algorithm.
 
           Possible values:
-          - cosine:           Cosine similarity based on term frequency vectors. Available: seq and freq
+          - cosine:           Cosine similarity based on term frequency vectors. Available: seq and
+            freq
           - dice:             Dice coefficient. Available: seq, set and freq
-          - euclidean:        Euclidean distance between term frequency vectors. Available: seq and freq
+          - euclidean:        Euclidean distance between term frequency vectors. Available: seq and
+            freq
           - jaccard:          Jaccard index. Available: seq, set and freq
-          - jensen-shannon:   Jensen-Shannon divergence between element distributions, as 1 - sqrt(JSD). Available: seq and freq
+          - jensen-shannon:   Jensen-Shannon divergence between element distributions, as 1 -
+            sqrt(JSD). Available: seq and freq
           - levenshtein:      Levenshtein distance. Available: seq
           - lcs:              Longest Common Subsequence (LCS). Available: seq
           - simpson:          Simpson's coefficient. Available: seq, set and freq
-          - tanimoto:         Tanimoto coefficient over term frequency vectors. Available: seq and freq
-          - weighted-jaccard: Weighted Jaccard index based on term frequency vectors. Available: seq and freq
+          - tanimoto:         Tanimoto coefficient over term frequency vectors. Available: seq and
+            freq
+          - weighted-jaccard: Weighted Jaccard index based on term frequency vectors. Available: seq
+            and freq
           
           [default: jaccard]
 
   -A, --aggregator <METHOD>
-          Specify the aggregator for combining the function similarities of a pair into its similarity.
-          Available:
-          - hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-                         two birthmarks, maximizing the total similarity.
-          - topn:N       Take each function's best match in the other birthmark, and average the N best of those from
-                         each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-                         and focus on the most significant similarities.
-          - containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
-                         how much of the smaller is found in the larger. A program copied whole into a larger one
-                         scores 1.0. It says the smaller is contained, not that the two are alike.
-          - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-                         similarity of at least T, where 0 < T <= 1.
-          - weighted     As hungarian, but each function counts by its number of elements, so that short functions,
-                         which agree by chance, count for little. review reads the sizes from the birthmarks the
-                         comparison names.
+          Specify the aggregator for combining the function similarities of a pair into its
+          similarity.
+          
+          - hungarian: use the Hungarian algorithm to find the one-to-one matching between the
+          functions of the two birthmarks that maximises the total similarity.
+          - topn:N: take each function's best match in the other birthmark, and average the N best
+          of those from each side. Matches need not be one-to-one, which can reduce noise from less
+          relevant matches. topn:all, or topn, takes them all.
+          - containment: as hungarian, but average over the smaller birthmark's functions rather
+          than the larger's: how much of the smaller is found in the larger. A program copied whole
+          into a larger one scores 1.0. It says the smaller is contained, not that the two are
+          alike.
+          - matched:T: as hungarian, but the proportion of the larger birthmark's functions matched
+          with a similarity of at least T, where 0 < T <= 1.
+          - weighted: as hungarian, but each function counts by its number of elements, so that
+          short functions, which agree by chance, count for little. review reads the sizes from the
+          birthmarks the comparison names.
           
           [default: hungarian]
 
   -s, --strategy <STRATEGY>
-          Specify the pairing strategy for comparing files.
+          Pairing strategy for comparing files
 
           Possible values:
-          - all-and-self:    All possible combinations including self-comparisons ($_nC_2 + n$). Used for full matrix visualization or comprehensive heatmaps
-          - all:             Compares all possible combinations ($_nC_2$). Used for comprehensive validation of accuracy (False Positive / True Positive)
-          - self-coverage:   Compares each file with itself ($n$). Used for sanity checks to ensure identical files yield a similarity score of 1.0
-          - adjacent:        Compares only adjacent pairs in the list ($n-1$). Useful for comparing sequential versions (e.g., v1.0 vs v1.1, v1.1 vs v1.2)
-          - first-vs-others: Compares a specific reference file against all other files ($n-1$). Compares first item and all other items. Useful for comparing a baseline version against multiple variants
-          - last-vs-others:  Compares a specific reference file against all other files ($n-1$). Compares the last item and all other items. Useful for comparing a baseline version against multiple variants
+          - all-and-self:    All possible combinations including self-comparisons ($_nC_2 + n$).
+            Used for full matrix visualization or comprehensive heatmaps
+          - all:             Compares all possible combinations ($_nC_2$). Used for comprehensive
+            validation of accuracy (False Positive / True Positive)
+          - self-coverage:   Compares each file with itself ($n$). Used for sanity checks to ensure
+            identical files yield a similarity score of 1.0
+          - adjacent:        Compares only adjacent pairs in the list ($n-1$). Useful for comparing
+            sequential versions (e.g., v1.0 vs v1.1, v1.1 vs v1.2)
+          - first-vs-others: Compares a specific reference file against all other files ($n-1$).
+            Compares first item and all other items. Useful for comparing a baseline version against
+            multiple variants
+          - last-vs-others:  Compares a specific reference file against all other files ($n-1$).
+            Compares the last item and all other items. Useful for comparing a baseline version
+            against multiple variants
           
           [default: all-and-self]
 
   -d, --dest <DIRECTORY>
-          Specify the destination directory for the comparing results
+          Destination directory for the results
           
           [default: similarities]
 
@@ -163,37 +195,25 @@ Options:
 Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities.
 
 ```sh
-Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities
+Re-read a finished comparison: recompute the similarity of each pair from the stored function
+similarities
 
 Usage: oinkie review [OPTIONS] <SCORE_DIRECTORY>
 
 Arguments:
-  <SCORE_DIRECTORY>  Path to the score directory: the pair CSVs that compare or run wrote, holding the function similarities
+  <SCORE_DIRECTORY>  Path to the score directory: the pair CSVs that compare or run wrote, holding
+                     the function similarities
 
 Options:
-  -A, --aggregator <METHOD>     Specify the aggregator for combining the function similarities of a pair into its similarity.
-                                Available:
-                                - hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-                                               two birthmarks, maximizing the total similarity.
-                                - topn:N       Take each function's best match in the other birthmark, and average the N best of those from
-                                               each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-                                               and focus on the most significant similarities.
-                                - containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
-                                               how much of the smaller is found in the larger. A program copied whole into a larger one
-                                               scores 1.0. It says the smaller is contained, not that the two are alike.
-                                - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-                                               similarity of at least T, where 0 < T <= 1.
-                                - weighted     As hungarian, but each function counts by its number of elements, so that short functions,
-                                               which agree by chance, count for little. review reads the sizes from the birthmarks the
-                                               comparison names. [default: hungarian]
-  -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to review.
-                                The file lists the similarity of each pair. [default: review.csv]
-      --min-elements <N|Rx>     Drop the functions with fewer elements than this before aggregating.
-                                N is a count of elements; Rx is R times the mean count over every function of every birthmark
-                                in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is
-                                recorded on the last line of the summary.
+  -A, --aggregator <METHOD>     Aggregator combining a pair's function similarities into its
+                                similarity: hungarian, topn:N, containment, matched:T or weighted
+                                [default: hungarian]
+  -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to review. The
+                                file lists the similarity of each pair. [default: review.csv]
+      --min-elements <N|Rx>     Drop the functions with fewer elements than this before aggregating:
+                                N elements, or R times the mean (Rx)
       --threads <N>             Number of threads to compute on [default: one per core]
-  -h, --help                    Print help
+  -h, --help                    Print help (see more with '--help')
 ```
 
 ### `stats` command
@@ -201,14 +221,15 @@ Options:
 Summarise a set of birthmarks. A birthmark file holds one entry per **function**, and each function's birthmark is made of **elements**; the command reports functions per file and elements per function (the birthmark length) for each group of birthmarks sharing an intermediate representation and a type.
 
 ```sh
-Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function's birthmark is
+Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long
+each function's birthmark is
 
 Usage: oinkie stats [OPTIONS] <PATHS>...
 
 Arguments:
   <PATHS>...
-          Birthmark files, or directories holding them. A directory contributes the *.json directly inside it;
-          a file that does not read as a birthmark is skipped with a warning and counted.
+          Birthmark files, or directories holding them. A directory contributes the *.json directly
+          inside it; a file that does not read as a birthmark is skipped with a warning and counted.
 
 Options:
   -f, --format <FORMAT>
@@ -216,7 +237,8 @@ Options:
 
           Possible values:
           - json:     Every table at once: the summary, the per-file rows and the skipped files
-          - csv:      One table: the summary, or the per-file rows with --per-file, or the most frequent elements with --top
+          - csv:      One table: the summary, or the per-file rows with --per-file, or the most
+            frequent elements with --top
           - markdown: Tables to read, or to paste into a paper
           
           [default: markdown]
@@ -228,10 +250,12 @@ Options:
           Descend into the subdirectories of the given directories
 
       --per-file
-          Report each birthmark file as well as each group. With -f csv this replaces the summary table.
+          Report each birthmark file as well as each group. With -f csv this replaces the summary
+          table.
 
   -t, --top <N>
-          Report the N most frequent elements of each group. With -f csv this replaces the summary table.
+          Report the N most frequent elements of each group. With -f csv this replaces the summary
+          table.
 
       --threads <N>
           Number of threads to compute on [default: one per core]
@@ -253,9 +277,9 @@ Arguments:
 
 Options:
   -a, --analysis <ANALYSIS>
-          Analysis to run, as '{birthmark}-{algorithm}' -- for example 'op-set-jaccard' or 'op-3gram-freq-cosine'.
-          Run 'oinkie info' for the birthmarks and the algorithms they pair with. Any k
-          parses in a k-gram name, not only the ones listed.
+          Analysis to run, as '{birthmark}-{algorithm}' -- for example 'op-set-jaccard' or
+          'op-3gram-freq-cosine'. Run 'oinkie info' for the birthmarks and the algorithms they pair
+          with. Any k parses in a k-gram name, not only the ones listed.
           
           [default: op-set-jaccard]
 
@@ -263,12 +287,20 @@ Options:
           Pairing strategy for file comparisons
 
           Possible values:
-          - all-and-self:    All possible combinations including self-comparisons ($_nC_2 + n$). Used for full matrix visualization or comprehensive heatmaps
-          - all:             Compares all possible combinations ($_nC_2$). Used for comprehensive validation of accuracy (False Positive / True Positive)
-          - self-coverage:   Compares each file with itself ($n$). Used for sanity checks to ensure identical files yield a similarity score of 1.0
-          - adjacent:        Compares only adjacent pairs in the list ($n-1$). Useful for comparing sequential versions (e.g., v1.0 vs v1.1, v1.1 vs v1.2)
-          - first-vs-others: Compares a specific reference file against all other files ($n-1$). Compares first item and all other items. Useful for comparing a baseline version against multiple variants
-          - last-vs-others:  Compares a specific reference file against all other files ($n-1$). Compares the last item and all other items. Useful for comparing a baseline version against multiple variants
+          - all-and-self:    All possible combinations including self-comparisons ($_nC_2 + n$).
+            Used for full matrix visualization or comprehensive heatmaps
+          - all:             Compares all possible combinations ($_nC_2$). Used for comprehensive
+            validation of accuracy (False Positive / True Positive)
+          - self-coverage:   Compares each file with itself ($n$). Used for sanity checks to ensure
+            identical files yield a similarity score of 1.0
+          - adjacent:        Compares only adjacent pairs in the list ($n-1$). Useful for comparing
+            sequential versions (e.g., v1.0 vs v1.1, v1.1 vs v1.2)
+          - first-vs-others: Compares a specific reference file against all other files ($n-1$).
+            Compares first item and all other items. Useful for comparing a baseline version against
+            multiple variants
+          - last-vs-others:  Compares a specific reference file against all other files ($n-1$).
+            Compares the last item and all other items. Useful for comparing a baseline version
+            against multiple variants
           
           [default: all-and-self]
 
@@ -278,21 +310,23 @@ Options:
           [default: similarities]
 
   -A, --aggregator <METHOD>
-          Specify the aggregator for combining the function similarities of a pair into its similarity.
-          Available:
-          - hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-                         two birthmarks, maximizing the total similarity.
-          - topn:N       Take each function's best match in the other birthmark, and average the N best of those from
-                         each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-                         and focus on the most significant similarities. available topn:N or topn:all (same as topn).
-          - containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
-                         how much of the smaller is found in the larger. A program copied whole into a larger one
-                         scores 1.0. It says the smaller is contained, not that the two are alike.
-          - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-                         similarity of at least T, where 0 < T <= 1.
-          - weighted     As hungarian, but each function counts by its number of elements, so that short functions,
-                         which agree by chance, count for little. review reads the sizes from the birthmarks the
-                         comparison names.
+          Specify the aggregator for combining the function similarities of a pair into its
+          similarity.
+          
+          - hungarian: use the Hungarian algorithm to find the one-to-one matching between the
+          functions of the two birthmarks that maximises the total similarity.
+          - topn:N: take each function's best match in the other birthmark, and average the N best
+          of those from each side. Matches need not be one-to-one, which can reduce noise from less
+          relevant matches. topn:all, or topn, takes them all.
+          - containment: as hungarian, but average over the smaller birthmark's functions rather
+          than the larger's: how much of the smaller is found in the larger. A program copied whole
+          into a larger one scores 1.0. It says the smaller is contained, not that the two are
+          alike.
+          - matched:T: as hungarian, but the proportion of the larger birthmark's functions matched
+          with a similarity of at least T, where 0 < T <= 1.
+          - weighted: as hungarian, but each function counts by its number of elements, so that
+          short functions, which agree by chance, count for little. review reads the sizes from the
+          birthmarks the comparison names.
           
           [default: hungarian]
 
@@ -318,13 +352,9 @@ Serve oinkie over the Model Context Protocol, on stdin and stdout
 Usage: oinkie mcp [OPTIONS]
 
 Options:
-  -r, --root <DIRECTORY>  Directory the tools may read and write under. May be given more than once.
-                          Every path a tool is handed, input and output alike, has to resolve inside one of
-                          these; anything else is refused. Defaults to the working directory.
-                          The paths the tools receive are written by a language model rather than by you,
-                          which is the whole reason this exists.
+  -r, --root <DIRECTORY>  Directory the tools may read and write under. May be given more than once
       --threads <N>       Number of threads to compute on [default: one per core]
-  -h, --help              Print help
+  -h, --help              Print help (see more with '--help')
 ```
 
 The tools it offers, how to configure a client, and why lifting is not among
