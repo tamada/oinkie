@@ -26,11 +26,11 @@
 //! # }
 //! ```
 
-use crate::Iterable;
-use crate::birthmarks::{Birthmark, Data, Function, Shape};
+use crate::birthmarks::{Birthmark, Data, Shape};
 use crate::{Error, Result};
 use itertools::Itertools;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::borrow::Cow;
 use std::time::Instant;
 
 /// Which pairs of a list of birthmarks to compare.
@@ -343,32 +343,55 @@ trait BirthmarkComparator {
             ))
         } else {
             let start = Instant::now();
-            let r = build_matrix(b1, b2, |e1, e2| self.compare_functions(e1, e2))?;
+            // Each function once in the shape the algorithm compares, rather
+            // than once per cell: converting is what a cell would otherwise
+            // spend most of its time on.
+            let shape = self.shape();
+            let d1: Vec<_> = b1
+                .functions
+                .iter()
+                .map(|f| in_shape(&f.data, shape))
+                .collect();
+            let d2: Vec<_> = b2
+                .functions
+                .iter()
+                .map(|f| in_shape(&f.data, shape))
+                .collect();
+            let r = build_matrix(&d1, &d2, |e1, e2| self.compare_data(e1, e2))?;
             aggregator
                 .aggregate(&r)
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
         }
     }
 
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64;
+    /// The shape this algorithm compares; see [`Algorithm::shape`].
+    fn shape(&self) -> Shape;
+
+    /// The similarity of two functions' elements, each already in
+    /// [`BirthmarkComparator::shape`] where it can be. Elements that cannot
+    /// be, such as a set handed to a sequence algorithm, score 0.0.
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64;
+
+    /// The similarity of two functions as they come, converting each first.
+    #[cfg(test)]
+    fn compare_functions(
+        &self,
+        e1: &crate::birthmarks::Function,
+        e2: &crate::birthmarks::Function,
+    ) -> f64 {
+        let shape = self.shape();
+        self.compare_data(&in_shape(&e1.data, shape), &in_shape(&e2.data, shape))
+    }
 }
 
-fn build_matrix<F, T>(
-    p1: impl Iterable<Item = T>,
-    p2: impl Iterable<Item = T>,
-    compare_func: F,
-) -> Result<Matrix>
-where
-    F: Fn(&T, &T) -> f64,
-{
-    let (n1, n2) = (p1.iter().count(), p2.iter().count());
-    let mut similarities = Vec::with_capacity(n1 * n2);
-    for item1 in p1.iter() {
-        for item2 in p2.iter() {
+fn build_matrix<T>(p1: &[T], p2: &[T], compare_func: impl Fn(&T, &T) -> f64) -> Result<Matrix> {
+    let mut similarities = Vec::with_capacity(p1.len() * p2.len());
+    for item1 in p1 {
+        for item2 in p2 {
             similarities.push(compare_func(item1, item2));
         }
     }
-    Matrix::new((n1, n2), similarities).ok_or_else(|| {
+    Matrix::new((p1.len(), p2.len()), similarities).ok_or_else(|| {
         Error::Parse("a function similarity came out as a number that is not finite".to_string())
     })
 }
@@ -629,134 +652,129 @@ struct WeightedJaccard;
 struct Lcs;
 
 impl BirthmarkComparator for Jaccard {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
-            jaccard_index(s1, s2)
-        } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
-            jaccard_index(k1, k2)
-        } else if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
-            jaccard_index(&seq2set(s1), &seq2set(s2))
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            jaccard_index(&seq2set(k1), &seq2set(k2))
-        } else if let (Data::Freq(s1), Data::Freq(s2)) = (&e1.data, &e2.data) {
-            jaccard_index(&freq2set(s1), &freq2set(s2))
-        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
-            jaccard_index(&freq2set(k1), &freq2set(k2))
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Set
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Set(s1), Data::Set(s2)) => jaccard_index(s1, s2),
+            (Data::KgramSet(k1), Data::KgramSet(k2)) => jaccard_index(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for Dice {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
-            dice_index(s1, s2)
-        } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
-            dice_index(k1, k2)
-        } else if let (Data::Seq(k1), Data::Seq(k2)) = (&e1.data, &e2.data) {
-            dice_index(&seq2set(k1), &seq2set(k2))
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            dice_index(&seq2set(k1), &seq2set(k2))
-        } else if let (Data::Freq(k1), Data::Freq(k2)) = (&e1.data, &e2.data) {
-            dice_index(&freq2set(k1), &freq2set(k2))
-        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
-            dice_index(&freq2set(k1), &freq2set(k2))
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Set
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Set(s1), Data::Set(s2)) => dice_index(s1, s2),
+            (Data::KgramSet(k1), Data::KgramSet(k2)) => dice_index(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for Simpson {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Set(s1), Data::Set(s2)) = (&e1.data, &e2.data) {
-            simpson_index(s1, s2)
-        } else if let (Data::KgramSet(k1), Data::KgramSet(k2)) = (&e1.data, &e2.data) {
-            simpson_index(k1, k2)
-        } else if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
-            simpson_index(&seq2set(s1), &seq2set(s2))
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            simpson_index(&seq2set(k1), &seq2set(k2))
-        } else if let (Data::Freq(s1), Data::Freq(s2)) = (&e1.data, &e2.data) {
-            simpson_index(&freq2set(s1), &freq2set(s2))
-        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
-            simpson_index(&freq2set(k1), &freq2set(k2))
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Set
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Set(s1), Data::Set(s2)) => simpson_index(s1, s2),
+            (Data::KgramSet(k1), Data::KgramSet(k2)) => simpson_index(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for Levenshtein {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
-            levenshtein_distance(s1, s2)
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            levenshtein_distance(k1, k2)
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Seq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Seq(s1), Data::Seq(s2)) => levenshtein_distance(s1, s2),
+            (Data::KgramSeq(k1), Data::KgramSeq(k2)) => levenshtein_distance(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for Cosine {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
-            cosine_similarity(f1, f2)
-        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
-            cosine_similarity(k1, k2)
-        } else if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
-            cosine_similarity(&seq2freq(s1), &seq2freq(s2))
-        } else if let (Data::KgramSeq(s1), Data::KgramSeq(s2)) = (&e1.data, &e2.data) {
-            cosine_similarity(&seq2freq(s1), &seq2freq(s2))
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Freq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Freq(f1), Data::Freq(f2)) => cosine_similarity(f1, f2),
+            (Data::KgramFreq(k1), Data::KgramFreq(k2)) => cosine_similarity(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for Euclidean {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
-            euclidean_distance(f1, f2)
-        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
-            euclidean_distance(k1, k2)
-        } else if let (Data::Seq(f1), Data::Seq(f2)) = (&e1.data, &e2.data) {
-            euclidean_distance(&seq2freq(f1), &seq2freq(f2))
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            euclidean_distance(&seq2freq(k1), &seq2freq(k2))
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Freq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Freq(f1), Data::Freq(f2)) => euclidean_distance(f1, f2),
+            (Data::KgramFreq(k1), Data::KgramFreq(k2)) => euclidean_distance(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for WeightedJaccard {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Freq(f1), Data::Freq(f2)) = (&e1.data, &e2.data) {
-            weighted_jaccard(f1, f2)
-        } else if let (Data::KgramFreq(k1), Data::KgramFreq(k2)) = (&e1.data, &e2.data) {
-            weighted_jaccard(k1, k2)
-        } else if let (Data::Seq(f1), Data::Seq(f2)) = (&e1.data, &e2.data) {
-            weighted_jaccard(&seq2freq(f1), &seq2freq(f2))
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            weighted_jaccard(&seq2freq(k1), &seq2freq(k2))
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Freq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Freq(f1), Data::Freq(f2)) => weighted_jaccard(f1, f2),
+            (Data::KgramFreq(k1), Data::KgramFreq(k2)) => weighted_jaccard(k1, k2),
+            _ => 0.0,
         }
     }
 }
 
 impl BirthmarkComparator for Lcs {
-    fn compare_functions(&self, e1: &Function, e2: &Function) -> f64 {
-        if let (Data::Seq(s1), Data::Seq(s2)) = (&e1.data, &e2.data) {
-            longest_common_subsequence(s1, s2)
-        } else if let (Data::KgramSeq(k1), Data::KgramSeq(k2)) = (&e1.data, &e2.data) {
-            longest_common_subsequence(k1, k2)
-        } else {
-            0.0
+    fn shape(&self) -> Shape {
+        Shape::Seq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Seq(s1), Data::Seq(s2)) => longest_common_subsequence(s1, s2),
+            (Data::KgramSeq(k1), Data::KgramSeq(k2)) => longest_common_subsequence(k1, k2),
+            _ => 0.0,
         }
+    }
+}
+
+/// `data` in `shape`, converted only when it is in another: a sequence
+/// becomes a set or a frequency map, and a frequency map a set. A shape that
+/// cannot be reached -- a sequence from a set, say -- leaves `data` as it is.
+fn in_shape(data: &Data, shape: Shape) -> Cow<'_, Data> {
+    match (data, shape) {
+        (Data::Seq(s), Shape::Set) => Cow::Owned(Data::Set(seq2set(s))),
+        (Data::Seq(s), Shape::Freq) => Cow::Owned(Data::Freq(seq2freq(s))),
+        (Data::Freq(f), Shape::Set) => Cow::Owned(Data::Set(freq2set(f))),
+        (Data::KgramSeq(k), Shape::Set) => Cow::Owned(Data::KgramSet(seq2set(k))),
+        (Data::KgramSeq(k), Shape::Freq) => Cow::Owned(Data::KgramFreq(seq2freq(k))),
+        (Data::KgramFreq(k), Shape::Set) => Cow::Owned(Data::KgramSet(freq2set(k))),
+        _ => Cow::Borrowed(data),
     }
 }
 
@@ -983,7 +1001,7 @@ fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::birthmarks::{BirthmarkType, Kgram};
+    use crate::birthmarks::{BirthmarkType, Function, Kgram};
 
     /// `Algorithm::ALL` is written by hand, so it is held to the enum: the
     /// `match` stops compiling when a variant is added, and the assertion
@@ -1294,22 +1312,59 @@ mod tests {
         }
     }
 
-    /// Mismatched or unsupported representations fall through to 0.0 rather
-    /// than panicking.
+    /// A representation that cannot be brought to the algorithm's shape
+    /// scores 0.0 rather than panicking: a set has lost the order a sequence
+    /// algorithm needs and the counts a frequency algorithm needs.
     #[test]
     fn comparators_return_zero_for_unsupported_representations() {
-        let s = function("f", seq(&["A"]));
         let st = function("g", set(&["A"]));
-        // Data variants that do not pair up
-        assert_eq!(Jaccard.compare_functions(&s, &st), 0.0);
-        assert_eq!(Dice.compare_functions(&s, &st), 0.0);
-        assert_eq!(Simpson.compare_functions(&s, &st), 0.0);
-        assert_eq!(Cosine.compare_functions(&s, &st), 0.0);
-        assert_eq!(Euclidean.compare_functions(&s, &st), 0.0);
-        assert_eq!(WeightedJaccard.compare_functions(&s, &st), 0.0);
-        // Levenshtein and LCS only support sequences at all
-        assert_eq!(Levenshtein.compare_functions(&st, &st), 0.0);
-        assert_eq!(Lcs.compare_functions(&st, &st), 0.0);
+        let fr = function("h", freq(&["A"]));
+        assert_eq!(Cosine.compare_functions(&st, &st), 0.0);
+        assert_eq!(Euclidean.compare_functions(&st, &st), 0.0);
+        assert_eq!(WeightedJaccard.compare_functions(&st, &st), 0.0);
+        for unordered in [&st, &fr] {
+            assert_eq!(Levenshtein.compare_functions(unordered, unordered), 0.0);
+            assert_eq!(Lcs.compare_functions(unordered, unordered), 0.0);
+        }
+    }
+
+    /// Converting each function once before the matrix is built scores every
+    /// cell exactly as converting both functions for that cell would.
+    #[test]
+    fn a_comparison_scores_every_cell_as_the_two_functions_alone_score() {
+        let elements: [&[&str]; 5] = [
+            &["A", "B", "A", "C"],
+            &["B", "C"],
+            &[],
+            &["A", "A", "A"],
+            &["C", "B", "A", "D"],
+        ];
+        for (algorithm, comparator, builders) in each_algorithm() {
+            for build in builders {
+                let functions = |range: std::ops::Range<usize>| -> Vec<Function> {
+                    range
+                        .map(|i| function(&format!("f{i}"), build(elements[i % 5])))
+                        .collect()
+                };
+                let mut b1 = birthmark("a", &[]);
+                let mut b2 = birthmark("b", &[]);
+                b1.functions = functions(0..4);
+                b2.functions = functions(1..6);
+                let c = comparator
+                    .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
+                    .unwrap();
+                for (i, f1) in b1.functions.iter().enumerate() {
+                    for (j, f2) in b2.functions.iter().enumerate() {
+                        assert_eq!(
+                            c.matrix()[[i, j]].to_bits(),
+                            comparator.compare_functions(f1, f2).to_bits(),
+                            "{algorithm:?} over {:?}: [{i}, {j}]",
+                            build(&["A"])
+                        );
+                    }
+                }
+            }
+        }
     }
 
     fn birthmark(name: &str, funcs: &[(&str, &[&str])]) -> Birthmark {
