@@ -46,6 +46,8 @@ oinkie stats [OPTIONS] <PATHS>...
   Report each birthmark file as well as each group.
 * `-t, --top <N>`  
   Report the \\(N\\) most frequent elements of each group. For `set` birthmarks the count is the number of functions containing the element.
+* `--threads <N>`  
+  The number of threads to compute on, for every part of the command that runs in parallel. `[default: one per core]`
 
 ---
 

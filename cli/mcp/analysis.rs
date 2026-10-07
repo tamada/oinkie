@@ -172,6 +172,7 @@ pub fn birthmark_files(inputs: &[PathBuf], dest: &Path) -> Result<Vec<PathBuf>> 
 pub fn run(
     inputs: &[PathBuf],
     analysis: &AnalysisType,
+    comparator: &Comparator,
     strategy: &PairingStrategy,
     aggregator: &Aggregator,
     dest: Option<&Path>,
@@ -207,9 +208,7 @@ pub fn run(
         .par_bridge()
         .map(|(i, (left, right))| {
             let (b1, b2) = (&by_input[left], &by_input[right]);
-            let comparison = analysis
-                .comparator()
-                .compare_birthmarks(b1, b2, aggregator)?;
+            let comparison = comparator.compare_birthmarks(b1, b2, aggregator)?;
             if let Some(d) = dest {
                 crate::score_csv::store(&comparison, pair_file(d, i))?;
             }

@@ -38,6 +38,8 @@ oinkie review [OPTIONS] <SCORE_DIRECTORY>
   Drop the functions with fewer elements than this from each pair before aggregating. See [Dropping short functions](#-dropping-short-functions).
   * **`N`**: a count of elements, such as `5`.
   * **`Rx`**: \(R\) times the mean element count, such as `0.3x`. A bare `0.3` is refused.
+* `--threads <N>`  
+  The number of threads to compute on, for every part of the command that runs in parallel. `[default: one per core]`
 
 ---
 

@@ -165,8 +165,9 @@ mod tests {
     #[test]
     fn test_a_comparison_is_read_back_whole_by_review() {
         let (b1, b2) = (birthmark(UDL), birthmark(CLANG));
-        let c = Algorithm::Jaccard
-            .comparator()
+        let c = oinkie::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard)
             .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
             .unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -220,8 +221,9 @@ mod tests {
             json["metadata"]["path"] = serde_json::json!(path);
             let b1: Birthmark = serde_json::from_value(json).unwrap();
             let b2 = birthmark(GCC);
-            let c = Algorithm::Jaccard
-                .comparator()
+            let c = oinkie::Oinkie::new()
+                .unwrap()
+                .comparator(&Algorithm::Jaccard)
                 .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
                 .unwrap();
             let dir = tempfile::tempdir().unwrap();
@@ -248,8 +250,9 @@ mod tests {
         let mut json = serde_json::to_value(birthmark(CLANG)).unwrap();
         json["elements"][0]["name"] = serde_json::json!(name);
         let b: Birthmark = serde_json::from_value(json).unwrap();
-        let c = Algorithm::Jaccard
-            .comparator()
+        let c = oinkie::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard)
             .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
             .unwrap();
         let dir = tempfile::tempdir().unwrap();
@@ -316,8 +319,9 @@ mod tests {
     #[test]
     fn test_a_destination_that_cannot_be_written_is_an_io_error_on_it() {
         let b = birthmark(CLANG);
-        let c = Algorithm::Jaccard
-            .comparator()
+        let c = oinkie::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard)
             .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
             .unwrap();
         let err = store(&c, "no/such/directory/out.csv").unwrap_err();

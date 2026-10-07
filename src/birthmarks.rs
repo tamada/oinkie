@@ -31,7 +31,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::compare::{Algorithm, Comparator};
+use crate::compare::Algorithm;
 use crate::{Error, Result};
 use rustc_hash::{FxHashMap, FxHashSet};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -639,7 +639,7 @@ impl Data {
 /// instead.
 pub struct AnalysisType {
     pub(crate) birthmark: BirthmarkType,
-    pub(crate) comparator: Comparator,
+    pub(crate) algorithm: Algorithm,
 }
 
 impl AnalysisType {
@@ -652,7 +652,7 @@ impl AnalysisType {
         }
         Ok(Self {
             birthmark: bt,
-            comparator: algorithm.comparator(),
+            algorithm,
         })
     }
 
@@ -661,9 +661,10 @@ impl AnalysisType {
         &self.birthmark
     }
 
-    /// The comparator that runs its algorithm.
-    pub fn comparator(&self) -> &Comparator {
-        &self.comparator
+    /// The algorithm that compares it; [`Oinkie::comparator`](crate::Oinkie::comparator)
+    /// makes the comparator that runs it.
+    pub fn algorithm(&self) -> &Algorithm {
+        &self.algorithm
     }
 }
 

@@ -41,6 +41,8 @@ oinkie run [OPTIONS] [FILES]...
   The birthmarks the comparisons were made from are written into its `birthmarks/` subdirectory, one per input, and each pair's CSV names the two it used -- so the directory holds everything [`review`](../review) needs to re-read the comparison.
 * `-S, --skip`  
   Reuse what an earlier run left in the destination. A birthmark already in `birthmarks/` is reused if it is of the analysis's birthmark type, and extracted again otherwise. A pair's CSV is reused only if both birthmarks it was computed from were reused; otherwise the pair is compared again, so a CSV never names a birthmark it was not computed from.
+* `--threads <N>`  
+  The number of threads to compute on, for every part of the command that runs in parallel. `[default: one per core]`
 
 ---
 

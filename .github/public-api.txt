@@ -63,8 +63,8 @@ impl core::marker::Copy for oinkie::birthmarks::Shape
 impl core::marker::StructuralPartialEq for oinkie::birthmarks::Shape
 pub struct oinkie::birthmarks::AnalysisType
 impl oinkie::birthmarks::AnalysisType
+pub fn oinkie::birthmarks::AnalysisType::algorithm(&self) -> &oinkie::compare::Algorithm
 pub fn oinkie::birthmarks::AnalysisType::birthmark(&self) -> &oinkie::birthmarks::BirthmarkType
-pub fn oinkie::birthmarks::AnalysisType::comparator(&self) -> &oinkie::compare::Comparator
 pub fn oinkie::birthmarks::AnalysisType::new(oinkie::birthmarks::BirthmarkType, oinkie::compare::Algorithm) -> oinkie::Result<Self>
 impl core::convert::TryFrom<&str> for oinkie::birthmarks::AnalysisType
 pub type oinkie::birthmarks::AnalysisType::Error = oinkie::Error
@@ -154,7 +154,6 @@ pub oinkie::compare::Algorithm::Simpson
 pub oinkie::compare::Algorithm::WeightedJaccard
 impl oinkie::compare::Algorithm
 pub const oinkie::compare::Algorithm::ALL: &[oinkie::compare::Algorithm]
-pub fn oinkie::compare::Algorithm::comparator(&self) -> oinkie::compare::Comparator
 pub fn oinkie::compare::Algorithm::name(&self) -> &'static str
 pub fn oinkie::compare::Algorithm::shape(&self) -> oinkie::birthmarks::Shape
 impl core::clone::Clone for oinkie::compare::Algorithm
@@ -162,8 +161,6 @@ pub fn oinkie::compare::Algorithm::clone(&self) -> Self
 impl core::cmp::Eq for oinkie::compare::Algorithm
 impl core::cmp::PartialEq for oinkie::compare::Algorithm
 pub fn oinkie::compare::Algorithm::eq(&self, &Self) -> bool
-impl core::convert::From<&oinkie::compare::Algorithm> for oinkie::compare::Comparator
-pub fn oinkie::compare::Comparator::from(&oinkie::compare::Algorithm) -> Self
 impl core::fmt::Debug for oinkie::compare::Algorithm
 pub fn oinkie::compare::Algorithm::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for oinkie::compare::Algorithm
@@ -201,8 +198,6 @@ pub fn oinkie::compare::Size::fmt(&self, &mut core::fmt::Formatter<'_>) -> core:
 pub struct oinkie::compare::Comparator
 impl oinkie::compare::Comparator
 pub fn oinkie::compare::Comparator::compare_birthmarks<'a>(&self, &'a oinkie::birthmarks::Birthmark, &'a oinkie::birthmarks::Birthmark, &oinkie::compare::Aggregator) -> oinkie::Result<oinkie::compare::Comparison<'a, oinkie::birthmarks::Birthmark>>
-impl core::convert::From<&oinkie::compare::Algorithm> for oinkie::compare::Comparator
-pub fn oinkie::compare::Comparator::from(&oinkie::compare::Algorithm) -> Self
 pub struct oinkie::compare::Comparison<'a, S>
 impl<'a, S> oinkie::compare::Comparison<'a, S>
 pub fn oinkie::compare::Comparison<'a, S>::columns(&self) -> &S
@@ -285,6 +280,7 @@ pub oinkie::Error::Mismatch(oinkie::birthmarks::BirthmarkType, oinkie::birthmark
 pub oinkie::Error::Parse(alloc::string::String)
 pub oinkie::Error::ParseFloat(alloc::string::String, core::num::float_parse::ParseFloatError)
 pub oinkie::Error::ParseInt(alloc::string::String, core::num::error::ParseIntError)
+pub oinkie::Error::ThreadPool(core::num::nonzero::NonZeroUsize, alloc::string::String)
 pub oinkie::Error::ToolIo(std::path::PathBuf, core::io::error::Error)
 pub oinkie::Error::ToolNotFound
 pub oinkie::Error::ToolNotFound::candidates: &'static [&'static str]
@@ -300,6 +296,25 @@ impl core::fmt::Debug for oinkie::Error
 pub fn oinkie::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 impl core::fmt::Display for oinkie::Error
 pub fn oinkie::Error::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct oinkie::Oinkie
+impl oinkie::Oinkie
+pub fn oinkie::Oinkie::builder() -> oinkie::OinkieBuilder
+pub fn oinkie::Oinkie::comparator(&self, &oinkie::compare::Algorithm) -> oinkie::compare::Comparator
+pub fn oinkie::Oinkie::install<OP, R>(&self, OP) -> R where OP: core::ops::function::FnOnce() -> R + core::marker::Send, R: core::marker::Send
+pub fn oinkie::Oinkie::new() -> oinkie::Result<oinkie::Oinkie>
+pub fn oinkie::Oinkie::threads(&self) -> core::num::nonzero::NonZeroUsize
+impl core::clone::Clone for oinkie::Oinkie
+pub fn oinkie::Oinkie::clone(&self) -> Self
+impl core::fmt::Debug for oinkie::Oinkie
+pub fn oinkie::Oinkie::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
+pub struct oinkie::OinkieBuilder
+impl oinkie::OinkieBuilder
+pub fn oinkie::OinkieBuilder::build(self) -> oinkie::Result<oinkie::Oinkie>
+pub fn oinkie::OinkieBuilder::threads(self, core::num::nonzero::NonZeroUsize) -> oinkie::OinkieBuilder
+impl core::clone::Clone for oinkie::OinkieBuilder
+pub fn oinkie::OinkieBuilder::clone(&self) -> Self
+impl core::fmt::Debug for oinkie::OinkieBuilder
+pub fn oinkie::OinkieBuilder::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result
 pub struct oinkie::Program(_)
 impl oinkie::Program
 pub fn oinkie::Program::function_names(&self) -> alloc::vec::Vec<&str>

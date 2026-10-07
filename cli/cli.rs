@@ -11,11 +11,12 @@ pub use crate::values::Analysis;
 use crate::values::{AnalysisParser, BirthmarkTypeParser};
 use crate::vocabulary::{algorithm_parser, ir_parser, strategy_parser};
 use clap::ValueEnum;
-use oinkie::Result;
 use oinkie::birthmarks::{AnalysisType, BirthmarkType};
 use oinkie::compare::{Aggregator, Algorithm, Comparator, PairingStrategy};
 use oinkie::extract::Extractor;
 use oinkie::lift::Ir;
+use oinkie::{Oinkie, Result};
+use std::num::NonZeroUsize;
 
 #[derive(Debug, clap::Parser)]
 #[command(version, about)]
@@ -125,6 +126,32 @@ pub enum OinkieCommand {
     Mcp(McpOpts),
 }
 
+/// How many threads a command computes on.
+///
+/// One option shared by every command that computes in-process, so that it
+/// is spelled and explained the same in each. `lift` does not take it: its
+/// parallelism is the number of decompilers, which `--jobs` bounds by their
+/// memory.
+#[derive(Debug, Clone, clap::Args)]
+pub struct Threads {
+    #[clap(
+        long,
+        value_name = "N",
+        help = "Number of threads to compute on [default: one per core]"
+    )]
+    threads: Option<NonZeroUsize>,
+}
+
+impl Threads {
+    /// The `Oinkie` to compute with, on as many threads as were asked for.
+    pub fn oinkie(&self) -> Result<Oinkie> {
+        match self.threads {
+            Some(n) => Oinkie::builder().threads(n).build(),
+            None => Oinkie::new(),
+        }
+    }
+}
+
 /// Options for the MCP server.
 #[cfg(feature = "mcp")]
 #[derive(Debug, clap::Parser)]
@@ -140,6 +167,8 @@ The paths the tools receive are written by a language model rather than by you,
 which is the whole reason this exists."
     )]
     roots: Vec<PathBuf>,
+    #[clap(flatten)]
+    pub(crate) threads: Threads,
 }
 
 #[cfg(feature = "mcp")]
@@ -301,6 +330,8 @@ The full birthmark types can be found by running 'oinkie info'.")]
         help = "Path to the JSON files to extract birthmarks from"
     )]
     files: Vec<PathBuf>,
+    #[clap(flatten)]
+    pub(crate) threads: Threads,
 }
 
 impl ExtractOpts {
@@ -373,6 +404,8 @@ in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The thr
 recorded on the last line of the summary."
     )]
     min_elements: Option<MinElements>,
+    #[clap(flatten)]
+    pub(crate) threads: Threads,
 }
 
 impl ReviewOpts {
@@ -504,6 +537,8 @@ pub struct StatsOpts {
 a file that does not read as a birthmark is skipped with a warning and counted."
     )]
     inputs: Vec<PathBuf>,
+    #[clap(flatten)]
+    pub(crate) threads: Threads,
 }
 
 impl StatsOpts {
@@ -579,6 +614,8 @@ Available:
         help = "Path to the birthmark JSON files to compare"
     )]
     files: Vec<PathBuf>,
+    #[clap(flatten)]
+    pub(crate) threads: Threads,
 }
 
 impl CompareOpts {
@@ -586,8 +623,8 @@ impl CompareOpts {
         &self.dest
     }
 
-    pub fn comparator(&self) -> Comparator {
-        self.algorithm.comparator()
+    pub fn comparator(&self, oinkie: &Oinkie) -> Comparator {
+        oinkie.comparator(&self.algorithm)
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item = (&PathBuf, &PathBuf)> + Send + '_> {
@@ -655,6 +692,8 @@ Available:
 
     #[clap(index = 1, help = "Path to the JSON files")]
     pub(crate) files: Vec<PathBuf>,
+    #[clap(flatten)]
+    pub(crate) threads: Threads,
 }
 
 impl RunOpts {

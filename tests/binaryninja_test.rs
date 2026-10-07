@@ -9,11 +9,11 @@
 //! way `lifted/pcodes/` already is: a fresh lift records the absolute path it
 //! canonicalised, which is particular to the machine that ran it.
 
-use oinkie::Program;
 use oinkie::birthmarks::BirthmarkType;
-use oinkie::compare::{Aggregator, Algorithm, Comparator};
+use oinkie::compare::{Aggregator, Algorithm};
 use oinkie::extract::Extractor;
 use oinkie::lift::Ir;
+use oinkie::{Oinkie, Program};
 use std::path::{Path, PathBuf};
 
 /// Compares two programs the way the command line does: the `op-set`
@@ -22,7 +22,8 @@ use std::path::{Path, PathBuf};
 fn compare(a: &Program, b: &Program) -> oinkie::Result<f64> {
     let extractor = Extractor::new(BirthmarkType::OpSet);
     let (ba, bb) = (extractor.extract(a)?, extractor.extract(b)?);
-    Comparator::from(&Algorithm::Jaccard)
+    Oinkie::new()?
+        .comparator(&Algorithm::Jaccard)
         .compare_birthmarks(&ba, &bb, &Aggregator::default())
         .map(|c| c.similarity())
 }
