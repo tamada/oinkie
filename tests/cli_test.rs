@@ -620,7 +620,7 @@ fn test_review_drops_the_functions_with_too_few_elements() {
     let scores = fc_set_scores(dir.path());
     let (plain, recorded) = review(&scores, None);
     assert_eq!(recorded, None, "no threshold, no line");
-    // udl's two empty functions take part: 1/3 over a padded 3x3 assignment
+    // udl's two empty functions take part: 1/3, over its three functions
     assert!((plain - 1.0 / 9.0).abs() < 1e-9, "{plain}");
 
     // half the mean: udl's empty functions go, leaving entry against entry
