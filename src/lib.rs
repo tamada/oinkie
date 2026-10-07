@@ -150,6 +150,16 @@ pub enum Error {
     /// as the caller's.
     #[error("Parse error: {0}")]
     Parse(String),
+    /// An aggregator that weighs functions by their sizes was not given one
+    /// size for each function of the matrix: the matrix's shape, and the
+    /// lengths of the sizes given, if any were.
+    #[error("{}", render_function_sizes(.matrix, .given))]
+    FunctionSizes {
+        /// The matrix's shape, as [`crate::compare::Matrix::dim`] gives it.
+        matrix: (usize, usize),
+        /// How many sizes were given for each side, or `None` for none.
+        given: Option<(usize, usize)>,
+    },
     /// Text that should have been a decimal number: the text, and why it is
     /// not one.
     #[error("{0}: Parse float error {1}")]
@@ -177,6 +187,19 @@ pub enum Error {
         /// The usual installation directories that were looked in.
         candidates: &'static [&'static str],
     },
+}
+
+/// What [`Error::FunctionSizes`] says.
+fn render_function_sizes(matrix: &(usize, usize), given: &Option<(usize, usize)>) -> String {
+    let (rows, cols) = matrix;
+    let given = match given {
+        None => "none were given".to_string(),
+        Some((r, c)) => format!("{r} and {c} were given"),
+    };
+    format!(
+        "the weighted aggregator needs the element count of every function: the matrix is \
+         {rows} by {cols}, and {given}"
+    )
 }
 
 /// What a missing installation says without naming how a caller supplies one.
@@ -228,6 +251,9 @@ impl Error {
 
             // A file the caller named, which they can name differently.
             Error::Io(_, _) | Error::Json(_, _) => true,
+
+            // Sizes the caller passed, or did not.
+            Error::FunctionSizes { .. } => true,
 
             // Something went wrong inside, or in a file oinkie itself
             // produced; or in the machine it runs on, which no argument can
@@ -388,6 +414,7 @@ mod tests {
             Error::ParseFloat(_, _) => "ParseFloat",
             Error::ParseInt(_, _) => "ParseInt",
             Error::ToolNotFound { .. } => "ToolNotFound",
+            Error::FunctionSizes { .. } => "FunctionSizes",
         }
     }
 
@@ -503,6 +530,13 @@ mod tests {
                     candidates: &["/opt/ghidra", "/usr/local/ghidra"],
                 },
                 "Ghidra not found. Give its home directory, set GHIDRA_HOME, or install it in one of: /opt/ghidra, /usr/local/ghidra".to_string(),
+            ),
+            (
+                Error::FunctionSizes {
+                    matrix: (2, 3),
+                    given: None,
+                },
+                "the weighted aggregator needs the element count of every function: the matrix is 2 by 3, and none were given".to_string(),
             ),
         ]
     }

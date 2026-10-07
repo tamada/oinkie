@@ -281,7 +281,7 @@ pub struct ReviewParams {
     pub score_directory: String,
     /// How to combine a pair's function similarities into its similarity:
     /// "hungarian" (the default), "topn:all", "topn:" and a count,
-    /// "containment", or "matched:" and a threshold.
+    /// "containment", "matched:" and a threshold, or "weighted".
     /// Call oinkie_info for what these mean.
     #[serde(default)]
     pub aggregator: Option<String>,

@@ -62,7 +62,8 @@ pub(crate) fn store(review: Review, dest: &Path, start: Instant) -> Result<Vec<D
 ///
 /// Given `min_elements`, each pair's functions with fewer elements than the
 /// threshold are dropped before aggregating -- a row and a column of the
-/// stored matrix each -- so nothing is compared again. The counts come from the
+/// stored matrix each -- so nothing is compared again. An aggregator that
+/// weighs functions by size is given their counts. The counts come from the
 /// birthmarks the pair CSVs name, each passed to `confine` before it is read:
 /// the paths come from the files rather than from whoever asked, and the MCP
 /// server reads only under its roots.
@@ -79,14 +80,16 @@ pub(crate) fn review_all(
     let start = Instant::now();
     let crs = load_results(score_dir)?;
     log::info!("read the previous results {:?}", start.elapsed());
-    let filter = min_elements
-        .map(|m| Filter::new(&crs, score_dir, m, confine))
+    // Read only when needed: without either, review needs nothing but the
+    // pair CSVs, and the birthmarks they name may be gone.
+    let sizes = (min_elements.is_some() || aggregator.uses_sizes())
+        .then(|| Sizes::new(&crs, score_dir, min_elements, confine))
         .transpose()?;
     let pbar = bars.overall(Kind::Review, crs.len(), "Reviewing");
     let results = crs
         .iter()
         .map(|cr| {
-            let r = review_pair(cr, score_dir, aggregator, filter.as_ref());
+            let r = review_pair(cr, score_dir, aggregator, sizes.as_ref());
             pbar.inc(1);
             r
         })
@@ -95,20 +98,22 @@ pub(crate) fn review_all(
     let results = Error::vec_result_to_result_vec(results)?;
     Ok(Review {
         results: results.into_iter().map(|(cr, _)| cr).collect(),
-        min_elements: min_elements.cloned().zip(filter.map(|f| f.threshold)),
+        min_elements: min_elements.cloned().zip(sizes.and_then(|s| s.threshold)),
     })
 }
 
-/// What `--min-elements` needs of every birthmark in the directory: each
-/// function's name and element count, in the order the matrices use.
-struct Filter {
-    threshold: f64,
+/// What `--min-elements` and an aggregator weighing functions by size need of
+/// every birthmark in the directory: each function's name and element count,
+/// in the order the matrices use.
+struct Sizes {
+    /// The `--min-elements` threshold, resolved, when one was given.
+    threshold: Option<f64>,
     birthmarks: FxHashMap<PathBuf, Vec<(String, usize)>>,
 }
 
-impl Filter {
+impl Sizes {
     /// Reads the birthmarks every pair names, once each, and resolves the
-    /// threshold. The mean is over every function of every distinct
+    /// threshold if there is one. The mean is over every function of every distinct
     /// birthmark, as one population, so that the threshold is the same for
     /// every pair: per-birthmark means would judge a program of small
     /// functions leniently, and per-pair means would judge one birthmark
@@ -119,7 +124,7 @@ impl Filter {
     fn new(
         crs: &[CompareResult],
         score_dir: &Path,
-        min: &MinElements,
+        min: Option<&MinElements>,
         confine: &(dyn Fn(&Path) -> Result<()> + Sync),
     ) -> Result<Self> {
         let mut paths = Vec::new();
@@ -147,28 +152,32 @@ impl Filter {
         let birthmarks = Error::vec_result_to_result_vec(loaded)?
             .into_iter()
             .collect::<FxHashMap<_, _>>();
-        let threshold = match min {
-            MinElements::Count(n) => *n as f64,
-            MinElements::Ratio(r) => {
-                let (sum, n) = birthmarks
-                    .values()
-                    .flatten()
-                    .fold((0usize, 0usize), |(sum, n), (_, len)| (sum + len, n + 1));
-                let mean = if n == 0 { 0.0 } else { sum as f64 / n as f64 };
-                r * mean
-            }
-        };
-        log::info!("min elements {min}: threshold {threshold}");
-        Ok(Filter {
+        let threshold = min.map(|min| {
+            let threshold = match min {
+                MinElements::Count(n) => *n as f64,
+                MinElements::Ratio(r) => {
+                    let (sum, n) = birthmarks
+                        .values()
+                        .flatten()
+                        .fold((0usize, 0usize), |(sum, n), (_, len)| (sum + len, n + 1));
+                    let mean = if n == 0 { 0.0 } else { sum as f64 / n as f64 };
+                    r * mean
+                }
+            };
+            log::info!("min elements {min}: threshold {threshold}");
+            threshold
+        });
+        Ok(Sizes {
             threshold,
             birthmarks,
         })
     }
 
-    /// The indices of the functions to keep, after checking that the
-    /// birthmark is still the one the matrix was computed from: one extracted
-    /// again since would lend its counts to another's functions.
-    fn keep(&self, birthmark: &Path, names: &[String], csv: &Path) -> Result<Vec<usize>> {
+    /// The element count of each of a side's functions, in the matrix's
+    /// order, after checking that the birthmark is still the one the matrix
+    /// was computed from: one extracted again since would lend its counts to
+    /// another's functions.
+    fn side(&self, birthmark: &Path, names: &[String], csv: &Path) -> Result<Vec<usize>> {
         let functions = &self.birthmarks[birthmark];
         let matches =
             functions.len() == names.len() && functions.iter().zip(names).all(|((f, _), n)| f == n);
@@ -180,12 +189,15 @@ impl Filter {
                 csv.display()
             )));
         }
-        Ok(functions
-            .iter()
-            .enumerate()
-            .filter(|(_, (_, len))| *len as f64 >= self.threshold)
-            .map(|(i, _)| i)
-            .collect())
+        Ok(functions.iter().map(|(_, len)| *len).collect())
+    }
+
+    /// The indices of the functions of `counts` to keep under the threshold:
+    /// every one without a threshold.
+    fn keep(&self, counts: &[usize]) -> Vec<usize> {
+        (0..counts.len())
+            .filter(|&i| self.threshold.is_none_or(|t| counts[i] as f64 >= t))
+            .collect()
     }
 }
 
@@ -224,15 +236,17 @@ fn review_pair(
     cr: &CompareResult,
     score_dir: &Path,
     aggregator: &Aggregator,
-    filter: Option<&Filter>,
+    sizes: Option<&Sizes>,
 ) -> Result<(CompareResult, Duration)> {
     let start = Instant::now();
     let csv = pair_csv(cr.index, score_dir);
     log::info!("load comparison file {} {:?}", cr.index, csv.display());
     let stored = load_comparison(&csv)?;
-    let matrix = match filter {
-        None => stored.matrix,
-        Some(f) => {
+    // The stored matrix has a row per right-hand function and a column per
+    // left-hand one, and the sizes follow it.
+    let (matrix, counts) = match sizes {
+        None => (stored.matrix, None),
+        Some(sizes) => {
             let (Some(left), Some(right)) = (&stored.left.birthmark, &stored.right.birthmark)
             else {
                 return Err(Error::Parse(format!(
@@ -240,12 +254,27 @@ fn review_pair(
                     csv.display()
                 )));
             };
-            let cols = f.keep(left, &stored.left.functions, &csv)?;
-            let rows = f.keep(right, &stored.right.functions, &csv)?;
-            select(&stored.matrix, &rows, &cols)
+            let col_counts = sizes.side(left, &stored.left.functions, &csv)?;
+            let row_counts = sizes.side(right, &stored.right.functions, &csv)?;
+            let (rows, cols) = (sizes.keep(&row_counts), sizes.keep(&col_counts));
+            let kept = |indices: &[usize], counts: &[usize]| {
+                indices.iter().map(|&i| counts[i]).collect::<Vec<_>>()
+            };
+            let counts = (kept(&rows, &row_counts), kept(&cols, &col_counts));
+            let matrix = if sizes.threshold.is_some() {
+                select(&stored.matrix, &rows, &cols)
+            } else {
+                stored.matrix
+            };
+            (matrix, Some(counts))
         }
     };
-    let similarity = score(&matrix, aggregator)?;
+    let similarity = aggregator.aggregate(
+        &matrix,
+        counts
+            .as_ref()
+            .map(|(rows, cols)| (rows.as_slice(), cols.as_slice())),
+    )?;
     Ok((
         CompareResult::new(
             cr.index,
@@ -266,24 +295,6 @@ fn select(matrix: &Matrix, rows: &[usize], cols: &[usize]) -> Matrix {
         .collect();
     Matrix::new((rows.len(), cols.len()), cells)
         .expect("cells taken from a Matrix are finite, and as many as its new shape")
-}
-
-/// One pair's score from its function-to-function matrix, by the rule
-/// `compare` uses: two sides with no functions are identical, and one side
-/// with none shares nothing with the other.
-fn score(matrix: &Matrix, aggregator: &Aggregator) -> Result<f64> {
-    let (rows, cols) = matrix.dim();
-    if rows == 0 && cols == 0 {
-        return Ok(1.0);
-    }
-    if rows == 0 || cols == 0 {
-        return Ok(0.0);
-    }
-    let similarities = aggregator.aggregate(matrix)?;
-    if similarities.is_empty() {
-        return Ok(0.0);
-    }
-    Ok(similarities.iter().sum::<f64>() / similarities.len() as f64)
 }
 
 fn load_results(score_dir: &Path) -> Result<Vec<CompareResult>> {
@@ -544,11 +555,11 @@ mod tests {
     #[test]
     fn test_an_empty_side_scores_as_compare_scores_it() {
         let h = Aggregator::Hungarian;
-        assert_eq!(score(&Matrix::zeros((0, 0)), &h).unwrap(), 1.0);
-        assert_eq!(score(&Matrix::zeros((0, 3)), &h).unwrap(), 0.0);
-        assert_eq!(score(&Matrix::zeros((3, 0)), &h).unwrap(), 0.0);
+        assert_eq!(h.aggregate(&Matrix::zeros((0, 0)), None).unwrap(), 1.0);
+        assert_eq!(h.aggregate(&Matrix::zeros((0, 3)), None).unwrap(), 0.0);
+        assert_eq!(h.aggregate(&Matrix::zeros((3, 0)), None).unwrap(), 0.0);
         let one = Matrix::new((1, 1), vec![0.5]).unwrap();
-        assert_eq!(score(&one, &h).unwrap(), 0.5);
+        assert_eq!(h.aggregate(&one, None).unwrap(), 0.5);
     }
 
     /// `compare` writes a side with no functions as `matrix,,` and rows with
@@ -596,16 +607,24 @@ mod tests {
             b.clone(),
             vec![("entry".to_string(), 3), ("main".to_string(), 1)],
         );
-        let f = Filter {
-            threshold: 2.0,
+        let f = Sizes {
+            threshold: Some(2.0),
             birthmarks,
         };
         let names = |n: &[&str]| n.iter().map(ToString::to_string).collect::<Vec<_>>();
         let csv = Path::new("00000.csv");
-        assert_eq!(f.keep(&b, &names(&["entry", "main"]), csv).unwrap(), [0]);
+        let counts = f.side(&b, &names(&["entry", "main"]), csv).unwrap();
+        assert_eq!(counts, [3, 1]);
+        assert_eq!(f.keep(&counts), [0]);
         for other in [&["main", "entry"][..], &["entry"], &["entry", "main", "x"]] {
-            assert!(f.keep(&b, &names(other), csv).is_err(), "{other:?}");
+            assert!(f.side(&b, &names(other), csv).is_err(), "{other:?}");
         }
+        // without a threshold, every function is kept
+        let all = Sizes {
+            threshold: None,
+            birthmarks: f.birthmarks,
+        };
+        assert_eq!(all.keep(&counts), [0, 1]);
     }
 
     #[test]

@@ -192,7 +192,7 @@ pub struct Comparison<'a, S> {
     rows: &'a S,
     matrix: Matrix,
     duration: std::time::Duration,
-    similarities: Vec<f64>,
+    similarity: f64,
 }
 
 impl<'a, S> Comparison<'a, S> {
@@ -200,14 +200,14 @@ impl<'a, S> Comparison<'a, S> {
         columns: &'a S,
         rows: &'a S,
         matrix: Matrix,
-        similarities: Vec<f64>,
+        similarity: f64,
         duration: std::time::Duration,
     ) -> Comparison<'a, S> {
         Self {
             columns,
             rows,
             matrix,
-            similarities,
+            similarity,
             duration,
         }
     }
@@ -229,16 +229,13 @@ impl<'a, S> Comparison<'a, S> {
         &self.matrix
     }
 
-    /// The pair's similarity, between 0 and 1: the mean of what the
-    /// [`Aggregator`] kept of the matrix.
+    /// The pair's similarity, between 0 and 1, as the [`Aggregator`] made it
+    /// of the matrix.
     ///
     /// Two birthmarks with no functions score 1.0, and one with none against
     /// one with some, 0.0.
     pub fn similarity(&self) -> f64 {
-        if self.similarities.is_empty() {
-            return 0.0;
-        }
-        self.similarities.iter().sum::<f64>() / self.similarities.len() as f64
+        self.similarity
     }
 
     /// How long the comparison took.
@@ -259,7 +256,7 @@ pub enum Size {
 /// How a pair's function similarities become its one similarity.
 ///
 /// Read by `from_str` from `hungarian`, `topn:N`, `topn:all`, `topn`,
-/// `containment` or `matched:T`, in any case.
+/// `containment`, `matched:T` or `weighted`, in any case.
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub enum Aggregator {
@@ -284,6 +281,16 @@ pub enum Aggregator {
     /// larger side's functions that have a counterpart that close. Read from
     /// `matched:T`, which refuses a threshold outside (0, 1].
     Matched(f64),
+    /// The one-to-one matching that maximises the matched similarities each
+    /// weighted by the two functions' element counts, (wᵢ + wⱼ)·sᵢⱼ, divided
+    /// by the element count of every function of both sides. A function then
+    /// counts in proportion to its size: two short functions, which agree by
+    /// chance and two empty ones exactly, count for little, and an unmatched
+    /// function lowers the score by its weight. With every function of one
+    /// size it is 2·Σsᵢⱼ / (n₁ + n₂), counting both sides' functions as Dice's
+    /// coefficient does, which is `Hungarian` only when n₁ = n₂. Needs each
+    /// function's size; see [`Aggregator::uses_sizes`].
+    Weighted,
 }
 
 impl std::str::FromStr for Aggregator {
@@ -307,6 +314,9 @@ impl std::str::FromStr for Aggregator {
                 }
                 Err(e) => Err(Error::ParseInt(s, e)),
             }
+        } else if s == "weighted" {
+            log::info!("Using weighted Hungarian algorithm for aggregation");
+            Ok(Aggregator::Weighted)
         } else if s == "containment" {
             log::info!("Using containment for aggregation");
             Ok(Aggregator::Containment)
@@ -331,30 +341,52 @@ impl std::str::FromStr for Aggregator {
 }
 
 impl Aggregator {
-    /// The similarities this aggregator keeps of `matrix`, which
-    /// [`Comparison::similarity`] averages.
+    /// Whether [`Aggregator::aggregate`] needs the element count of each
+    /// function, which a caller holding only a stored matrix has to find.
+    pub fn uses_sizes(&self) -> bool {
+        matches!(self, Aggregator::Weighted)
+    }
+
+    /// The pair's similarity, between 0 and 1, made of its `matrix`.
     ///
-    /// The shorter side counts as though it had as many functions as the
-    /// longer, each sharing nothing with any function: a function left
-    /// without a counterpart lowers the pair's similarity rather than drop
-    /// out of it. [`Aggregator::Containment`] alone does not, since leaving
-    /// the larger side's other functions out is what it is for.
-    pub fn aggregate(&self, matrix: &Matrix) -> Result<Vec<f64>> {
-        let longer = |mut kept: Vec<f64>| {
-            let (n1, n2) = matrix.dim();
-            kept.resize(n1.max(n2), 0.0);
-            kept
-        };
+    /// `sizes` holds the element count of each function of either side, in
+    /// the order of [`Matrix::dim`]: one per row, then one per column. Only an
+    /// aggregator that [uses sizes](Aggregator::uses_sizes) reads them, and
+    /// fails with [`Error::FunctionSizes`] without them.
+    ///
+    /// A matrix with no functions on either side scores 1.0, and one with
+    /// none on one side, 0.0. Otherwise the shorter side counts as though it
+    /// had as many functions as the longer, each sharing nothing with any
+    /// function: a function left without a counterpart lowers the pair's
+    /// similarity rather than drop out of it. [`Aggregator::Containment`]
+    /// alone does not, since leaving the larger side's other functions out is
+    /// what it is for.
+    pub fn aggregate(&self, matrix: &Matrix, sizes: Option<(&[usize], &[usize])>) -> Result<f64> {
+        let (n1, n2) = matrix.dim();
+        if n1 == 0 && n2 == 0 {
+            return Ok(1.0);
+        }
+        if n1 == 0 || n2 == 0 {
+            return Ok(0.0);
+        }
+        let mean = |kept: Vec<f64>, over: usize| kept.iter().sum::<f64>() / over as f64;
+        let longer = n1.max(n2);
         match self {
-            Aggregator::Hungarian => Ok(longer(paired_similarities(matrix))),
-            Aggregator::TopN(n) => Ok(top_n_selection(matrix, n)),
-            Aggregator::Containment => Ok(paired_similarities(matrix)),
-            Aggregator::Matched(threshold) => Ok(longer(
-                paired_similarities(matrix)
+            Aggregator::Hungarian => Ok(mean(paired_similarities(matrix), longer)),
+            Aggregator::TopN(n) => {
+                let kept = top_n_selection(matrix, n);
+                let over = kept.len();
+                Ok(if over == 0 { 0.0 } else { mean(kept, over) })
+            }
+            Aggregator::Containment => Ok(mean(paired_similarities(matrix), n1.min(n2))),
+            Aggregator::Matched(threshold) => {
+                let matched = paired_similarities(matrix)
                     .into_iter()
                     .map(|s| if s >= *threshold { 1.0 } else { 0.0 })
-                    .collect(),
-            )),
+                    .collect();
+                Ok(mean(matched, longer))
+            }
+            Aggregator::Weighted => weighted_similarity(matrix, sizes),
         }
     }
 }
@@ -417,7 +449,7 @@ trait BirthmarkComparator: Sync {
                 b1,
                 b2,
                 Matrix::zeros((0, 0)),
-                vec![1.0],
+                1.0,
                 std::time::Duration::from_millis(0),
             ))
         } else if p1_len == 0 || p2_len == 0 {
@@ -425,7 +457,7 @@ trait BirthmarkComparator: Sync {
                 b1,
                 b2,
                 Matrix::zeros((p1_len, p2_len)),
-                vec![0.0],
+                0.0,
                 std::time::Duration::from_millis(0),
             ))
         } else {
@@ -455,8 +487,15 @@ trait BirthmarkComparator: Sync {
                 || observer.notify(Progress::RowFilled),
             )?;
             observer.notify(Progress::Aggregating);
+            let sizes = |b: &Birthmark| {
+                b.functions
+                    .iter()
+                    .map(crate::birthmarks::Function::len)
+                    .collect::<Vec<_>>()
+            };
+            let (s1, s2) = (sizes(b1), sizes(b2));
             aggregator
-                .aggregate(&r)
+                .aggregate(&r, Some((&s1, &s2)))
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
         }
     }
@@ -540,6 +579,30 @@ fn top_n_selection(matrix: &Matrix, n: &Size) -> Vec<f64> {
     let mut kept = best(firsts);
     kept.extend(best(seconds));
     kept
+}
+
+/// [`Aggregator::Weighted`] of `matrix`, whose sides are not empty.
+fn weighted_similarity(matrix: &Matrix, sizes: Option<(&[usize], &[usize])>) -> Result<f64> {
+    let (n1, n2) = matrix.dim();
+    let Some((w1, w2)) = sizes.filter(|(w1, w2)| w1.len() == n1 && w2.len() == n2) else {
+        return Err(Error::FunctionSizes {
+            matrix: (n1, n2),
+            given: sizes.map(|(w1, w2)| (w1.len(), w2.len())),
+        });
+    };
+    let total = (w1.iter().sum::<usize>() + w2.iter().sum::<usize>()) as f64;
+    // Every function of both sides is empty, and empty functions agree.
+    if total == 0.0 {
+        return Ok(1.0);
+    }
+    let weighted = |i: usize, j: usize| (w1[i] + w2[j]) as f64 * matrix[[i, j]];
+    let pairing = crate::assignment::assign_by(n1, n2, weighted);
+    let kept = pairing
+        .iter()
+        .enumerate()
+        .filter_map(|(i, j)| j.map(|j| weighted(i, j)))
+        .sum::<f64>();
+    Ok(kept / total)
 }
 
 /// The similarities of the one-to-one pairing that maximises their total, by
@@ -1715,7 +1778,6 @@ mod tests {
         let mut padded = cells;
         padded.extend([0.0; 3]);
         let square = Matrix::new((3, 3), padded).unwrap();
-        let mean = |v: Vec<f64>| v.iter().sum::<f64>() / v.len() as f64;
         for aggregator in [
             Aggregator::Hungarian,
             Aggregator::TopN(Size::All),
@@ -1724,23 +1786,21 @@ mod tests {
             Aggregator::Matched(0.5),
         ] {
             let (got, want) = (
-                aggregator.aggregate(&wide).unwrap(),
-                aggregator.aggregate(&square).unwrap(),
+                aggregator.aggregate(&wide, None).unwrap(),
+                aggregator.aggregate(&square, None).unwrap(),
             );
-            assert_eq!(got.len(), want.len(), "{aggregator:?}");
-            assert!((mean(got) - mean(want)).abs() < 1e-12, "{aggregator:?}");
+            assert!((got - want).abs() < 1e-12, "{aggregator:?}");
         }
         // the best pairing is 0.9 + 0.7, and the third column goes unpaired
-        let paired = Aggregator::Hungarian.aggregate(&wide).unwrap();
-        assert!((mean(paired) - 1.6 / 3.0).abs() < 1e-12);
+        let paired = Aggregator::Hungarian.aggregate(&wide, None).unwrap();
+        assert!((paired - 1.6 / 3.0).abs() < 1e-12);
     }
 
     /// The worked example in the documentation: A₁ and A₂ against B₁ to B₃.
     #[test]
     fn containment_and_matched_score_the_documented_example() {
         let m = Matrix::new((2, 3), vec![0.9, 0.2, 0.1, 0.3, 0.8, 0.0]).unwrap();
-        let mean = |v: Vec<f64>| v.iter().sum::<f64>() / v.len() as f64;
-        let score = |a: Aggregator| mean(a.aggregate(&m).unwrap());
+        let score = |a: Aggregator| a.aggregate(&m, None).unwrap();
         assert!((score(Aggregator::Hungarian) - 1.7 / 3.0).abs() < 1e-12);
         // the same pairing, over A's two functions rather than B's three
         assert!((score(Aggregator::Containment) - 0.85).abs() < 1e-12);
@@ -1811,22 +1871,167 @@ mod tests {
         assert_eq!(m.row(1), &[1.0, 1.1, 1.2]);
     }
 
+    /// Every aggregator follows the rule for empty sides on a matrix alone,
+    /// so that a caller scoring a stored matrix need not repeat it.
     #[test]
-    fn comparison_similarity_is_zero_when_no_scores_were_aggregated() {
-        let b = birthmark("a", &[("f", &["A"])]);
-        let c = Comparison::new(
-            &b,
-            &b,
-            Matrix::zeros((0, 0)),
-            vec![],
-            std::time::Duration::from_nanos(0),
+    fn every_aggregator_scores_an_empty_side_by_the_rule() {
+        let none = Matrix::zeros((0, 0));
+        let one_side = Matrix::zeros((0, 3));
+        for aggregator in [
+            Aggregator::Hungarian,
+            Aggregator::TopN(Size::All),
+            Aggregator::TopN(Size::Num(2)),
+            Aggregator::Containment,
+            Aggregator::Matched(0.5),
+            Aggregator::Weighted,
+        ] {
+            assert_eq!(
+                aggregator.aggregate(&none, None).unwrap(),
+                1.0,
+                "{aggregator:?}"
+            );
+            assert_eq!(
+                aggregator.aggregate(&one_side, None).unwrap(),
+                0.0,
+                "{aggregator:?}"
+            );
+            assert_eq!(
+                aggregator.aggregate(&Matrix::zeros((3, 0)), None).unwrap(),
+                0.0,
+                "{aggregator:?}"
+            );
+        }
+    }
+
+    /// `weighted` is read by name, and is the only aggregator that needs the
+    /// functions' sizes, which it refuses to do without.
+    #[test]
+    fn weighted_needs_a_size_for_every_function() {
+        assert!(matches!(
+            "Weighted".parse::<Aggregator>(),
+            Ok(Aggregator::Weighted)
+        ));
+        assert!(Aggregator::Weighted.uses_sizes());
+        for other in [
+            Aggregator::Hungarian,
+            Aggregator::TopN(Size::All),
+            Aggregator::Containment,
+            Aggregator::Matched(0.5),
+        ] {
+            assert!(!other.uses_sizes(), "{other:?}");
+        }
+        let m = Matrix::new((2, 3), vec![0.9, 0.2, 0.1, 0.3, 0.8, 0.0]).unwrap();
+        for sizes in [
+            None,
+            Some((&[1, 2][..], &[1, 2][..])),
+            Some((&[1, 2, 3][..], &[1, 2][..])),
+        ] {
+            let err = Aggregator::Weighted.aggregate(&m, sizes).unwrap_err();
+            assert!(
+                matches!(err, Error::FunctionSizes { matrix: (2, 3), .. }),
+                "{err}"
+            );
+            assert!(err.is_caller_fault());
+        }
+    }
+
+    /// The worked example, weighted: A₁ and A₂ of sizes 10 and 1, B₁ to B₃
+    /// of sizes 10, 1 and 1. The pairing is the same as unweighted, A₁ with
+    /// B₁ and A₂ with B₂, and counts (10+10)·0.9 + (1+1)·0.8 of the 23
+    /// elements in all.
+    #[test]
+    fn weighted_scores_the_documented_example() {
+        let m = Matrix::new((2, 3), vec![0.9, 0.2, 0.1, 0.3, 0.8, 0.0]).unwrap();
+        let score = Aggregator::Weighted
+            .aggregate(&m, Some((&[10, 1], &[10, 1, 1])))
+            .unwrap();
+        assert!(
+            (score - (20.0 * 0.9 + 2.0 * 0.8) / 23.0).abs() < 1e-12,
+            "{score}"
         );
+        // Equal sizes weigh every function alike: twice the matched total
+        // over both sides' functions, 2·1.7/5, where `hungarian` divides the
+        // total by the larger side's three.
+        let equal = Aggregator::Weighted
+            .aggregate(&m, Some((&[3, 3], &[3, 3, 3])))
+            .unwrap();
+        assert!((equal - 2.0 * 1.7 / 5.0).abs() < 1e-12, "{equal}");
+        // With as many functions on each side, the two agree.
+        let square = Matrix::new((2, 2), vec![0.9, 0.2, 0.3, 0.8]).unwrap();
+        let equal = Aggregator::Weighted
+            .aggregate(&square, Some((&[3, 3], &[3, 3])))
+            .unwrap();
+        let hungarian = Aggregator::Hungarian.aggregate(&square, None).unwrap();
+        assert!((equal - hungarian).abs() < 1e-12, "{equal} {hungarian}");
+    }
+
+    /// The matching maximises the weighted sum, so a large function takes the
+    /// partner that is best for it even where the unweighted total would be
+    /// higher another way.
+    #[test]
+    fn weighted_matches_the_large_functions_first() {
+        // A₁ is large and B₁, B₂ are its candidates; A₂ is small.
+        //        B₁   B₂
+        // A₁   0.8  0.7
+        // A₂   0.9  0.1
+        // Unweighted, A₁–B₂ and A₂–B₁ total 1.6, beating A₁–B₁ and A₂–B₂'s 0.9.
+        // Weighted by A₁ = 100, A₂ = 1, B₁ = B₂ = 1, A₁–B₁ is worth 101·0.8
+        // against 101·0.7, which outweighs anything A₂ can add.
+        let m = Matrix::new((2, 2), vec![0.8, 0.7, 0.9, 0.1]).unwrap();
+        let (w1, w2) = ([100, 1], [1, 1]);
+        let score = Aggregator::Weighted
+            .aggregate(&m, Some((&w1, &w2)))
+            .unwrap();
+        let expected = (101.0 * 0.8 + 2.0 * 0.1) / 103.0;
+        assert!(
+            (score - expected).abs() < 1e-12,
+            "{score} against {expected}"
+        );
+    }
+
+    /// Two short functions that agree count for little against two long ones
+    /// that do not, where unweighted they count the same.
+    #[test]
+    fn weighted_lets_short_functions_count_for_little() {
+        let short_agree = birthmark(
+            "a",
+            &[
+                ("tiny", &["A"]),
+                ("long", &["A", "B", "C", "D", "E", "F", "G", "H"]),
+            ],
+        );
+        let long_differ = birthmark(
+            "b",
+            &[
+                ("tiny", &["A"]),
+                ("long", &["S", "T", "U", "V", "W", "X", "Y", "Z"]),
+            ],
+        );
+        let comparator = crate::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard);
+        let score = |a: Aggregator| {
+            comparator
+                .compare_birthmarks(&short_agree, &long_differ, &a)
+                .unwrap()
+                .similarity()
+        };
+        assert_eq!(score(Aggregator::Hungarian), 0.5);
+        // the tiny pair, 1 + 1 elements of the 18, is all that matches
+        assert!((score(Aggregator::Weighted) - 2.0 / 18.0).abs() < 1e-12);
+    }
+
+    /// Functions all empty on both sides agree, as empty functions do under
+    /// every algorithm, rather than divide by a total of nothing.
+    #[test]
+    fn weighted_scores_empty_functions_alike() {
+        let m = Matrix::new((2, 1), vec![1.0, 1.0]).unwrap();
         assert_eq!(
-            c.similarity(),
-            0.0,
-            "an empty aggregation must not produce NaN"
+            Aggregator::Weighted
+                .aggregate(&m, Some((&[0, 0], &[0])))
+                .unwrap(),
+            1.0
         );
-        assert_eq!(c.duration(), std::time::Duration::from_nanos(0));
     }
 
     /// The number of threads changes when a cell is computed, never what it

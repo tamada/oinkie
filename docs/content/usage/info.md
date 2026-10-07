@@ -82,5 +82,5 @@ not listed.
 
 `info` does not list the aggregators, which are given to `-A/--aggregator` on
 `compare`, `run` and `review` rather than named in an analysis. They are
-`hungarian`, `topn:N` (or `topn:all`), `containment` and `matched:T`; see those
-commands' `--help`.
+`hungarian`, `topn:N` (or `topn:all`), `containment`, `matched:T` and
+`weighted`; see those commands' `--help`.

@@ -25,19 +25,34 @@ where
     if cells.len() != rows.checked_mul(cols)? || !cells.iter().all(|&c| c.into().is_finite()) {
         return None;
     }
+    Some(assign_by(rows, cols, |i, j| cells[i * cols + j].into()))
+}
+
+/// [`assign`] over values computed from a row and a column rather than read
+/// from a slice, so that a pairing by values derived from a matrix -- its
+/// cells weighted, say -- needs no second matrix to hold them.
+///
+/// `value` must be finite for every row and column; [`assign`] checks that
+/// of its cells, and a caller deriving them from finite cells and finite
+/// factors has it already.
+pub(crate) fn assign_by(
+    rows: usize,
+    cols: usize,
+    value: impl Fn(usize, usize) -> f64,
+) -> Vec<Option<usize>> {
     if rows <= cols {
-        Some(solve(rows, cols, |i, j| cells[i * cols + j].into()))
+        solve(rows, cols, value)
     } else {
         // The method needs the narrower side as its rows, so the columns
         // take that role and the result is turned back around.
-        let by_col = solve(cols, rows, |j, i| cells[i * cols + j].into());
+        let by_col = solve(cols, rows, |j, i| value(i, j));
         let mut by_row = vec![None; rows];
         for (j, i) in by_col.into_iter().enumerate() {
             if let Some(i) = i {
                 by_row[i] = Some(j);
             }
         }
-        Some(by_row)
+        by_row
     }
 }
 

@@ -681,6 +681,54 @@ fn test_review_scores_under_containment_and_matched() {
         .failure();
 }
 
+/// `weighted` needs each function's size, which `run` has in hand and
+/// `review` reads from the birthmarks the pair CSVs name: the two give the
+/// same score, the sides' sizes each following the matrix's orientation.
+/// op-seq on udl and hello_gcc, so that the sizes differ between functions
+/// and between the two sides.
+#[test]
+fn test_review_weighted_scores_what_run_weighted_scores() {
+    let dir = tempdir().unwrap();
+    let scores = dir.path().join("scores");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args([
+            "run",
+            "-a",
+            "op-seq-lcs",
+            "-A",
+            "weighted",
+            "-s",
+            "all",
+            "-d",
+        ])
+        .arg(&scores)
+        .args([
+            "testdata/lifted/pcodes/udl.json",
+            "testdata/lifted/pcodes/hello_gcc.json",
+        ])
+        .assert()
+        .success();
+    let run = first_score(&scores.join("results.csv"));
+    let review = |aggregator: &str| {
+        let out = dir.path().join(format!("{aggregator}.csv"));
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(["review", "-A", aggregator, "-d"])
+            .arg(&out)
+            .arg(&scores)
+            .assert()
+            .success();
+        first_score(&out)
+    };
+    assert_eq!(review("weighted"), run);
+    assert_ne!(
+        review("weighted"),
+        review("hungarian"),
+        "the sizes made no difference"
+    );
+}
+
 /// A ratio is of the mean over every function of every distinct birthmark
 /// in the directory: here op-seq, under which the functions are of different
 /// lengths, with udl in both pairs and counted once.

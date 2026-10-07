@@ -96,6 +96,14 @@ The pairing of `hungarian`, averaged over the **smaller** program's functions ra
 
 The pairing of `hungarian`, counting the pairs whose similarity is at least \\(T\\), over the larger program's functions: the proportion of functions that have a counterpart that close. "62% of the functions have a counterpart at 0.9 or above" is easier to state in a report than a mean similarity. \\(T\\) is above 0 and at most 1; `matched:0.9`, for instance.
 
+### 5. `weighted`
+
+The one-to-one pairing that maximises the paired similarities each weighted by the two functions' sizes -- their numbers of elements -- divided by the sizes of every function of both programs:
+
+\\[ \\frac{\\sum_{(i,j)\\ \\text{paired}} (w_i + w_j)\\, s_{ij}}{\\sum_i w_i + \\sum_j w_j} \\]
+
+Under `hungarian` every pair counts alike, so two tiny functions, which agree by chance, count as much as two large ones. Under `weighted` they count for little, without choosing a threshold as `review --min-elements` asks; a function left without a partner lowers the score by its size. With every function of one size it reduces to \\(2 \\sum s_{ij} / (n_1 + n_2)\\), which counts both programs' functions as Dice's coefficient does, and equals `hungarian` only when the two have as many functions. `review -A weighted` reads the sizes from the birthmarks the comparison names.
+
 ### Pairs of different sizes
 
 When one program has more functions than the other, the functions the smaller one cannot match count as zeros, so they lower the similarity instead of dropping out of it. Program A with 2 functions against program B with 3:
@@ -110,5 +118,6 @@ When one program has more functions than the other, the functions the smaller on
 * `topn:1` takes the single best from each side, 0.9 and 0.9, and scores 0.9: a small \\(N\\) looks only at the strongest matches, whatever is left over.
 * `containment` takes the pairing `hungarian` found and averages it over A's two functions: \\((0.9 + 0.8) / 2 = 0.85\\). B₃ does not count against it.
 * `matched:0.85` counts the paired similarities of at least 0.85 -- only 0.9 -- over B's three functions: \\(1 / 3 \\approx 0.333\\). `matched:0.8` counts both, \\(2 / 3\\).
+* `weighted`, with A₁ and B₁ of 10 elements and the rest of 1, pairs as `hungarian` does here and scores \\(((10 + 10) \\times 0.9 + (1 + 1) \\times 0.8) / 23 \\approx 0.852\\): the large pair carries the score, and B₃, which is small, costs little.
 
-So under `hungarian`, `topn:all` and `matched:T`, a small program does not score as a copy of a large one merely because all of it appears there; under `containment`, it does, which is what `containment` is for. The [glossary](../../glossary#aggregator) states the rule once for every command that aggregates.
+So under `hungarian`, `topn:all`, `matched:T` and `weighted`, a small program does not score as a copy of a large one merely because all of it appears there; under `containment`, it does, which is what `containment` is for. The [glossary](../../glossary#aggregator) states the rule once for every command that aggregates.
