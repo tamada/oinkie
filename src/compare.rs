@@ -532,12 +532,17 @@ pub enum Algorithm {
     Euclidean,
     /// Jaccard index. Available: seq, set and freq.
     Jaccard,
+    /// Jensen–Shannon divergence between the functions' element distributions,
+    /// as the similarity 1 − √JSD. Available: seq and freq.
+    JensenShannon,
     /// Levenshtein distance. Available: seq.
     Levenshtein,
     /// Longest Common Subsequence (LCS). Available: seq.
     Lcs,
     /// Simpson's coefficient. Available: seq, set and freq.
     Simpson,
+    /// Tanimoto coefficient over term frequency vectors. Available: seq and freq.
+    Tanimoto,
     /// Weighted Jaccard index based on term frequency vectors. Available: seq and freq.
     WeightedJaccard,
 }
@@ -563,9 +568,11 @@ impl std::fmt::Display for Algorithm {
             Algorithm::Dice => write!(f, "Dice Coefficient"),
             Algorithm::Euclidean => write!(f, "Euclidean Distance"),
             Algorithm::Jaccard => write!(f, "Jaccard Index"),
+            Algorithm::JensenShannon => write!(f, "Jensen-Shannon Divergence"),
             Algorithm::Levenshtein => write!(f, "Levenshtein Distance"),
             Algorithm::Lcs => write!(f, "Longest Common Subsequence"),
             Algorithm::Simpson => write!(f, "Simpson's Coefficient"),
+            Algorithm::Tanimoto => write!(f, "Tanimoto Coefficient"),
             Algorithm::WeightedJaccard => write!(f, "Weighted Jaccard Index"),
         }
     }
@@ -581,9 +588,11 @@ impl Algorithm {
         Algorithm::Dice,
         Algorithm::Euclidean,
         Algorithm::Jaccard,
+        Algorithm::JensenShannon,
         Algorithm::Levenshtein,
         Algorithm::Lcs,
         Algorithm::Simpson,
+        Algorithm::Tanimoto,
         Algorithm::WeightedJaccard,
     ];
 
@@ -601,19 +610,23 @@ impl Algorithm {
             Algorithm::Dice => ("dice", Shape::Set),
             Algorithm::Euclidean => ("euclidean", Shape::Freq),
             Algorithm::Jaccard => ("jaccard", Shape::Set),
+            Algorithm::JensenShannon => ("jensenshannon", Shape::Freq),
             Algorithm::Lcs => ("lcs", Shape::Seq),
             Algorithm::Levenshtein => ("levenshtein", Shape::Seq),
             Algorithm::Simpson => ("simpson", Shape::Set),
+            Algorithm::Tanimoto => ("tanimoto", Shape::Freq),
             Algorithm::WeightedJaccard => ("weightedjaccard", Shape::Freq),
         }
     }
 
     /// The same name with a hyphen between its words.
     ///
-    /// It differs from [`Algorithm::name`] for `weightedjaccard` alone;
-    /// the other seven are single words and spell the same either way.
+    /// It differs from [`Algorithm::name`] for `jensenshannon` and
+    /// `weightedjaccard`; the others are single words and spell the same
+    /// either way.
     fn hyphenated(&self) -> &'static str {
         match self {
+            Algorithm::JensenShannon => "jensen-shannon",
             Algorithm::WeightedJaccard => "weighted-jaccard",
             other => other.name(),
         }
@@ -647,9 +660,11 @@ enum ComparatorImpl {
     Dice(Dice),
     Euclidean(Euclidean),
     Jaccard(Jaccard),
+    JensenShannon(JensenShannon),
     Levenshtein(Levenshtein),
     Lcs(Lcs),
     Simpson(Simpson),
+    Tanimoto(Tanimoto),
     WeightedJaccard(WeightedJaccard),
 }
 
@@ -660,9 +675,11 @@ impl Comparator {
             Algorithm::Dice => ComparatorImpl::Dice(Dice),
             Algorithm::Euclidean => ComparatorImpl::Euclidean(Euclidean),
             Algorithm::Jaccard => ComparatorImpl::Jaccard(Jaccard),
+            Algorithm::JensenShannon => ComparatorImpl::JensenShannon(JensenShannon),
             Algorithm::Levenshtein => ComparatorImpl::Levenshtein(Levenshtein),
             Algorithm::Lcs => ComparatorImpl::Lcs(Lcs),
             Algorithm::Simpson => ComparatorImpl::Simpson(Simpson),
+            Algorithm::Tanimoto => ComparatorImpl::Tanimoto(Tanimoto),
             Algorithm::WeightedJaccard => ComparatorImpl::WeightedJaccard(WeightedJaccard),
         };
         Comparator { inner, pool }
@@ -699,9 +716,11 @@ impl Comparator {
             ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2, a, o),
             ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2, a, o),
             ComparatorImpl::Jaccard(j) => j.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::JensenShannon(js) => js.compare_birthmarks(b1, b2, a, o),
             ComparatorImpl::Levenshtein(l) => l.compare_birthmarks(b1, b2, a, o),
             ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2, a, o),
             ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Tanimoto(t) => t.compare_birthmarks(b1, b2, a, o),
             ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2, a, o),
         })
     }
@@ -715,6 +734,8 @@ struct Cosine;
 struct Euclidean;
 struct WeightedJaccard;
 struct Lcs;
+struct JensenShannon;
+struct Tanimoto;
 
 impl BirthmarkComparator for Jaccard {
     fn shape(&self) -> Shape {
@@ -809,6 +830,34 @@ impl BirthmarkComparator for WeightedJaccard {
         match (d1, d2) {
             (Data::Freq(f1), Data::Freq(f2)) => weighted_jaccard(f1, f2),
             (Data::KgramFreq(k1), Data::KgramFreq(k2)) => weighted_jaccard(k1, k2),
+            _ => 0.0,
+        }
+    }
+}
+
+impl BirthmarkComparator for JensenShannon {
+    fn shape(&self) -> Shape {
+        Shape::Freq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Freq(f1), Data::Freq(f2)) => jensen_shannon(f1, f2),
+            (Data::KgramFreq(k1), Data::KgramFreq(k2)) => jensen_shannon(k1, k2),
+            _ => 0.0,
+        }
+    }
+}
+
+impl BirthmarkComparator for Tanimoto {
+    fn shape(&self) -> Shape {
+        Shape::Freq
+    }
+
+    fn compare_data(&self, d1: &Data, d2: &Data) -> f64 {
+        match (d1, d2) {
+            (Data::Freq(f1), Data::Freq(f2)) => tanimoto(f1, f2),
+            (Data::KgramFreq(k1), Data::KgramFreq(k2)) => tanimoto(k1, k2),
             _ => 0.0,
         }
     }
@@ -1028,6 +1077,66 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(
     }
 }
 
+/// a·b / (|a|² + |b|² − a·b) over the counts: Jaccard's index on sets,
+/// extended to multiplicities. In integers, as the sums above.
+fn tanimoto<T: std::cmp::Eq + std::hash::Hash>(
+    f1: &FxHashMap<T, usize>,
+    f2: &FxHashMap<T, usize>,
+) -> f64 {
+    let squares =
+        |f: &FxHashMap<T, usize>| f.values().map(|&v| v as u128 * v as u128).sum::<u128>();
+    let dot_product = shared(f1, f2)
+        .map(|(a, b)| a as u128 * b as u128)
+        .sum::<u128>();
+    // Zero only when both functions are empty, which agree.
+    let denominator = squares(f1) + squares(f2) - dot_product;
+    if denominator == 0 {
+        return 1.0;
+    }
+    dot_product as f64 / denominator as f64
+}
+
+/// 1 − √JSD, the Jensen–Shannon divergence in bits between the two functions'
+/// elements as distributions: each count over its function's total.
+///
+/// The square root because √JSD is a metric, and because it grows with the
+/// differences between the distributions where JSD grows with their squares,
+/// which would leave quite different functions scoring close to 1.
+fn jensen_shannon<T: std::cmp::Eq + std::hash::Hash>(
+    f1: &FxHashMap<T, usize>,
+    f2: &FxHashMap<T, usize>,
+) -> f64 {
+    let total = |f: &FxHashMap<T, usize>| f.values().map(|&v| v as u128).sum::<u128>();
+    let (total1, total2) = (total(f1), total(f2));
+    // An empty function has no distribution. Two of them agree, and one
+    // against a function that is not empty does not, as under every other
+    // algorithm.
+    match (total1 > 0, total2 > 0) {
+        (true, true) => {}
+        (false, false) => return 1.0,
+        _ => return 0.0,
+    }
+    // An element in one function only contributes its whole probability to
+    // the divergence, halved, so those terms come from the mass the shared
+    // elements leave, which is counted in integers so that identical
+    // functions leave exactly none.
+    let (mut shared1, mut shared2, mut terms) = (0u128, 0u128, 0.0f64);
+    for (a, b) in shared(f1, f2) {
+        shared1 += a as u128;
+        shared2 += b as u128;
+        let p = a as f64 / total1 as f64;
+        let q = b as f64 / total2 as f64;
+        let m = p + q;
+        terms += p * (2.0 * p / m).log2() + q * (2.0 * q / m).log2();
+    }
+    let unshared =
+        (total1 - shared1) as f64 / total1 as f64 + (total2 - shared2) as f64 / total2 as f64;
+    // Rounding can take a divergence of zero a hair below it, where the root
+    // is NaN, or one of 1 a hair above.
+    let divergence = ((unshared + terms) / 2.0).clamp(0.0, 1.0);
+    1.0 - divergence.sqrt()
+}
+
 fn longest_common_subsequence<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     let n = s1.len();
     let m = s2.len();
@@ -1081,15 +1190,17 @@ mod tests {
                 Algorithm::Dice => 1,
                 Algorithm::Euclidean => 2,
                 Algorithm::Jaccard => 3,
-                Algorithm::Levenshtein => 4,
-                Algorithm::Lcs => 5,
-                Algorithm::Simpson => 6,
-                Algorithm::WeightedJaccard => 7,
+                Algorithm::JensenShannon => 4,
+                Algorithm::Levenshtein => 5,
+                Algorithm::Lcs => 6,
+                Algorithm::Simpson => 7,
+                Algorithm::Tanimoto => 8,
+                Algorithm::WeightedJaccard => 9,
             }
         }
         let mut seen = Algorithm::ALL.iter().map(index).collect::<Vec<_>>();
         seen.sort_unstable();
-        assert_eq!(seen, (0..8).collect::<Vec<_>>());
+        assert_eq!(seen, (0..10).collect::<Vec<_>>());
     }
 
     /// The same for `PairingStrategy::ALL`.
@@ -1122,6 +1233,10 @@ mod tests {
         assert_eq!(
             Algorithm::from_str("weighted-jaccard").unwrap(),
             Algorithm::WeightedJaccard
+        );
+        assert_eq!(
+            Algorithm::from_str("Jensen-Shannon").unwrap(),
+            Algorithm::JensenShannon
         );
         let err = Algorithm::from_str("nonsense").unwrap_err().to_string();
         assert!(err.contains("nonsense"), "{err}");
@@ -1220,9 +1335,11 @@ mod tests {
             (Algorithm::Dice, "Dice Coefficient"),
             (Algorithm::Euclidean, "Euclidean Distance"),
             (Algorithm::Jaccard, "Jaccard Index"),
+            (Algorithm::JensenShannon, "Jensen-Shannon Divergence"),
             (Algorithm::Levenshtein, "Levenshtein Distance"),
             (Algorithm::Lcs, "Longest Common Subsequence"),
             (Algorithm::Simpson, "Simpson's Coefficient"),
+            (Algorithm::Tanimoto, "Tanimoto Coefficient"),
             (Algorithm::WeightedJaccard, "Weighted Jaccard Index"),
         ];
         for (algorithm, expected) in cases {
@@ -1312,6 +1429,8 @@ mod tests {
             assert!((Cosine.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
             assert!((WeightedJaccard.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
             assert!((Euclidean.compare_functions(&e1, &e2) - 1.0).abs() < 1e-9);
+            assert_eq!(JensenShannon.compare_functions(&e1, &e2), 1.0);
+            assert_eq!(Tanimoto.compare_functions(&e1, &e2), 1.0);
         }
     }
 
@@ -1338,9 +1457,11 @@ mod tests {
                     Algorithm::Dice => (a.clone(), Box::new(Dice), sets.clone()),
                     Algorithm::Euclidean => (a.clone(), Box::new(Euclidean), freqs.clone()),
                     Algorithm::Jaccard => (a.clone(), Box::new(Jaccard), sets.clone()),
+                    Algorithm::JensenShannon => (a.clone(), Box::new(JensenShannon), freqs.clone()),
                     Algorithm::Levenshtein => (a.clone(), Box::new(Levenshtein), seqs.clone()),
                     Algorithm::Lcs => (a.clone(), Box::new(Lcs), seqs.clone()),
                     Algorithm::Simpson => (a.clone(), Box::new(Simpson), sets.clone()),
+                    Algorithm::Tanimoto => (a.clone(), Box::new(Tanimoto), freqs.clone()),
                     Algorithm::WeightedJaccard => {
                         (a.clone(), Box::new(WeightedJaccard), freqs.clone())
                     }
@@ -1389,6 +1510,8 @@ mod tests {
         assert_eq!(Cosine.compare_functions(&st, &st), 0.0);
         assert_eq!(Euclidean.compare_functions(&st, &st), 0.0);
         assert_eq!(WeightedJaccard.compare_functions(&st, &st), 0.0);
+        assert_eq!(JensenShannon.compare_functions(&st, &st), 0.0);
+        assert_eq!(Tanimoto.compare_functions(&st, &st), 0.0);
         for unordered in [&st, &fr] {
             assert_eq!(Levenshtein.compare_functions(unordered, unordered), 0.0);
             assert_eq!(Lcs.compare_functions(unordered, unordered), 0.0);
@@ -1688,17 +1811,8 @@ mod tests {
     #[test]
     fn comparator_dispatches_every_algorithm() {
         let b = birthmark("a", &[("f", &["A", "B"])]);
-        for algorithm in [
-            Algorithm::Cosine,
-            Algorithm::Dice,
-            Algorithm::Euclidean,
-            Algorithm::Jaccard,
-            Algorithm::Levenshtein,
-            Algorithm::Lcs,
-            Algorithm::Simpson,
-            Algorithm::WeightedJaccard,
-        ] {
-            let comparator = crate::Oinkie::new().unwrap().comparator(&algorithm);
+        for algorithm in Algorithm::ALL {
+            let comparator = crate::Oinkie::new().unwrap().comparator(algorithm);
             let c = comparator
                 .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
                 .unwrap_or_else(|e| panic!("{algorithm}: {e}"));
@@ -1790,6 +1904,52 @@ mod tests {
         }
     }
 
+    fn tanimoto_by_union<T: std::cmp::Eq + std::hash::Hash>(
+        f1: &FxHashMap<T, usize>,
+        f2: &FxHashMap<T, usize>,
+    ) -> f64 {
+        let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+        let (mut dot, mut squares1, mut squares2) = (0.0, 0.0, 0.0);
+        for k in &keys {
+            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+            dot += v1 * v2;
+            squares1 += v1 * v1;
+            squares2 += v2 * v2;
+        }
+        let denominator = squares1 + squares2 - dot;
+        if denominator == 0.0 {
+            1.0
+        } else {
+            dot / denominator
+        }
+    }
+
+    /// The textbook definition: the mean of each distribution's
+    /// Kullback–Leibler divergence from their mixture, over every element.
+    fn jensen_shannon_by_union<T: std::cmp::Eq + std::hash::Hash>(
+        f1: &FxHashMap<T, usize>,
+        f2: &FxHashMap<T, usize>,
+    ) -> f64 {
+        let total1 = f1.values().sum::<usize>() as f64;
+        let total2 = f2.values().sum::<usize>() as f64;
+        if total1 == 0.0 || total2 == 0.0 {
+            return if total1 == total2 { 1.0 } else { 0.0 };
+        }
+        let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+        let kl = |p: f64, m: f64| if p > 0.0 { p * (p / m).log2() } else { 0.0 };
+        let divergence = keys
+            .iter()
+            .map(|k| {
+                let p = *f1.get(*k).unwrap_or(&0) as f64 / total1;
+                let q = *f2.get(*k).unwrap_or(&0) as f64 / total2;
+                let m = (p + q) / 2.0;
+                (kl(p, m) + kl(q, m)) / 2.0
+            })
+            .sum::<f64>();
+        1.0 - divergence.max(0.0).sqrt()
+    }
+
     /// Every pair of a set of frequency maps -- with repeated counts, counts
     /// in one only, disjoint maps, a large count and the empty map -- scores
     /// the same bits summed over the shared elements as over all of them.
@@ -1844,6 +2004,20 @@ mod tests {
                     weighted_jaccard(f1, f2).to_bits(),
                     weighted_jaccard_by_union(f1, f2).to_bits(),
                     "weighted jaccard {f1:?} {f2:?}"
+                );
+                // Over whole numbers, as the three above.
+                assert_eq!(
+                    tanimoto(f1, f2).to_bits(),
+                    tanimoto_by_union(f1, f2).to_bits(),
+                    "tanimoto {f1:?} {f2:?}"
+                );
+                // Over logarithms, which the rearrangement rounds
+                // differently: close, not equal. The root magnifies a
+                // difference near a divergence of zero, hence the margin.
+                let (js, by_union) = (jensen_shannon(f1, f2), jensen_shannon_by_union(f1, f2));
+                assert!(
+                    (js - by_union).abs() < 1e-7,
+                    "jensen-shannon {js} against {by_union}: {f1:?} {f2:?}"
                 );
             }
         }
@@ -1934,5 +2108,35 @@ mod tests {
         // an empty vector has no direction, so both are treated as identical
         assert_eq!(cosine_similarity(&empty, &empty), 1.0);
         assert_eq!(weighted_jaccard(&empty, &empty), 1.0);
+        assert_eq!(tanimoto(&empty, &empty), 1.0);
+        assert_eq!(jensen_shannon(&empty, &empty), 1.0);
+    }
+
+    /// Identical distributions score exactly 1.0 and disjoint ones exactly
+    /// 0.0, whatever the functions' sizes: the divergence is of proportions.
+    #[test]
+    fn jensen_shannon_compares_proportions() {
+        let small: FxHashMap<&str, usize> = [("A", 1), ("B", 3)].into_iter().collect();
+        let large: FxHashMap<&str, usize> = [("A", 250), ("B", 750)].into_iter().collect();
+        let other: FxHashMap<&str, usize> = [("C", 5)].into_iter().collect();
+        assert_eq!(jensen_shannon(&small, &small), 1.0);
+        assert_eq!(jensen_shannon(&small, &large), 1.0, "same proportions");
+        assert_eq!(jensen_shannon(&small, &other), 0.0, "nothing shared");
+        assert!(jensen_shannon(&small, &large) > jensen_shannon(&small, &other));
+        // The counts of `small` and `large` differ, so the others do not
+        // score them as identical.
+        assert!(tanimoto(&small, &large) < 1.0);
+        assert!(weighted_jaccard(&small, &large) < 1.0);
+    }
+
+    /// On counts of one each -- a set -- Tanimoto is Jaccard's index, which
+    /// is why it is not offered on sets.
+    #[test]
+    fn tanimoto_on_ones_is_jaccard() {
+        let f1: FxHashMap<&str, usize> = [("A", 1), ("B", 1), ("C", 1)].into_iter().collect();
+        let f2: FxHashMap<&str, usize> = [("B", 1), ("C", 1), ("D", 1)].into_iter().collect();
+        let s1 = freq2set(&f1);
+        let s2 = freq2set(&f2);
+        assert_eq!(tanimoto(&f1, &f2), jaccard_index(&s1, &s2));
     }
 }

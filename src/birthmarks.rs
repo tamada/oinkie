@@ -747,8 +747,9 @@ impl Shape {
 /// An algorithm by either of the names it goes by: the one an analysis name
 /// uses, and the same with a hyphen between its words.
 ///
-/// They differ for `weightedjaccard` / `weighted-jaccard` alone; the other
-/// seven are single words and spell the same either way.
+/// They differ for `jensenshannon` / `jensen-shannon` and `weightedjaccard` /
+/// `weighted-jaccard`; the others are single words and spell the same either
+/// way.
 fn parse_algorithm(name: &str) -> Option<Algorithm> {
     name.parse().ok()
 }
@@ -907,6 +908,8 @@ mod tests {
             "op-seq-lcs",
             "op-set-simpson",
             "op-freq-weightedjaccard",
+            "op-freq-jensenshannon",
+            "op-freq-tanimoto",
             // the fc- family reaches BirthmarkType::try_from by the same route
             "fc-freq-cosine",
             "fc-set-dice",
@@ -916,6 +919,8 @@ mod tests {
             "fc-seq-lcs",
             "fc-set-simpson",
             "fc-freq-weightedjaccard",
+            "fc-freq-jensenshannon",
+            "fc-freq-tanimoto",
         ];
         for name in names {
             assert!(AnalysisType::try_from(name).is_ok(), "name: {name}");
@@ -941,6 +946,11 @@ mod tests {
                 BirthmarkType::OpKgramFreq(6),
             ),
             ("op-3gram-seq-lcs", BirthmarkType::OpKgramSeq(3)),
+            ("op-2gram-freq-tanimoto", BirthmarkType::OpKgramFreq(2)),
+            (
+                "op-4gram-freq-jensen-shannon",
+                BirthmarkType::OpKgramFreq(4),
+            ),
             // no ceiling: the grammar accepts any k, whatever list of
             // names a caller chooses to offer
             ("op-9gram-freq-cosine", BirthmarkType::OpKgramFreq(9)),
@@ -959,7 +969,11 @@ mod tests {
         for algorithm in Algorithm::ALL {
             assert_eq!(parse_algorithm(algorithm.name()).as_ref(), Some(algorithm));
         }
-        // `weighted-jaccard` is the only one that is spelled two ways.
+        // The two names of more than one word are spelled two ways.
+        assert_eq!(
+            parse_algorithm("jensen-shannon"),
+            Some(Algorithm::JensenShannon)
+        );
         assert_eq!(
             parse_algorithm("weighted-jaccard"),
             Some(Algorithm::WeightedJaccard)
@@ -975,7 +989,12 @@ mod tests {
     /// same analysis.
     #[test]
     fn test_the_split_is_found_rather_than_assumed() {
-        for name in ["op-freq-weighted-jaccard", "op-freq-weightedjaccard"] {
+        for name in [
+            "op-freq-weighted-jaccard",
+            "op-freq-weightedjaccard",
+            "op-freq-jensen-shannon",
+            "op-freq-jensenshannon",
+        ] {
             let at = AnalysisType::try_from(name).unwrap_or_else(|e| panic!("{name}: {e}"));
             assert_eq!(at.birthmark, BirthmarkType::OpFreq, "{name}");
         }

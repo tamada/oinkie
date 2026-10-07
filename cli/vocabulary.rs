@@ -81,6 +81,11 @@ pub const ALGORITHMS: Table<Algorithm> = &[
         "Jaccard index. Available: seq, set and freq",
     ),
     (
+        Algorithm::JensenShannon,
+        "jensen-shannon",
+        "Jensen-Shannon divergence between element distributions, as 1 - sqrt(JSD). Available: seq and freq",
+    ),
+    (
         Algorithm::Levenshtein,
         "levenshtein",
         "Levenshtein distance. Available: seq",
@@ -94,6 +99,11 @@ pub const ALGORITHMS: Table<Algorithm> = &[
         Algorithm::Simpson,
         "simpson",
         "Simpson's coefficient. Available: seq, set and freq",
+    ),
+    (
+        Algorithm::Tanimoto,
+        "tanimoto",
+        "Tanimoto coefficient over term frequency vectors. Available: seq and freq",
     ),
     (
         Algorithm::WeightedJaccard,
@@ -331,8 +341,8 @@ mod tests {
         }
         // Two families that have no k, plus MAX_ADVERTISED_K that do, each in
         // three shapes; and each shape pairs with the algorithms that operate
-        // on it -- two for seq, three each for set and freq.
-        assert_eq!(names.len(), (2 + 3 + 3) * (2 + MAX_ADVERTISED_K));
+        // on it -- two for seq, three for set and five for freq.
+        assert_eq!(names.len(), (2 + 3 + 5) * (2 + MAX_ADVERTISED_K));
     }
 
     #[test]

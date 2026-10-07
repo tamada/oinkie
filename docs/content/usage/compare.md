@@ -67,9 +67,11 @@ The mathematical algorithms used to compare two birthmark properties:
 * **`dice`** (Dice Index)
 * **`euclidean`** (Euclidean Distance Similarity)
 * **`jaccard`** (Jaccard Index)
+* **`jensen-shannon`** (Jensen–Shannon Divergence): compares the proportions of each element in the two functions, whatever their sizes, as \\(1 - \\sqrt{\\mathrm{JSD}}\\), the divergence taken in bits
 * **`levenshtein`** (Levenshtein Distance Similarity)
 * **`lcs`** (Longest Common Subsequence Similarity)
 * **`simpson`** (Simpson Index / Overlap Coefficient)
+* **`tanimoto`** (Tanimoto Coefficient): \\(a \\cdot b / (|a|^2 + |b|^2 - a \\cdot b)\\) over the counts; on sets it would be Jaccard's index, so it takes frequencies only
 * **`weighted-jaccard`** (Weighted Jaccard Index)
 
 ---

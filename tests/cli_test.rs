@@ -371,6 +371,8 @@ fn test_run_scores_what_extract_and_compare_score() {
         ("op-2gram-set", "jaccard"),
         ("fc-freq", "cosine"),
         ("op-2gram-freq", "weighted-jaccard"),
+        ("op-freq", "jensen-shannon"),
+        ("fc-freq", "tanimoto"),
     ] {
         let analysis = format!("{birthmark_type}-{algorithm}");
         let dir = tempdir().unwrap();

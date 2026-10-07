@@ -62,8 +62,8 @@ For instance:
 
 You can use any valid combination of elements, structures, and matching algorithms. Run `oinkie info` or consult the `--help` command for a comprehensive list of all possible analysis parameters on your system. Typical options include:
 
-* `fc-freq-cosine`, `fc-set-dice`, `fc-freq-euclidean`, `fc-set-jaccard`, `fc-seq-levenshtein`, `fc-seq-lcs`, `fc-set-simpson`, `fc-freq-weightedjaccard`
-* `op-freq-cosine`, `op-set-dice`, `op-freq-euclidean`, `op-set-jaccard`, `op-seq-levenshtein`, `op-seq-lcs`, `op-set-simpson`, `op-freq-weightedjaccard`
+* `fc-freq-cosine`, `fc-set-dice`, `fc-freq-euclidean`, `fc-set-jaccard`, `fc-seq-levenshtein`, `fc-seq-lcs`, `fc-set-simpson`, `fc-freq-weightedjaccard`, `fc-freq-jensenshannon`, `fc-freq-tanimoto`
+* `op-freq-cosine`, `op-set-dice`, `op-freq-euclidean`, `op-set-jaccard`, `op-seq-levenshtein`, `op-seq-lcs`, `op-set-simpson`, `op-freq-weightedjaccard`, `op-freq-jensenshannon`, `op-freq-tanimoto`
 * \\(k\\)-gram variations (`op-1gram`, `op-2gram`, ...) combined with `set`, `seq`, or
   `freq`, and matching algorithms. `oinkie info` and shell completion stop listing
   at \\(k = 8\\), but any \\(k\\) is accepted: `op-12gram-set-jaccard` runs.

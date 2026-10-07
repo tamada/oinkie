@@ -148,9 +148,11 @@ pub oinkie::compare::Algorithm::Cosine
 pub oinkie::compare::Algorithm::Dice
 pub oinkie::compare::Algorithm::Euclidean
 pub oinkie::compare::Algorithm::Jaccard
+pub oinkie::compare::Algorithm::JensenShannon
 pub oinkie::compare::Algorithm::Lcs
 pub oinkie::compare::Algorithm::Levenshtein
 pub oinkie::compare::Algorithm::Simpson
+pub oinkie::compare::Algorithm::Tanimoto
 pub oinkie::compare::Algorithm::WeightedJaccard
 impl oinkie::compare::Algorithm
 pub const oinkie::compare::Algorithm::ALL: &[oinkie::compare::Algorithm]
