@@ -646,6 +646,41 @@ fn test_review_drops_the_functions_with_too_few_elements() {
     assert_eq!(recorded.as_deref(), Some("min elements,0,0"));
 }
 
+/// `review -A` with the aggregators that read the same matching as
+/// `hungarian` differently. hello_clang's one function best matches one of
+/// udl's three at 1/3: `hungarian` averages that over udl's three functions,
+/// `containment` over hello_clang's one, and `matched` counts it if it is
+/// close enough.
+#[test]
+fn test_review_scores_under_containment_and_matched() {
+    let dir = tempdir().unwrap();
+    let scores = fc_set_scores(dir.path());
+    let score = |aggregator: &str| {
+        let out = dir
+            .path()
+            .join(format!("{}.csv", aggregator.replace(':', "_")));
+        Command::cargo_bin("oinkie")
+            .unwrap()
+            .args(["review", "-A", aggregator, "-d"])
+            .arg(&out)
+            .arg(&scores)
+            .assert()
+            .success();
+        first_score(&out)
+    };
+    assert!((score("hungarian") - 1.0 / 9.0).abs() < 1e-9);
+    assert!((score("containment") - 1.0 / 3.0).abs() < 1e-9);
+    assert!((score("matched:0.3") - 1.0 / 3.0).abs() < 1e-9);
+    assert_eq!(score("matched:0.5"), 0.0);
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["review", "-A", "matched:2", "-d"])
+        .arg(dir.path().join("refused.csv"))
+        .arg(&scores)
+        .assert()
+        .failure();
+}
+
 /// A ratio is of the mean over every function of every distinct birthmark
 /// in the directory: here op-seq, under which the functions are of different
 /// lengths, with udl in both pairs and counted once.

@@ -88,6 +88,14 @@ Uses the **Hungarian Algorithm** to pair the functions of program A with those o
 
 Takes each function's best match in the other program, on both sides, and averages the \\(N\\) best of those from each side. The matching need not be one-to-one. This reduces noise from minor or unrelated function matches.
 
+### 3. `containment`
+
+The pairing of `hungarian`, averaged over the **smaller** program's functions rather than the larger's: how much of the smaller program is found in the larger one. Code copied whole into a larger program scores 1.0, where `hungarian` scores it at the share of the larger program it makes up. A high score therefore says the smaller program is *contained* in the larger, not that the two are alike; read it with the two programs' sizes in mind. It follows Broder's distinction between the containment and the resemblance of documents (1997).
+
+### 4. `matched:T`
+
+The pairing of `hungarian`, counting the pairs whose similarity is at least \\(T\\), over the larger program's functions: the proportion of functions that have a counterpart that close. "62% of the functions have a counterpart at 0.9 or above" is easier to state in a report than a mean similarity. \\(T\\) is above 0 and at most 1; `matched:0.9`, for instance.
+
 ### Pairs of different sizes
 
 When one program has more functions than the other, the functions the smaller one cannot match count as zeros, so they lower the similarity instead of dropping out of it. Program A with 2 functions against program B with 3:
@@ -100,5 +108,7 @@ When one program has more functions than the other, the functions the smaller on
 * `hungarian` pairs A₁ with B₁ and A₂ with B₂, leaves B₃ without a partner, and averages over B's three functions: \\((0.9 + 0.8 + 0) / 3 \\approx 0.567\\).
 * `topn:all` takes A's best matches, 0.9 and 0.8, filled out with a 0 to B's three, and B's, 0.9, 0.8 and 0.1: \\((0.9 + 0.8 + 0 + 0.9 + 0.8 + 0.1) / 6 \\approx 0.583\\).
 * `topn:1` takes the single best from each side, 0.9 and 0.9, and scores 0.9: a small \\(N\\) looks only at the strongest matches, whatever is left over.
+* `containment` takes the pairing `hungarian` found and averages it over A's two functions: \\((0.9 + 0.8) / 2 = 0.85\\). B₃ does not count against it.
+* `matched:0.85` counts the paired similarities of at least 0.85 -- only 0.9 -- over B's three functions: \\(1 / 3 \\approx 0.333\\). `matched:0.8` counts both, \\(2 / 3\\).
 
-So under `hungarian` and `topn:all`, a small program does not score as a copy of a large one merely because all of it appears there. The [glossary](../../glossary#aggregator) states the rule once for every command that aggregates.
+So under `hungarian`, `topn:all` and `matched:T`, a small program does not score as a copy of a large one merely because all of it appears there; under `containment`, it does, which is what `containment` is for. The [glossary](../../glossary#aggregator) states the rule once for every command that aggregates.

@@ -114,11 +114,16 @@ Options:
   -A, --aggregator <METHOD>
           Specify the aggregator for combining the function similarities of a pair into its similarity.
           Available:
-          - hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-                       two birthmarks, maximizing the total similarity.
-          - topn:N     Take each function's best match in the other birthmark, and average the N best of those from
-                       each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-                       and focus on the most significant similarities.
+          - hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+                         two birthmarks, maximizing the total similarity.
+          - topn:N       Take each function's best match in the other birthmark, and average the N best of those from
+                         each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+                         and focus on the most significant similarities.
+          - containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
+                         how much of the smaller is found in the larger. A program copied whole into a larger one
+                         scores 1.0. It says the smaller is contained, not that the two are alike.
+          - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
+                         similarity of at least T, where 0 < T <= 1.
           
           [default: hungarian]
 
@@ -165,11 +170,16 @@ Arguments:
 Options:
   -A, --aggregator <METHOD>     Specify the aggregator for combining the function similarities of a pair into its similarity.
                                 Available:
-                                - hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-                                             two birthmarks, maximizing the total similarity.
-                                - topn:N     Take each function's best match in the other birthmark, and average the N best of those from
-                                             each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-                                             and focus on the most significant similarities. [default: hungarian]
+                                - hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+                                               two birthmarks, maximizing the total similarity.
+                                - topn:N       Take each function's best match in the other birthmark, and average the N best of those from
+                                               each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+                                               and focus on the most significant similarities.
+                                - containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
+                                               how much of the smaller is found in the larger. A program copied whole into a larger one
+                                               scores 1.0. It says the smaller is contained, not that the two are alike.
+                                - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
+                                               similarity of at least T, where 0 < T <= 1. [default: hungarian]
   -d, --dest-file <RESULT.CSV>  Specify the result CSV file of the comparing results to review.
                                 The file lists the similarity of each pair. [default: review.csv]
       --min-elements <N|Rx>     Drop the functions with fewer elements than this before aggregating.
@@ -264,11 +274,16 @@ Options:
   -A, --aggregator <METHOD>
           Specify the aggregator for combining the function similarities of a pair into its similarity.
           Available:
-          - hungarian  Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
-                       two birthmarks, maximizing the total similarity.
-          - topn:N     Take each function's best match in the other birthmark, and average the N best of those from
-                       each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
-                       and focus on the most significant similarities. available topn:N or topn:all (same as topn).
+          - hungarian    Use the Hungarian algorithm to find the optimal one-to-one matching between the functions of
+                         two birthmarks, maximizing the total similarity.
+          - topn:N       Take each function's best match in the other birthmark, and average the N best of those from
+                         each side. Matches need not be one-to-one. This can reduce noise from less relevant matches
+                         and focus on the most significant similarities. available topn:N or topn:all (same as topn).
+          - containment  As hungarian, but average over the smaller birthmark's functions rather than the larger's:
+                         how much of the smaller is found in the larger. A program copied whole into a larger one
+                         scores 1.0. It says the smaller is contained, not that the two are alike.
+          - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
+                         similarity of at least T, where 0 < T <= 1.
           
           [default: hungarian]
 

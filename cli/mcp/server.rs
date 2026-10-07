@@ -280,7 +280,8 @@ pub struct ReviewParams {
     /// `run` wrote -- the one they were given as their destination.
     pub score_directory: String,
     /// How to combine a pair's function similarities into its similarity:
-    /// "hungarian" (the default), "topn:all", or "topn:" and a count.
+    /// "hungarian" (the default), "topn:all", "topn:" and a count,
+    /// "containment", or "matched:" and a threshold.
     /// Call oinkie_info for what these mean.
     #[serde(default)]
     pub aggregator: Option<String>,
@@ -489,7 +490,7 @@ impl Oinkie {
         description = "Recompute the similarity of every pair in a directory of pair CSVs \
                        similarity CSVs, using a different aggregator, without comparing \
                        anything again. Use this to ask what the same comparison would have \
-                       scored under 'topn' rather than 'hungarian', or without the functions \
+                       scored under 'topn' or 'containment' rather than 'hungarian', or without the functions \
                        too short to be evidence (min_elements)."
     )]
     async fn oinkie_review(

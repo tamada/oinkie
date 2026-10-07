@@ -130,7 +130,9 @@ impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::Kgram
 pub fn oinkie::birthmarks::Kgram::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub mod oinkie::compare
 #[non_exhaustive] pub enum oinkie::compare::Aggregator
+pub oinkie::compare::Aggregator::Containment
 pub oinkie::compare::Aggregator::Hungarian
+pub oinkie::compare::Aggregator::Matched(f64)
 pub oinkie::compare::Aggregator::TopN(oinkie::compare::Size)
 impl oinkie::compare::Aggregator
 pub fn oinkie::compare::Aggregator::aggregate(&self, &oinkie::compare::Matrix) -> oinkie::Result<alloc::vec::Vec<f64>>

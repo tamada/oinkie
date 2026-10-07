@@ -258,8 +258,8 @@ pub enum Size {
 
 /// How a pair's function similarities become its one similarity.
 ///
-/// Read by `from_str` from `hungarian`, `topn:N`, `topn:all` or `topn`, in any
-/// case.
+/// Read by `from_str` from `hungarian`, `topn:N`, `topn:all`, `topn`,
+/// `containment` or `matched:T`, in any case.
 #[derive(Debug, Clone, Default)]
 #[non_exhaustive]
 pub enum Aggregator {
@@ -272,6 +272,18 @@ pub enum Aggregator {
     /// default.
     #[default]
     Hungarian,
+    /// The matching of [`Aggregator::Hungarian`], averaged over the smaller
+    /// side's functions rather than the larger's: how much of the smaller
+    /// birthmark is found in the larger one. A program copied whole into a
+    /// larger one scores 1.0, where under `Hungarian` it scores the share of
+    /// the larger it makes up. It says the smaller is contained in the larger,
+    /// not that the two are alike.
+    Containment,
+    /// The matching of [`Aggregator::Hungarian`], counting the matched pairs
+    /// whose similarity is at least this threshold: the proportion of the
+    /// larger side's functions that have a counterpart that close. Read from
+    /// `matched:T`, which refuses a threshold outside (0, 1].
+    Matched(f64),
 }
 
 impl std::str::FromStr for Aggregator {
@@ -295,6 +307,23 @@ impl std::str::FromStr for Aggregator {
                 }
                 Err(e) => Err(Error::ParseInt(s, e)),
             }
+        } else if s == "containment" {
+            log::info!("Using containment for aggregation");
+            Ok(Aggregator::Containment)
+        } else if let Some(t) = s.strip_prefix("matched:") {
+            match t.parse::<f64>() {
+                Ok(t) if t > 0.0 && t <= 1.0 => {
+                    log::info!("Using matched({t}) for aggregation");
+                    Ok(Aggregator::Matched(t))
+                }
+                _ => Err(Error::Parse(format!(
+                    "{s}: matched requires a threshold above 0 and at most 1, such as \"matched:0.9\""
+                ))),
+            }
+        } else if s == "matched" {
+            Err(Error::Parse(
+                "matched requires a threshold, such as \"matched:0.9\"".to_string(),
+            ))
         } else {
             Err(Error::Parse(format!("{s}: Invalid aggregator")))
         }
@@ -308,11 +337,24 @@ impl Aggregator {
     /// The shorter side counts as though it had as many functions as the
     /// longer, each sharing nothing with any function: a function left
     /// without a counterpart lowers the pair's similarity rather than drop
-    /// out of it.
+    /// out of it. [`Aggregator::Containment`] alone does not, since leaving
+    /// the larger side's other functions out is what it is for.
     pub fn aggregate(&self, matrix: &Matrix) -> Result<Vec<f64>> {
+        let longer = |mut kept: Vec<f64>| {
+            let (n1, n2) = matrix.dim();
+            kept.resize(n1.max(n2), 0.0);
+            kept
+        };
         match self {
-            Aggregator::Hungarian => Ok(hungarian_algorithm(matrix)),
+            Aggregator::Hungarian => Ok(longer(paired_similarities(matrix))),
             Aggregator::TopN(n) => Ok(top_n_selection(matrix, n)),
+            Aggregator::Containment => Ok(paired_similarities(matrix)),
+            Aggregator::Matched(threshold) => Ok(longer(
+                paired_similarities(matrix)
+                    .into_iter()
+                    .map(|s| if s >= *threshold { 1.0 } else { 0.0 })
+                    .collect(),
+            )),
         }
     }
 }
@@ -500,20 +542,17 @@ fn top_n_selection(matrix: &Matrix, n: &Size) -> Vec<f64> {
     kept
 }
 
-/// The similarities of the one-to-one pairing that maximises their total,
-/// with a zero for each function of the longer side left unpaired, as
-/// [`Aggregator::aggregate`] says.
-fn hungarian_algorithm(matrix: &Matrix) -> Vec<f64> {
+/// The similarities of the one-to-one pairing that maximises their total, by
+/// the Hungarian method: one for each function of the shorter side.
+fn paired_similarities(matrix: &Matrix) -> Vec<f64> {
     let (n1, n2) = matrix.dim();
     let pairing = crate::assignment::assign(n1, n2, &matrix.cells)
         .expect("a Matrix holds only finite cells, rows * cols of them");
-    let mut similarities: Vec<f64> = pairing
+    pairing
         .iter()
         .enumerate()
         .filter_map(|(i, j)| j.map(|j| matrix[[i, j]]))
-        .collect();
-    similarities.resize(n1.max(n2), 0.0);
-    similarities
+        .collect()
 }
 
 /// How two functions' elements are compared into a function similarity,
@@ -1294,6 +1333,36 @@ mod tests {
         ));
     }
 
+    /// `containment` takes nothing, and `matched` a threshold in (0, 1]
+    /// that it cannot do without.
+    #[test]
+    fn containment_and_matched_are_read_with_their_threshold() {
+        assert!(matches!(
+            "Containment".parse::<Aggregator>(),
+            Ok(Aggregator::Containment)
+        ));
+        assert!(matches!(
+            "matched:0.9".parse::<Aggregator>(),
+            Ok(Aggregator::Matched(t)) if t == 0.9
+        ));
+        assert!(matches!(
+            "MATCHED:1".parse::<Aggregator>(),
+            Ok(Aggregator::Matched(t)) if t == 1.0
+        ));
+        for refused in [
+            "matched",
+            "matched:",
+            "matched:0",
+            "matched:1.5",
+            "matched:-0.2",
+            "matched:x",
+            "matched:NaN",
+        ] {
+            let err = refused.parse::<Aggregator>().unwrap_err().to_string();
+            assert!(err.contains("threshold"), "{refused}: {err}");
+        }
+    }
+
     #[test]
     fn pairs_on_empty_targets_yield_nothing() {
         let empty: Vec<i32> = vec![];
@@ -1652,6 +1721,7 @@ mod tests {
             Aggregator::TopN(Size::All),
             Aggregator::TopN(Size::Num(1)),
             Aggregator::TopN(Size::Num(3)),
+            Aggregator::Matched(0.5),
         ] {
             let (got, want) = (
                 aggregator.aggregate(&wide).unwrap(),
@@ -1663,6 +1733,71 @@ mod tests {
         // the best pairing is 0.9 + 0.7, and the third column goes unpaired
         let paired = Aggregator::Hungarian.aggregate(&wide).unwrap();
         assert!((mean(paired) - 1.6 / 3.0).abs() < 1e-12);
+    }
+
+    /// The worked example in the documentation: A₁ and A₂ against B₁ to B₃.
+    #[test]
+    fn containment_and_matched_score_the_documented_example() {
+        let m = Matrix::new((2, 3), vec![0.9, 0.2, 0.1, 0.3, 0.8, 0.0]).unwrap();
+        let mean = |v: Vec<f64>| v.iter().sum::<f64>() / v.len() as f64;
+        let score = |a: Aggregator| mean(a.aggregate(&m).unwrap());
+        assert!((score(Aggregator::Hungarian) - 1.7 / 3.0).abs() < 1e-12);
+        // the same pairing, over A's two functions rather than B's three
+        assert!((score(Aggregator::Containment) - 0.85).abs() < 1e-12);
+        // 0.9 and 0.8 are matched; B₃ is not
+        assert!((score(Aggregator::Matched(0.8)) - 2.0 / 3.0).abs() < 1e-12);
+        assert!((score(Aggregator::Matched(0.85)) - 1.0 / 3.0).abs() < 1e-12);
+        assert_eq!(score(Aggregator::Matched(0.95)), 0.0);
+    }
+
+    /// A birthmark copied whole into a larger one is contained in it, which
+    /// `containment` says and `hungarian` does not.
+    #[test]
+    fn a_birthmark_inside_a_larger_one_is_contained() {
+        let small = birthmark("s", &[("f", &["A", "B"]), ("g", &["C"])]);
+        let large = birthmark(
+            "l",
+            &[
+                ("f", &["A", "B"]),
+                ("x", &["X", "Y"]),
+                ("g", &["C"]),
+                ("y", &["Z"]),
+            ],
+        );
+        let comparator = crate::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard);
+        let score = |a: Aggregator| {
+            comparator
+                .compare_birthmarks(&small, &large, &a)
+                .unwrap()
+                .similarity()
+        };
+        assert_eq!(score(Aggregator::Containment), 1.0);
+        assert_eq!(score(Aggregator::Hungarian), 0.5);
+        assert_eq!(score(Aggregator::Matched(1.0)), 0.5);
+    }
+
+    /// The empty-birthmark rule holds for both: two empty birthmarks agree,
+    /// and an empty one against one that is not does not.
+    #[test]
+    fn containment_and_matched_keep_the_rule_for_empty_birthmarks() {
+        let empty = birthmark("e", &[]);
+        let filled = birthmark("f", &[("f", &["A"])]);
+        let comparator = crate::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard);
+        for aggregator in [Aggregator::Containment, Aggregator::Matched(0.5)] {
+            let score = |b1, b2| {
+                comparator
+                    .compare_birthmarks(b1, b2, &aggregator)
+                    .unwrap()
+                    .similarity()
+            };
+            assert_eq!(score(&empty, &empty), 1.0, "{aggregator:?}");
+            assert_eq!(score(&empty, &filled), 0.0, "{aggregator:?}");
+            assert_eq!(score(&filled, &empty), 0.0, "{aggregator:?}");
+        }
     }
 
     #[test]

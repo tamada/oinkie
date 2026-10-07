@@ -66,6 +66,18 @@ const AGGREGATORS: &[(&str, &str)] = &[
         "As topn:all, but averaging only the 5 best matches from each side. Any count of at least 1 works: \
          the name is topn: followed by the number, and 5 here is only an example.",
     ),
+    (
+        "containment",
+        "As hungarian, but averaged over the smaller birthmark's functions rather than the larger's: how much of \
+         the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the \
+         smaller is contained, not that the two are alike.",
+    ),
+    (
+        "matched:0.9",
+        "As hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at \
+         least 0.9. Any threshold above 0 and at most 1 works: the name is matched: followed by the threshold, \
+         and 0.9 here is only an example.",
+    ),
 ];
 
 pub fn vocabulary() -> Vocabulary {
@@ -108,9 +120,10 @@ pub fn vocabulary() -> Vocabulary {
             "An analysis is named '{birthmark}-{algorithm}'. The algorithm has to operate on the \
              birthmark's shape; a pairing that does not is refused, naming the one that was meant."
                 .to_string(),
-            "An aggregator is 'hungarian', 'topn:all' or 'topn:' followed by a count of at \
-             least 1. The listed 'topn:5' is one example of the last, not the only value it \
-             takes -- the same way the k-gram list above is a sample rather than a limit."
+            "An aggregator is 'hungarian', 'topn:all', 'topn:' followed by a count of at \
+             least 1, 'containment', or 'matched:' followed by a threshold above 0 and at most 1. \
+             The listed 'topn:5' and 'matched:0.9' are examples of those, not the only values \
+             they take -- the same way the k-gram list above is a sample rather than a limit."
                 .to_string(),
             "An algorithm's own name and the name it carries inside an analysis can differ: \
              'weighted-jaccard' is the algorithm, and the analysis is spelled \
@@ -261,6 +274,20 @@ mod tests {
             "the placeholder must not be advertised as a value"
         );
         assert!(Aggregator::from_str("topn:0").is_err(), "0 is refused");
+    }
+
+    /// The same for the `matched:` threshold.
+    #[test]
+    fn test_the_notes_say_the_matched_threshold_is_free() {
+        let notes = vocabulary().notes.join(" ");
+        assert!(notes.contains("matched:"), "{notes}");
+        for t in ["matched:0.5", "matched:0.9", "matched:1"] {
+            assert!(Aggregator::from_str(t).is_ok(), "{t} should parse");
+        }
+        assert!(
+            Aggregator::from_str("matched:T").is_err(),
+            "the placeholder must not be advertised as a value"
+        );
     }
 
     /// A missing doc comment would otherwise reach a model as an empty string,
