@@ -29,6 +29,7 @@
 use crate::birthmarks::{Birthmark, Data, Shape};
 use crate::{Error, Result};
 use itertools::Itertools;
+use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::time::Instant;
@@ -312,7 +313,7 @@ impl Aggregator {
     }
 }
 
-trait BirthmarkComparator {
+trait BirthmarkComparator: Sync {
     fn compare_birthmarks<'a>(
         &self,
         b1: &'a Birthmark,
@@ -384,12 +385,26 @@ trait BirthmarkComparator {
     }
 }
 
-fn build_matrix<T>(p1: &[T], p2: &[T], compare_func: impl Fn(&T, &T) -> f64) -> Result<Matrix> {
-    let mut similarities = Vec::with_capacity(p1.len() * p2.len());
-    for item1 in p1 {
-        for item2 in p2 {
-            similarities.push(compare_func(item1, item2));
-        }
+/// Every function of `p1` against every function of `p2`, one row per function
+/// of `p1`.
+///
+/// The rows are filled in parallel: each cell depends on its two functions
+/// alone, and a large pair is where a comparison spends its time.
+fn build_matrix<T: Sync>(
+    p1: &[T],
+    p2: &[T],
+    compare_func: impl Fn(&T, &T) -> f64 + Sync,
+) -> Result<Matrix> {
+    let mut similarities = vec![0.0; p1.len() * p2.len()];
+    if !p2.is_empty() {
+        similarities
+            .par_chunks_mut(p2.len())
+            .zip(p1.par_iter())
+            .for_each(|(row, item1)| {
+                for (cell, item2) in row.iter_mut().zip(p2) {
+                    *cell = compare_func(item1, item2);
+                }
+            });
     }
     Matrix::new((p1.len(), p2.len()), similarities).ok_or_else(|| {
         Error::Parse("a function similarity came out as a number that is not finite".to_string())
