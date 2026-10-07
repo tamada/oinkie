@@ -1,6 +1,7 @@
 //! Comparing birthmarks.
 //!
-//! An [`Algorithm`] gives a [`Comparator`], which compares every function of
+//! An [`Oinkie`](crate::Oinkie) makes the [`Comparator`] for an
+//! [`Algorithm`], which compares every function of
 //! one [`Birthmark`] with every function of another into a matrix of function
 //! similarities. An [`Aggregator`] turns the matrix into the pair's one
 //! similarity, and the [`Comparison`] holds both. A [`PairingStrategy`]
@@ -9,7 +10,7 @@
 //! ```
 //! use std::path::Path;
 //!
-//! use oinkie::Program;
+//! use oinkie::{Oinkie, Program};
 //! use oinkie::birthmarks::BirthmarkType;
 //! use oinkie::compare::{Aggregator, Algorithm};
 //! use oinkie::extract::Extractor;
@@ -18,8 +19,8 @@
 //! let extractor = Extractor::new(BirthmarkType::OpSet);
 //! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
 //!
-//! let comparison = Algorithm::Jaccard
-//!     .comparator()
+//! let comparison = Oinkie::new()?
+//!     .comparator(&Algorithm::Jaccard)
 //!     .compare_birthmarks(&a, &a, &Aggregator::Hungarian)?;
 //! assert_eq!(comparison.similarity(), 1.0, "a birthmark is identical to itself");
 //! # Ok(())
@@ -32,6 +33,7 @@ use itertools::Itertools;
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Instant;
 
 /// Which pairs of a list of birthmarks to compare.
@@ -572,18 +574,14 @@ impl Algorithm {
     pub fn name(&self) -> &'static str {
         self.spec().0
     }
-
-    /// The comparator that runs this algorithm.
-    pub fn comparator(&self) -> Comparator {
-        self.into()
-    }
 }
 
-/// Compares birthmarks under one [`Algorithm`]. [`Algorithm::comparator`] and
-/// [`AnalysisType::comparator`](crate::birthmarks::AnalysisType::comparator)
-/// make one.
+/// Compares birthmarks under one [`Algorithm`], on the threads of the
+/// [`Oinkie`](crate::Oinkie) that made it with
+/// [`Oinkie::comparator`](crate::Oinkie::comparator).
 pub struct Comparator {
     inner: ComparatorImpl,
+    pool: Arc<rayon::ThreadPool>,
 }
 
 /// The algorithm behind a [`Comparator`], kept out of its public API so that
@@ -599,38 +597,21 @@ enum ComparatorImpl {
     WeightedJaccard(WeightedJaccard),
 }
 
-impl From<&Algorithm> for Comparator {
-    fn from(algorithm: &Algorithm) -> Self {
-        match algorithm {
-            Algorithm::Cosine => Comparator {
-                inner: ComparatorImpl::Cosine(Cosine {}),
-            },
-            Algorithm::Dice => Comparator {
-                inner: ComparatorImpl::Dice(Dice {}),
-            },
-            Algorithm::Euclidean => Comparator {
-                inner: ComparatorImpl::Euclidean(Euclidean {}),
-            },
-            Algorithm::Jaccard => Comparator {
-                inner: ComparatorImpl::Jaccard(Jaccard {}),
-            },
-            Algorithm::Levenshtein => Comparator {
-                inner: ComparatorImpl::Levenshtein(Levenshtein {}),
-            },
-            Algorithm::Lcs => Comparator {
-                inner: ComparatorImpl::Lcs(Lcs {}),
-            },
-            Algorithm::Simpson => Comparator {
-                inner: ComparatorImpl::Simpson(Simpson {}),
-            },
-            Algorithm::WeightedJaccard => Comparator {
-                inner: ComparatorImpl::WeightedJaccard(WeightedJaccard {}),
-            },
-        }
-    }
-}
-
 impl Comparator {
+    pub(crate) fn new(algorithm: &Algorithm, pool: Arc<rayon::ThreadPool>) -> Comparator {
+        let inner = match algorithm {
+            Algorithm::Cosine => ComparatorImpl::Cosine(Cosine),
+            Algorithm::Dice => ComparatorImpl::Dice(Dice),
+            Algorithm::Euclidean => ComparatorImpl::Euclidean(Euclidean),
+            Algorithm::Jaccard => ComparatorImpl::Jaccard(Jaccard),
+            Algorithm::Levenshtein => ComparatorImpl::Levenshtein(Levenshtein),
+            Algorithm::Lcs => ComparatorImpl::Lcs(Lcs),
+            Algorithm::Simpson => ComparatorImpl::Simpson(Simpson),
+            Algorithm::WeightedJaccard => ComparatorImpl::WeightedJaccard(WeightedJaccard),
+        };
+        Comparator { inner, pool }
+    }
+
     /// Compares every function of `b1`, the matrix's columns, with every
     /// function of `b2`, its rows, and aggregates the matrix with
     /// `aggregator`.
@@ -644,7 +625,7 @@ impl Comparator {
         b2: &'a Birthmark,
         aggregator: &Aggregator,
     ) -> Result<Comparison<'a, Birthmark>> {
-        match &self.inner {
+        self.pool.install(|| match &self.inner {
             ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2, aggregator),
             ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2, aggregator),
             ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2, aggregator),
@@ -653,7 +634,7 @@ impl Comparator {
             ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2, aggregator),
             ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2, aggregator),
             ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2, aggregator),
-        }
+        })
     }
 }
 
@@ -1517,6 +1498,50 @@ mod tests {
         assert_eq!(c.duration(), std::time::Duration::from_nanos(0));
     }
 
+    /// The number of threads changes when a cell is computed, never what it
+    /// holds.
+    #[test]
+    fn a_comparison_is_the_same_on_any_number_of_threads() {
+        let funcs: Vec<(String, Vec<&str>)> = (0..40)
+            .map(|i| {
+                let ops = ["A", "B", "C", "D", "E"];
+                let f = (0..(i % 7)).map(|k| ops[(i * 3 + k) % 5]).collect();
+                (format!("f{i}"), f)
+            })
+            .collect();
+        let as_slices: Vec<(&str, &[&str])> = funcs
+            .iter()
+            .map(|(n, f)| (n.as_str(), f.as_slice()))
+            .collect();
+        let (b1, b2) = (
+            birthmark("a", &as_slices[..25]),
+            birthmark("b", &as_slices[10..]),
+        );
+        let on = |n: usize| {
+            crate::Oinkie::builder()
+                .threads(std::num::NonZeroUsize::new(n).unwrap())
+                .build()
+                .unwrap()
+        };
+        for algorithm in Algorithm::ALL {
+            let (one, four) = (
+                on(1)
+                    .comparator(algorithm)
+                    .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian),
+                on(4)
+                    .comparator(algorithm)
+                    .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian),
+            );
+            let (one, four) = (one.unwrap(), four.unwrap());
+            assert_eq!(one.matrix(), four.matrix(), "{algorithm}");
+            assert_eq!(
+                one.similarity().to_bits(),
+                four.similarity().to_bits(),
+                "{algorithm}"
+            );
+        }
+    }
+
     #[test]
     fn comparator_dispatches_every_algorithm() {
         let b = birthmark("a", &[("f", &["A", "B"])]);
@@ -1530,7 +1555,7 @@ mod tests {
             Algorithm::Simpson,
             Algorithm::WeightedJaccard,
         ] {
-            let comparator = algorithm.comparator();
+            let comparator = crate::Oinkie::new().unwrap().comparator(&algorithm);
             let c = comparator
                 .compare_birthmarks(&b, &b, &Aggregator::Hungarian)
                 .unwrap_or_else(|e| panic!("{algorithm}: {e}"));

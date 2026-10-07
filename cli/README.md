@@ -75,6 +75,8 @@ Options:
           The full birthmark types can be found by running 'oinkie info'. [default: op-seq]
   -S, --skip
           Skip the resultant birthmark file is already exists
+      --threads <N>
+          Number of threads to compute on [default: one per core]
   -h, --help
           Print help
 ```
@@ -138,6 +140,9 @@ Options:
   -S, --skip
           Skip if the similarity file already exists for the pair of birthmarks
 
+      --threads <N>
+          Number of threads to compute on [default: one per core]
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -168,6 +173,7 @@ Options:
                                 N is a count of elements; Rx is R times the mean count over every function of every birthmark
                                 in the directory (e.g. 0.3x). Needs the birthmarks the comparisons name. The threshold is
                                 recorded on the last line of the summary.
+      --threads <N>             Number of threads to compute on [default: one per core]
   -h, --help                    Print help
 ```
 
@@ -207,6 +213,9 @@ Options:
 
   -t, --top <N>
           Report the N most frequent elements of each group. With -f csv this replaces the summary table.
+
+      --threads <N>
+          Number of threads to compute on [default: one per core]
 
   -h, --help
           Print help (see a summary with '-h')
@@ -263,6 +272,9 @@ Options:
   -S, --skip
           Skip if the similarity file already exists for the pair of birthmarks
 
+      --threads <N>
+          Number of threads to compute on [default: one per core]
+
   -h, --help
           Print help (see a summary with '-h')
 ```
@@ -284,6 +296,7 @@ Options:
                           these; anything else is refused. Defaults to the working directory.
                           The paths the tools receive are written by a language model rather than by you,
                           which is the whole reason this exists.
+      --threads <N>       Number of threads to compute on [default: one per core]
   -h, --help              Print help
 ```
 

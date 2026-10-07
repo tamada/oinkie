@@ -31,15 +31,32 @@ const DEFAULT_MAX_PAIRS: usize = 500;
 #[derive(Clone)]
 pub struct Oinkie {
     roots: Roots,
+    /// The threads every tool computes on, shared by all of them so that
+    /// `--threads` bounds the server as a whole.
+    engine: oinkie::Oinkie,
     tool_router: rmcp::handler::server::tool::ToolRouter<Self>,
 }
 
 impl Oinkie {
-    pub fn new(roots: Roots) -> Self {
+    pub fn new(roots: Roots, engine: oinkie::Oinkie) -> Self {
         Self {
             roots,
+            engine,
             tool_router: Self::tool_router(),
         }
+    }
+
+    /// Runs `f` off the async runtime, on the server's threads: the tools'
+    /// work would otherwise stall everything else the server has to answer,
+    /// cancellation included.
+    async fn compute<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+    ) -> Result<T, ErrorData> {
+        let engine = self.engine.clone();
+        tokio::task::spawn_blocking(move || engine.install(f))
+            .await
+            .map_err(joined)
     }
 }
 
@@ -334,12 +351,10 @@ impl Oinkie {
         let skip = params.skip.unwrap_or(false);
         self.confine(analysis::extracted_files(&files, &dest).map_err(super::error::to_mcp)?)?;
 
-        let birthmarks = tokio::task::spawn_blocking(move || {
-            analysis::extract(&files, &birthmark_type, &dest, skip)
-        })
-        .await
-        .map_err(joined)?
-        .map_err(super::error::to_mcp)?;
+        let birthmarks = self
+            .compute(move || analysis::extract(&files, &birthmark_type, &dest, skip))
+            .await?
+            .map_err(super::error::to_mcp)?;
 
         Ok(Json(ExtractedAll {
             birthmark_type: name,
@@ -371,18 +386,20 @@ impl Oinkie {
         }
 
         let written = dest.clone();
-        let scores = tokio::task::spawn_blocking(move || {
-            analysis::run(
-                &files,
-                &analysis_type,
-                &strategy,
-                &aggregator,
-                written.as_deref(),
-            )
-        })
-        .await
-        .map_err(joined)?
-        .map_err(super::error::to_mcp)?;
+        let comparator = self.engine.comparator(analysis_type.algorithm());
+        let scores = self
+            .compute(move || {
+                analysis::run(
+                    &files,
+                    &analysis_type,
+                    &comparator,
+                    &strategy,
+                    &aggregator,
+                    written.as_deref(),
+                )
+            })
+            .await?
+            .map_err(super::error::to_mcp)?;
 
         Ok(Json(Compared {
             scores,
@@ -413,18 +430,19 @@ impl Oinkie {
         }
 
         let written = dest.clone();
-        let scores = tokio::task::spawn_blocking(move || {
-            analysis::compare(
-                &files,
-                &algorithm.comparator(),
-                &strategy,
-                &aggregator,
-                written.as_deref(),
-            )
-        })
-        .await
-        .map_err(joined)?
-        .map_err(super::error::to_mcp)?;
+        let comparator = self.engine.comparator(&algorithm);
+        let scores = self
+            .compute(move || {
+                analysis::compare(
+                    &files,
+                    &comparator,
+                    &strategy,
+                    &aggregator,
+                    written.as_deref(),
+                )
+            })
+            .await?
+            .map_err(super::error::to_mcp)?;
 
         Ok(Json(Compared {
             scores,
@@ -456,9 +474,9 @@ impl Oinkie {
         self.confine(found.iter().cloned())?;
 
         let top = params.top;
-        let report = tokio::task::spawn_blocking(move || crate::stats::compute(&found, top))
-            .await
-            .map_err(joined)?;
+        let report = self
+            .compute(move || crate::stats::compute(&found, top))
+            .await?;
         Ok(Json(Statistics {
             groups: report.groups,
             files: params.per_file.unwrap_or(false).then_some(report.files),
@@ -504,64 +522,60 @@ impl Oinkie {
             .transpose()
             .map_err(|e| ErrorData::invalid_params(format!("min_elements: {e}"), None))?;
 
-        // Off the async runtime: this reads every CSV in the directory and
-        // runs an assignment problem per pair, so it is exactly the kind of
-        // work that would otherwise stall everything else the server has to
-        // answer, cancellation included.
         let written = dest.clone();
         let roots = self.roots.clone();
-        let scores = tokio::task::spawn_blocking(move || {
-            let start = std::time::Instant::now();
-            // The birthmarks are named by the score CSVs, not by the caller,
-            // and are read only if they are under a root like everything else.
-            let confine = |p: &Path| -> oinkie::Result<()> {
-                let refused = |message: String| {
-                    oinkie::Error::Io(
-                        p.to_path_buf(),
-                        std::io::Error::new(std::io::ErrorKind::PermissionDenied, message),
-                    )
+        let scores = self
+            .compute(move || {
+                let start = std::time::Instant::now();
+                // The birthmarks are named by the score CSVs, not by the caller,
+                // and are read only if they are under a root like everything else.
+                let confine = |p: &Path| -> oinkie::Result<()> {
+                    let refused = |message: String| {
+                        oinkie::Error::Io(
+                            p.to_path_buf(),
+                            std::io::Error::new(std::io::ErrorKind::PermissionDenied, message),
+                        )
+                    };
+                    let text = p
+                        .to_str()
+                        .ok_or_else(|| refused("not a path the server can confine".to_string()))?;
+                    roots
+                        .resolve(text)
+                        .map(|_| ())
+                        .map_err(|e| refused(e.message.to_string()))
                 };
-                let text = p
-                    .to_str()
-                    .ok_or_else(|| refused("not a path the server can confine".to_string()))?;
-                roots
-                    .resolve(text)
-                    .map(|_| ())
-                    .map_err(|e| refused(e.message.to_string()))
-            };
-            let review = crate::review::review_all(
-                &score_dir,
-                &aggregator,
-                min_elements.as_ref(),
-                &confine,
-            )?;
-            let scores = review
-                .results
-                .iter()
-                .map(|r| Score {
-                    index: r.index,
-                    left: r.path1.display().to_string(),
-                    right: r.path2.display().to_string(),
-                    similarity: r.similarity,
-                    duration_ms: r.duration.as_millis() as u64,
-                })
-                .collect::<Vec<_>>();
-            let applied =
-                review
-                    .min_elements
-                    .as_ref()
-                    .map(|(given, threshold)| MinElementsApplied {
-                        given: given.to_string(),
-                        threshold: *threshold,
-                    });
-            if let Some(d) = written {
-                crate::review::store(review, &d, start)?;
-            }
-            Ok::<_, oinkie::Error>((scores, applied))
-        })
-        .await
-        .map_err(|e| ErrorData::internal_error(format!("the review did not finish: {e}"), None))?
-        .map_err(super::error::to_mcp)?;
+                let review = crate::review::review_all(
+                    &score_dir,
+                    &aggregator,
+                    min_elements.as_ref(),
+                    &confine,
+                )?;
+                let scores = review
+                    .results
+                    .iter()
+                    .map(|r| Score {
+                        index: r.index,
+                        left: r.path1.display().to_string(),
+                        right: r.path2.display().to_string(),
+                        similarity: r.similarity,
+                        duration_ms: r.duration.as_millis() as u64,
+                    })
+                    .collect::<Vec<_>>();
+                let applied =
+                    review
+                        .min_elements
+                        .as_ref()
+                        .map(|(given, threshold)| MinElementsApplied {
+                            given: given.to_string(),
+                            threshold: *threshold,
+                        });
+                if let Some(d) = written {
+                    crate::review::store(review, &d, start)?;
+                }
+                Ok::<_, oinkie::Error>((scores, applied))
+            })
+            .await?
+            .map_err(super::error::to_mcp)?;
 
         let (scores, min_elements) = scores;
         Ok(Json(Reviewed {

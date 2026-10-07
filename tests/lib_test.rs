@@ -1,10 +1,10 @@
 //! The library used the way an outside crate uses it: through the public API
 //! alone, with no knowledge of which tool lifted a program.
 
-use oinkie::Program;
 use oinkie::birthmarks::BirthmarkType;
 use oinkie::compare::{Aggregator, Algorithm, PairingStrategy};
 use oinkie::extract::Extractor;
+use oinkie::{Oinkie, Program};
 use std::path::Path;
 
 fn load_program(path: &str) -> Program {
@@ -39,7 +39,7 @@ fn test_extractor_and_comparator() {
         let b1 = extractor.extract(&p1).unwrap();
         let b2 = extractor.extract(&p2).unwrap();
 
-        let comparator = algo.comparator();
+        let comparator = Oinkie::new().unwrap().comparator(&algo);
 
         // Test with Hungarian aggregator
         let result_hungarian = comparator
@@ -105,7 +105,7 @@ fn test_empty_comparisons() {
     let b1 = ext1.extract(&p1).unwrap();
     let b2 = ext2.extract(&p1).unwrap();
 
-    let comparator = Algorithm::Jaccard.comparator();
+    let comparator = Oinkie::new().unwrap().comparator(&Algorithm::Jaccard);
     let result = comparator.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian);
     assert!(result.is_err()); // Mismatched types
 }

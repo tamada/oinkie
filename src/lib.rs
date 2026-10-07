@@ -1,8 +1,9 @@
 //! Detects software theft by comparing birthmarks extracted from binaries.
 //!
-//! The root holds only what every use touches: [`Program`], [`Error`] and
-//! [`Result`]. Everything else is reached by the module it belongs to, and by
-//! that path alone:
+//! The root holds only what every use touches: [`Program`], [`Oinkie`] --
+//! the threads oinkie computes on, and the comparators that run there --
+//! [`Error`] and [`Result`]. Everything else is reached by the module it
+//! belongs to, and by that path alone:
 //!
 //! - [`lift`] -- turning a binary into a lifted program, through a tool;
 //! - [`extract`] -- extracting a birthmark from a lifted program;
@@ -20,7 +21,7 @@
 //! ```
 //! use std::path::Path;
 //!
-//! use oinkie::Program;
+//! use oinkie::{Oinkie, Program};
 //! use oinkie::birthmarks::AnalysisType;
 //! use oinkie::compare::Aggregator;
 //! use oinkie::extract::Extractor;
@@ -31,8 +32,8 @@
 //! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
 //! let b = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/udl.json"))?)?;
 //!
-//! let comparison = analysis
-//!     .comparator()
+//! let comparison = Oinkie::new()?
+//!     .comparator(analysis.algorithm())
 //!     .compare_birthmarks(&a, &b, &Aggregator::Hungarian)?;
 //! let similarity = comparison.similarity();
 //! assert!((0.0..=1.0).contains(&similarity));
@@ -56,8 +57,10 @@ pub mod extract;
 mod ghidra;
 mod ida;
 pub mod lift;
+mod oinkie;
 mod program;
 
+pub use crate::oinkie::{Oinkie, OinkieBuilder};
 pub use crate::program::Program;
 
 /// What every fallible function in this crate returns.
@@ -155,6 +158,10 @@ pub enum Error {
     /// one.
     #[error("{0}: Parse int error {1}")]
     ParseInt(String, #[source] std::num::ParseIntError),
+    /// The threads of an [`Oinkie`] could not be started: how many were
+    /// asked for, and why.
+    #[error("could not start {0} threads: {1}")]
+    ThreadPool(std::num::NonZeroUsize, String),
     /// A lifting tool's installation could not be found: none was given, its
     /// environment variable is unset, and it is in none of the usual places.
     ///
@@ -232,6 +239,7 @@ impl Error {
             // and nothing in the error says which -- so, as with `Parse`, it
             // does not claim the caller is at fault.
             Error::ToolNotFound { .. }
+            | Error::ThreadPool(_, _)
             | Error::ToolIo(_, _)
             | Error::Csv(_)
             | Error::InvalidPcode(_)
@@ -372,6 +380,7 @@ mod tests {
             Error::UnreadableOutput(_, _) => "UnreadableOutput",
             Error::InvalidPcode(_) => "InvalidPcode",
             Error::Io(_, _) => "Io",
+            Error::ThreadPool(_, _) => "ThreadPool",
             Error::ToolIo(_, _) => "ToolIo",
             Error::Json(_, _) => "Json",
             Error::Mismatch(_, _) => "Mismatch",
@@ -479,6 +488,13 @@ mod tests {
             (
                 Error::ParseInt("x".to_string(), int_err),
                 format!("x: Parse int error {int_msg}"),
+            ),
+            (
+                Error::ThreadPool(
+                    std::num::NonZeroUsize::new(4).unwrap(),
+                    "Resource temporarily unavailable".to_string(),
+                ),
+                "could not start 4 threads: Resource temporarily unavailable".to_string(),
             ),
             (
                 Error::ToolNotFound {

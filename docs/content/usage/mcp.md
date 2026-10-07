@@ -96,6 +96,14 @@ written somewhere surprising.
 
 ---
 
+## ⚙️ Threads
+
+The tools compute on one shared set of threads, as many as the machine has
+cores. `--threads N` sets how many, for the server as a whole: several tool
+calls at once share the same N rather than each starting its own.
+
+---
+
 ## 🚫 Lifting is not offered
 
 There is no `oinkie_lift`, and there is not going to be one. Run

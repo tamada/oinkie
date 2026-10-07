@@ -18,7 +18,7 @@ use oinkie::birthmarks::Birthmark;
 use oinkie::compare::{Aggregator, Comparator};
 use oinkie::extract::Extractor;
 use oinkie::lift::{Lifter, LifterBuilder};
-use oinkie::{Error, Program, Result};
+use oinkie::{Error, Oinkie, Program, Result};
 use rayon::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::io::Write;
@@ -46,9 +46,10 @@ fn load_program(path: &Path) -> Result<Program> {
     Ok(program)
 }
 
-fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
+fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
     let start = Instant::now();
     let atype = opts.analysis_type()?;
+    let comparator = oinkie.comparator(atype.algorithm());
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(opts.files.len() + comparing_count);
@@ -102,7 +103,7 @@ fn perform_run(opts: cli::RunOpts) -> Result<Vec<Duration>> {
                     i + 1,
                     comparing_count
                 ));
-                let result = atype.comparator().compare_birthmarks(b1, b2, aggregator)?;
+                let result = comparator.compare_birthmarks(b1, b2, aggregator)?;
                 pbar.inc(1);
                 score_csv::store(&result, &dest_file)?;
                 Ok(CompareResult::new(
@@ -215,9 +216,9 @@ fn new_progress_bar(len: usize) -> ProgressBar {
     )
 }
 
-fn perform_compare(opts: cli::CompareOpts) -> Result<Vec<Duration>> {
+fn perform_compare(opts: cli::CompareOpts, oinkie: &Oinkie) -> Result<Vec<Duration>> {
     let start = Instant::now();
-    let comparator = opts.comparator();
+    let comparator = opts.comparator(oinkie);
     let dest = opts.dest();
     let comparing_count = opts.compare_count();
     let pbar = new_progress_bar(comparing_count * 3);
@@ -567,13 +568,31 @@ mod mcp;
 fn perform(opts: cli::OinkieOpts) -> Result<Vec<Duration>> {
     opts.init()?;
     use cli::OinkieCommand::*;
+    // Every command that computes in-process runs on the threads of one
+    // Oinkie, its own loops over pairs and files included, so that --threads
+    // bounds all of it. `lift` runs decompilers, which --jobs bounds instead.
     match opts.command {
-        Run(opts) => perform_run(opts),
-        Compare(opts) => perform_compare(opts),
-        Extract(opts) => validate_extract_opts(opts).and_then(perform_extract),
-        Review(opts) => review::perform(opts),
+        Run(opts) => opts
+            .threads
+            .oinkie()
+            .and_then(|o| o.install(|| perform_run(opts, &o))),
+        Compare(opts) => opts
+            .threads
+            .oinkie()
+            .and_then(|o| o.install(|| perform_compare(opts, &o))),
+        Extract(opts) => opts
+            .threads
+            .oinkie()
+            .and_then(|o| o.install(|| validate_extract_opts(opts).and_then(perform_extract))),
+        Review(opts) => opts
+            .threads
+            .oinkie()
+            .and_then(|o| o.install(|| review::perform(opts))),
         Reaggregate { .. } => unreachable!("rs_main refuses the old name before perform"),
-        Stats(opts) => stats::perform(opts),
+        Stats(opts) => opts
+            .threads
+            .oinkie()
+            .and_then(|o| o.install(|| stats::perform(opts))),
         Lift(opts) => perform_lift(opts),
         Info => perform_info(),
         #[cfg(feature = "mcp")]

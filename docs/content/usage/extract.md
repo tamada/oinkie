@@ -32,6 +32,8 @@ oinkie extract [OPTIONS] [FILES]...
   *Refer below for a full list of supported birthmark types.*
 * `-S, --skip`  
   Skip the extraction process if the output birthmark file already exists.
+* `--threads <N>`  
+  The number of threads to compute on, for every part of the command that runs in parallel. `[default: one per core]`
 
 ---
 

@@ -34,12 +34,13 @@ pub(crate) fn perform(opts: &crate::cli::McpOpts) -> Result<Vec<Duration>> {
     // how this was launched, and the person who can fix it is watching now
     // rather than when a tool is first called.
     let roots = paths::Roots::new(opts.roots())?;
-    runtime.block_on(serve(roots))?;
+    let engine = opts.threads.oinkie()?;
+    runtime.block_on(serve(roots, engine))?;
     Ok(vec![start.elapsed()])
 }
 
-async fn serve(roots: paths::Roots) -> Result<()> {
-    let service = server::Oinkie::new(roots)
+async fn serve(roots: paths::Roots, engine: oinkie::Oinkie) -> Result<()> {
+    let service = server::Oinkie::new(roots, engine)
         .serve(rmcp::transport::stdio())
         .await
         .map_err(|e| Error::Parse(format!("could not start the MCP server: {e}")))?;

@@ -39,6 +39,8 @@ oinkie compare [OPTIONS] [JSON_FILES]...
   The output directory where comparison results are saved (typically as CSV files). `[default: similarities]`
 * `-S, --skip`  
   Skip the comparison if the output file already exists for the current file pair.
+* `--threads <N>`  
+  The number of threads to compute on, for every part of the command that runs in parallel. `[default: one per core]`
 
 ---
 
