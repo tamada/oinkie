@@ -134,8 +134,10 @@ pub oinkie::compare::Aggregator::Containment
 pub oinkie::compare::Aggregator::Hungarian
 pub oinkie::compare::Aggregator::Matched(f64)
 pub oinkie::compare::Aggregator::TopN(oinkie::compare::Size)
+pub oinkie::compare::Aggregator::Weighted
 impl oinkie::compare::Aggregator
-pub fn oinkie::compare::Aggregator::aggregate(&self, &oinkie::compare::Matrix) -> oinkie::Result<alloc::vec::Vec<f64>>
+pub fn oinkie::compare::Aggregator::aggregate(&self, &oinkie::compare::Matrix, core::option::Option<(&[usize], &[usize])>) -> oinkie::Result<f64>
+pub fn oinkie::compare::Aggregator::uses_sizes(&self) -> bool
 impl core::clone::Clone for oinkie::compare::Aggregator
 pub fn oinkie::compare::Aggregator::clone(&self) -> Self
 impl core::default::Default for oinkie::compare::Aggregator
@@ -295,6 +297,9 @@ pub fn oinkie::lift::Lifter::notice(&self) -> core::option::Option<alloc::string
 pub oinkie::Error::Array(alloc::vec::Vec<Self>)
 pub oinkie::Error::BirthmarkType(alloc::string::String)
 pub oinkie::Error::Csv(csv::error::Error)
+pub oinkie::Error::FunctionSizes
+pub oinkie::Error::FunctionSizes::given: core::option::Option<(usize, usize)>
+pub oinkie::Error::FunctionSizes::matrix: (usize, usize)
 pub oinkie::Error::IncompatibleAnalysis(oinkie::birthmarks::BirthmarkType, oinkie::compare::Algorithm)
 pub oinkie::Error::InvalidPcode(u32)
 pub oinkie::Error::Io(std::path::PathBuf, core::io::error::Error)

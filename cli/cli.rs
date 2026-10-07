@@ -388,7 +388,10 @@ Available:
                how much of the smaller is found in the larger. A program copied whole into a larger one
                scores 1.0. It says the smaller is contained, not that the two are alike.
 - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-               similarity of at least T, where 0 < T <= 1."
+               similarity of at least T, where 0 < T <= 1.
+- weighted     As hungarian, but each function counts by its number of elements, so that short functions,
+               which agree by chance, count for little. review reads the sizes from the birthmarks the
+               comparison names."
     )]
     aggregator: Aggregator,
 
@@ -603,7 +606,10 @@ Available:
                how much of the smaller is found in the larger. A program copied whole into a larger one
                scores 1.0. It says the smaller is contained, not that the two are alike.
 - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-               similarity of at least T, where 0 < T <= 1."
+               similarity of at least T, where 0 < T <= 1.
+- weighted     As hungarian, but each function counts by its number of elements, so that short functions,
+               which agree by chance, count for little. review reads the sizes from the birthmarks the
+               comparison names."
     )]
     aggregator: Aggregator,
 
@@ -702,7 +708,10 @@ Available:
                how much of the smaller is found in the larger. A program copied whole into a larger one
                scores 1.0. It says the smaller is contained, not that the two are alike.
 - matched:T    As hungarian, but the proportion of the larger birthmark's functions matched with a
-               similarity of at least T, where 0 < T <= 1."
+               similarity of at least T, where 0 < T <= 1.
+- weighted     As hungarian, but each function counts by its number of elements, so that short functions,
+               which agree by chance, count for little. review reads the sizes from the birthmarks the
+               comparison names."
     )]
     aggregator: Aggregator,
 

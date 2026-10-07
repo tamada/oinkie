@@ -34,6 +34,7 @@ oinkie review [OPTIONS] <SCORE_DIRECTORY>
   * **`topn:N`**: Average the \\(N\\) best of each function's best matches, from each side.
   * **`containment`**: The `hungarian` pairing, averaged over the smaller side's functions: how much of the smaller is found in the larger.
   * **`matched:T`**: The proportion of functions the `hungarian` pairing matches with a similarity of at least \\(T\\).
+  * **`weighted`**: A one-to-one pairing in which each function counts by its number of elements. It reads the sizes from the birthmarks the comparison names, as `--min-elements` does, so those files must still be there and unchanged.
 * `-d, --dest-file <RESULT.CSV>`  
   The path to the destination CSV file where the recomputed similarity of each pair is saved. `[default: review.csv]`
 * `--min-elements <N|Rx>`  

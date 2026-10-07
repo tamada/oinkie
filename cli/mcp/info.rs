@@ -78,6 +78,13 @@ const AGGREGATORS: &[(&str, &str)] = &[
          least 0.9. Any threshold above 0 and at most 1 works: the name is matched: followed by the threshold, \
          and 0.9 here is only an example.",
     ),
+    (
+        "weighted",
+        "As hungarian, but each function counts by its number of elements: the matched pairs' similarities \
+         weighted by the two functions' sizes, over the sizes of every function of both sides. Short \
+         functions, which agree by chance, count for little. Under oinkie_review it reads the sizes from \
+         the birthmarks the comparison names.",
+    ),
 ];
 
 pub fn vocabulary() -> Vocabulary {
@@ -121,7 +128,8 @@ pub fn vocabulary() -> Vocabulary {
              birthmark's shape; a pairing that does not is refused, naming the one that was meant."
                 .to_string(),
             "An aggregator is 'hungarian', 'topn:all', 'topn:' followed by a count of at \
-             least 1, 'containment', or 'matched:' followed by a threshold above 0 and at most 1. \
+             least 1, 'containment', 'matched:' followed by a threshold above 0 and at most 1, \
+             or 'weighted'. \
              The listed 'topn:5' and 'matched:0.9' are examples of those, not the only values \
              they take -- the same way the k-gram list above is a sample rather than a limit."
                 .to_string(),
