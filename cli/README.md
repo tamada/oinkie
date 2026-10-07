@@ -150,7 +150,7 @@ Options:
 
 ### `review` command
 
-Re-read a finished comparison: recompute its birthmark-wise similarity scores from the stored element-wise scores.
+Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities.
 
 ```sh
 Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities

@@ -70,3 +70,15 @@ The toolkit's operations are divided into distinct stages. You can execute them 
    
 5. **[All-in-One Execution (Run)](run)**  
    Execute extraction and comparison together in a single command.
+
+---
+
+## ⚙️ Threads, memory and time
+
+Comparing is where the resources go, and how much depends on the pairs:
+
+* **Memory.** Comparing a pair holds one number for every pair of their functions, 8 bytes each: two birthmarks of 5,000 functions take 200 MB, two of 50,000 take 20 GB. Several pairs are compared at once, so the largest pairs and the number of threads together set the peak.
+* **Time.** It grows with the same count of function pairs, and with the algorithm: `lcs` and `levenshtein` work through both functions' sequences for every pair of functions, the set and frequency algorithms only through what the two hold. On a 10-core machine, two birthmarks of 5,000 functions compare in a few seconds under `jaccard` and in under a minute under `lcs`. The `hungarian` aggregator adds its own share on large pairs; `topn:N` adds almost none.
+* **Threads.** `compare`, `run`, `review`, `extract`, `stats` and `mcp` compute on one thread per core by default. `--threads N` bounds all of it to \\(N\\) threads -- the pairs, the files, and the rows of each pair's matrix share them -- and lowers memory with it. Nothing else sets the number; an environment variable such as `RAYON_NUM_THREADS` has no effect.
+* **`lift --jobs` is a different knob.** It counts decompiler processes, each a whole Ghidra, Binary Ninja or IDA run, and is bounded by their memory rather than by cores. Lifting is serial unless `--jobs` says otherwise; see [lift](lift).
+
