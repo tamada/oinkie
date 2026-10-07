@@ -880,19 +880,36 @@ fn levenshtein_distance<T: PartialEq>(s1: &[T], s2: &[T]) -> f64 {
     1.0 - (distance as f64 / max_len as f64)
 }
 
+/// The counts the two functions share: for each element in both, its count
+/// in each.
+///
+/// The smaller map is walked and the other looked up, so nothing is
+/// allocated. An element in one function only contributes nothing to the
+/// sums below that need this -- its count in the other is 0 -- so the shared
+/// ones are all they need.
+fn shared<'a, T: std::cmp::Eq + std::hash::Hash>(
+    f1: &'a FxHashMap<T, usize>,
+    f2: &'a FxHashMap<T, usize>,
+) -> impl Iterator<Item = (usize, usize)> + 'a {
+    let swapped = f1.len() > f2.len();
+    let (small, large) = if swapped { (f2, f1) } else { (f1, f2) };
+    small
+        .iter()
+        .filter_map(move |(k, &a)| large.get(k).map(|&b| if swapped { (b, a) } else { (a, b) }))
+}
+
+// The sums below are of counts, which are whole numbers, and are taken in
+// integers. Each is then the exact value that summing the same terms in f64
+// gives in any order, as long as it stays below 2^53, so that rearranging a
+// sum over every element into one over the shared ones changes no score.
+
 fn cosine_similarity<T: std::cmp::Eq + std::hash::Hash>(
     f1: &FxHashMap<T, usize>,
     f2: &FxHashMap<T, usize>,
 ) -> f64 {
-    let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
-    let dot_product = keys
-        .iter()
-        .map(|k| {
-            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-            v1 * v2
-        })
-        .sum::<f64>();
+    let dot_product = shared(f1, f2)
+        .map(|(a, b)| a as u128 * b as u128)
+        .sum::<u128>() as f64;
     let magnitude1 = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     let magnitude2 = f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     // A zero magnitude is an empty function. Two of them agree, as under every
@@ -909,15 +926,13 @@ fn euclidean_distance<T: std::cmp::Eq + std::hash::Hash>(
     f1: &FxHashMap<T, usize>,
     f2: &FxHashMap<T, usize>,
 ) -> f64 {
-    let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
-    let sum_of_squares = keys
-        .iter()
-        .map(|k| {
-            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-            (v1 - v2).powi(2)
-        })
-        .sum::<f64>();
+    let squares =
+        |f: &FxHashMap<T, usize>| f.values().map(|&v| v as u128 * v as u128).sum::<u128>();
+    let dot_product = shared(f1, f2)
+        .map(|(a, b)| a as u128 * b as u128)
+        .sum::<u128>();
+    // Σ(a - b)² over every element, as Σa² + Σb² - 2Σab.
+    let sum_of_squares = (squares(f1) + squares(f2) - 2 * dot_product) as f64;
     let scale = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()
         + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
     // Zero only when both functions are empty, where the quotient below would
@@ -933,25 +948,12 @@ fn weighted_jaccard<T: std::cmp::Eq + std::hash::Hash>(
     f1: &FxHashMap<T, usize>,
     f2: &FxHashMap<T, usize>,
 ) -> f64 {
-    let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
-    let min_sum = keys
-        .iter()
-        .map(|k| {
-            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-            v1.min(v2)
-        })
-        .sum::<f64>();
-    let max_sum = keys
-        .iter()
-        .map(|k| {
-            let v1 = *f1.get(*k).unwrap_or(&0) as f64;
-            let v2 = *f2.get(*k).unwrap_or(&0) as f64;
-            v1.max(v2)
-        })
-        .sum::<f64>();
-    if max_sum > 0.0 {
-        min_sum / max_sum
+    let total = |f: &FxHashMap<T, usize>| f.values().map(|&v| v as u128).sum::<u128>();
+    let min_sum = shared(f1, f2).map(|(a, b)| a.min(b) as u128).sum::<u128>();
+    // Σmax(a, b) over every element, as Σa + Σb - Σmin(a, b).
+    let max_sum = total(f1) + total(f2) - min_sum;
+    if max_sum > 0 {
+        min_sum as f64 / max_sum as f64
     } else {
         1.0
     }
@@ -1563,6 +1565,146 @@ mod tests {
                 (c.similarity() - 1.0).abs() < 1e-9,
                 "algorithm: {algorithm}"
             );
+        }
+    }
+
+    // The frequency algorithms as they sum over every element of either
+    // function, which the sums over the shared elements must agree with bit
+    // for bit.
+
+    fn cosine_similarity_by_union<T: std::cmp::Eq + std::hash::Hash>(
+        f1: &FxHashMap<T, usize>,
+        f2: &FxHashMap<T, usize>,
+    ) -> f64 {
+        let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+        let dot_product = keys
+            .iter()
+            .map(|k| {
+                let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+                let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+                v1 * v2
+            })
+            .sum::<f64>();
+        let magnitude1 = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
+        let magnitude2 = f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
+        // A zero magnitude is an empty function. Two of them agree, as under every
+        // other algorithm; one against a function that is not empty does not, or
+        // an empty function would match anything.
+        match (magnitude1 > 0.0, magnitude2 > 0.0) {
+            (true, true) => dot_product / (magnitude1 * magnitude2),
+            (false, false) => 1.0,
+            _ => 0.0,
+        }
+    }
+
+    fn euclidean_distance_by_union<T: std::cmp::Eq + std::hash::Hash>(
+        f1: &FxHashMap<T, usize>,
+        f2: &FxHashMap<T, usize>,
+    ) -> f64 {
+        let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+        let sum_of_squares = keys
+            .iter()
+            .map(|k| {
+                let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+                let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+                (v1 - v2).powi(2)
+            })
+            .sum::<f64>();
+        let scale = f1.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt()
+            + f2.values().map(|v| (*v as f64).powi(2)).sum::<f64>().sqrt();
+        // Zero only when both functions are empty, where the quotient below would
+        // be 0/0: a NaN that would reach the assignment and the pair's
+        // similarity. Two empty functions agree, as under every other algorithm.
+        if scale == 0.0 {
+            return 1.0;
+        }
+        1.0 - (sum_of_squares.sqrt() / scale)
+    }
+
+    fn weighted_jaccard_by_union<T: std::cmp::Eq + std::hash::Hash>(
+        f1: &FxHashMap<T, usize>,
+        f2: &FxHashMap<T, usize>,
+    ) -> f64 {
+        let keys = f1.keys().chain(f2.keys()).collect::<FxHashSet<_>>();
+        let min_sum = keys
+            .iter()
+            .map(|k| {
+                let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+                let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+                v1.min(v2)
+            })
+            .sum::<f64>();
+        let max_sum = keys
+            .iter()
+            .map(|k| {
+                let v1 = *f1.get(*k).unwrap_or(&0) as f64;
+                let v2 = *f2.get(*k).unwrap_or(&0) as f64;
+                v1.max(v2)
+            })
+            .sum::<f64>();
+        if max_sum > 0.0 {
+            min_sum / max_sum
+        } else {
+            1.0
+        }
+    }
+
+    /// Every pair of a set of frequency maps -- with repeated counts, counts
+    /// in one only, disjoint maps, a large count and the empty map -- scores
+    /// the same bits summed over the shared elements as over all of them.
+    #[test]
+    fn frequency_algorithms_agree_with_their_sums_over_every_element() {
+        let maps: Vec<FxHashMap<&str, usize>> = vec![
+            FxHashMap::default(),
+            [("A", 1)].into_iter().collect(),
+            [("A", 3), ("B", 1), ("C", 2)].into_iter().collect(),
+            [("B", 5), ("C", 2), ("D", 7)].into_iter().collect(),
+            [("E", 1), ("F", 1)].into_iter().collect(),
+            [("A", 1_000_000), ("B", 999_999), ("Z", 3)]
+                .into_iter()
+                .collect(),
+            (0..200)
+                .map(|i| (["A", "B", "C", "D", "E", "F", "G"][i % 7], i))
+                .collect(),
+        ];
+        // and maps drawn at random over a small vocabulary, so that most
+        // pairs share some elements and not others
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let vocabulary = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+        let mut maps = maps;
+        for _ in 0..60 {
+            let mut map = FxHashMap::default();
+            for &k in &vocabulary {
+                if next() % 2 == 0 {
+                    map.insert(k, (next() % 50) as usize + 1);
+                }
+            }
+            maps.push(map);
+        }
+        for f1 in &maps {
+            for f2 in &maps {
+                assert_eq!(
+                    cosine_similarity(f1, f2).to_bits(),
+                    cosine_similarity_by_union(f1, f2).to_bits(),
+                    "cosine {f1:?} {f2:?}"
+                );
+                assert_eq!(
+                    euclidean_distance(f1, f2).to_bits(),
+                    euclidean_distance_by_union(f1, f2).to_bits(),
+                    "euclidean {f1:?} {f2:?}"
+                );
+                assert_eq!(
+                    weighted_jaccard(f1, f2).to_bits(),
+                    weighted_jaccard_by_union(f1, f2).to_bits(),
+                    "weighted jaccard {f1:?} {f2:?}"
+                );
+            }
         }
     }
 
