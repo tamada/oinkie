@@ -93,8 +93,10 @@ Formerly *element-wise similarity* or *element-wise score*.
 
 How a pair's function similarities become its one [similarity](#similarity) (`-A`, `--aggregator`):
 
-* `hungarian` (the default) — the one-to-one matching of functions that maximises the total, by the Hungarian algorithm, and the mean over the matched pairs;
+* `hungarian` (the default) — the one-to-one matching of functions that maximises the total, by the Hungarian algorithm, and the mean of the matched similarities over as many functions as the larger birthmark has;
 * `topn:N` — each function's best match in the other birthmark, on both sides and not necessarily one-to-one, and the mean of the \\(N\\) best of those from each side. `topn:all`, or `topn`, takes them all.
+
+When one birthmark has more functions than the other, the difference counts as zeros. Under `hungarian`, each function of the larger birthmark left without a partner counts 0, and the mean is over the larger birthmark's functions. Under `topn`, the smaller side's list of best matches is filled out with zeros to the larger side's length, which `topn:all` averages in and a small \\(N\\) mostly leaves out. So under `hungarian` and `topn:all`, a small program does not score as a copy of a large one merely because all of it appears there.
 
 ### Similarity
 

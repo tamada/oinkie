@@ -28,6 +28,7 @@ The high similarity suggests that either program is suspected of being a copy of
 
 - [Usage of the CLI interface](cli/README.md)
 - [Serving oinkie to an agent over MCP](cli/mcp/README.md)
+- [Using oinkie as a library](#-using-oinkie-as-a-library)
 
 ## What is the software birthmark?
 
@@ -88,13 +89,14 @@ the similarity calculation algorithm to use.
 
 For more details, see ([`cli/README.md`](cli/README.md)).
 
-#### 🧦 Paring strategy
+#### 🧦 Pairing strategy
 
 - All and self,
 - All,
 - SelfCoverage,
-- Adjacent, and
-- FirstVsOthers.
+- Adjacent,
+- FirstVsOthers, and
+- LastVsOthers.
 
 #### 🪞 Similarity calculation algorithm
 
@@ -115,6 +117,43 @@ Generally, if the similarity exceeds a certain threshold, it is suspected of bei
 From past research, the typical threshold is 0.75.
 
 Note that the birthmark method just detects potential copies; it does not prove that plagiarism has occurred.
+
+## 📚 Using oinkie as a library
+
+Everything the `oinkie` command does is in the `oinkie` crate, which is on [crates.io](https://crates.io/crates/oinkie). Without its default `cli` feature, it leaves out what only the command needs -- the argument parser, the logger and the progress bars:
+
+```sh
+cargo add oinkie --no-default-features
+```
+
+Extract a birthmark from each lifted program, then compare them under one analysis:
+
+```rust
+use std::path::Path;
+
+use oinkie::birthmarks::AnalysisType;
+use oinkie::compare::Aggregator;
+use oinkie::extract::Extractor;
+use oinkie::{Oinkie, Program};
+
+fn main() -> oinkie::Result<()> {
+    // Two lifted programs, as `oinkie lift` writes them.
+    let analysis = AnalysisType::try_from("op-set-jaccard")?;
+    let extractor = Extractor::new(analysis.birthmark().clone());
+    let a = extractor.extract(&Program::load(Path::new("a.json"))?)?;
+    let b = extractor.extract(&Program::load(Path::new("b.json"))?)?;
+
+    // One Oinkie, kept for every comparison: it owns the threads they run on.
+    let oinkie = Oinkie::new()?;
+    let comparison = oinkie
+        .comparator(analysis.algorithm())
+        .compare_birthmarks(&a, &b, &Aggregator::Hungarian)?;
+    println!("{:.3}", comparison.similarity());
+    Ok(())
+}
+```
+
+`Oinkie::new()` computes on one thread per core, and `Oinkie::builder().threads(n).build()` on `n`. The API is documented on [docs.rs](https://docs.rs/oinkie). This is the API from v0.8.0 on; earlier releases made a comparator with `Algorithm::comparator()`, and `.github/release-notes/v0.8.0.md` says what changed.
 
 ## ℹ️ About
 

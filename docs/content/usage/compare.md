@@ -80,8 +80,23 @@ Because software birthmarks are extracted at a **function level**, comparing two
 
 ### 1. `hungarian` (Default)
 
-Uses the **Hungarian Algorithm** to find the optimal global matching between the functions of program A and program B. This ensures that every function is paired up with its most likely match in the other program, maximizing the overall similarity.
+Uses the **Hungarian Algorithm** to pair the functions of program A with those of program B one to one, choosing the pairing whose similarities add up to the most, and averages the paired similarities. A function is not always paired with its own best match: two functions may share a best match, and only one of them can have it.
 
 ### 2. `topn:N`
 
 Takes each function's best match in the other program, on both sides, and averages the \\(N\\) best of those from each side. The matching need not be one-to-one. This reduces noise from minor or unrelated function matches.
+
+### Pairs of different sizes
+
+When one program has more functions than the other, the functions the smaller one cannot match count as zeros, so they lower the similarity instead of dropping out of it. Program A with 2 functions against program B with 3:
+
+|  | B₁ | B₂ | B₃ |
+| --- | --- | --- | --- |
+| **A₁** | 0.9 | 0.2 | 0.1 |
+| **A₂** | 0.3 | 0.8 | 0.0 |
+
+* `hungarian` pairs A₁ with B₁ and A₂ with B₂, leaves B₃ without a partner, and averages over B's three functions: \\((0.9 + 0.8 + 0) / 3 \\approx 0.567\\).
+* `topn:all` takes A's best matches, 0.9 and 0.8, filled out with a 0 to B's three, and B's, 0.9, 0.8 and 0.1: \\((0.9 + 0.8 + 0 + 0.9 + 0.8 + 0.1) / 6 \\approx 0.583\\).
+* `topn:1` takes the single best from each side, 0.9 and 0.9, and scores 0.9: a small \\(N\\) looks only at the strongest matches, whatever is left over.
+
+So under `hungarian` and `topn:all`, a small program does not score as a copy of a large one merely because all of it appears there. The [glossary](../../glossary#aggregator) states the rule once for every command that aggregates.

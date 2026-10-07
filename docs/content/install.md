@@ -1,11 +1,11 @@
 ---
 title: "⚓️ Install"
-description: "How to install oinkie from source or download release binaries."
+description: "How to install oinkie from crates.io, from source or as release binaries, and how to depend on it as a library."
 date: 2026-06-22
 draft: false
 ---
 
-To install **oinkie**, you can build it from source using Rust's package manager, Cargo, or download pre-compiled binaries from the release page.
+Install **oinkie** from [crates.io](https://crates.io/crates/oinkie) with Rust's package manager, Cargo, build it from source, or download pre-compiled binaries from the [release page](https://github.com/tamada/oinkie/releases). To use it from Rust code instead, see [As a library](#-as-a-library).
 
 ---
 
@@ -34,6 +34,20 @@ To analyze binaries, **oinkie** relies on Ghidra for lifting compiled machine co
 
 ---
 
+## 📦 From crates.io
+
+```sh
+cargo install oinkie
+```
+
+This installs the `oinkie` command into Cargo's binary directory (usually `~/.cargo/bin`, which should be in your `PATH`). The MCP server is behind a feature of its own; to have `oinkie mcp` as well:
+
+```sh
+cargo install oinkie --features mcp
+```
+
+---
+
 ## 📦 Building from Source
 
 You can clone the repository and compile **oinkie** directly on your machine.
@@ -59,6 +73,18 @@ To install the `oinkie` command to your Cargo binary directory (usually `~/.carg
 ```sh
 cargo install --path .
 ```
+
+---
+
+## 📚 As a library
+
+The `oinkie` crate is the library the command is built on. Its default `cli` feature carries what only the command needs -- the argument parser, the logger and the progress bars -- so a program that uses the library leaves it out:
+
+```sh
+cargo add oinkie --no-default-features
+```
+
+The README's [Using oinkie as a library](https://github.com/tamada/oinkie#-using-oinkie-as-a-library) has an example, and the API is documented on [docs.rs](https://docs.rs/oinkie).
 
 ---
 

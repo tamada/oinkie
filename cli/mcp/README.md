@@ -81,7 +81,7 @@ TTY rewrites what passes through it and breaks the JSON-RPC framing.
 | `oinkie_run` | lifted programs in, a similarity per pair out — the whole question in one call |
 | `oinkie_extract` | write birthmarks, which `oinkie_compare` takes |
 | `oinkie_compare` | score birthmarks, to try another algorithm without re-reading the programs |
-| `oinkie_review` | recompute scores in a directory under a different aggregator |
+| `oinkie_review` | recompute scores in a directory under a different aggregator, or without the functions too short to be evidence (`min_elements`) |
 | `oinkie_stats` | summarise birthmarks: functions per file, elements per function, empty functions, the most frequent elements — what `oinkie stats` reports |
 
 Ask `oinkie_info` first. The names are precise — `op-3gram-freq-cosine` is a
