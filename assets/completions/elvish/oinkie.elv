@@ -20,6 +20,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
         &'oinkie'= {
             cand -l 'Log level for the application'
             cand --level 'Log level for the application'
+            cand --no-progress 'Draw no progress bars, as when stderr is kept in a log or a CI output'
             cand -h 'Print help'
             cand --help 'Print help'
             cand -V 'Print version'

@@ -5,7 +5,9 @@
 //! one [`Birthmark`] with every function of another into a matrix of function
 //! similarities. An [`Aggregator`] turns the matrix into the pair's one
 //! similarity, and the [`Comparison`] holds both. A [`PairingStrategy`]
-//! chooses which pairs of a list to compare.
+//! chooses which pairs of a list to compare. An [`Observer`] passed to
+//! [`Comparator::compare_birthmarks_with`] is told how far a comparison has
+//! got, for a caller that shows it.
 //!
 //! ```
 //! use std::path::Path;
@@ -315,12 +317,52 @@ impl Aggregator {
     }
 }
 
+/// How far a comparison has got, as [`Comparator::compare_birthmarks_with`]
+/// reports it to an [`Observer`].
+///
+/// A pair with no functions on a side has no matrix to fill and reports
+/// nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Progress {
+    /// The matrix is about to be filled.
+    MatrixStarted {
+        /// How many rows it will have, each reported by
+        /// [`Progress::RowFilled`] when done: the first of [`Matrix::dim`].
+        rows: usize,
+        /// How many cells each row holds: the second of [`Matrix::dim`].
+        columns: usize,
+    },
+    /// One [`Matrix::row`] is filled. Reported once per row, in no
+    /// particular order.
+    RowFilled,
+    /// Every row is filled and the [`Aggregator`] is running.
+    Aggregating,
+}
+
+/// Told how far a comparison has got.
+///
+/// The rows of a matrix are filled on several threads at once, so
+/// [`Observer::notify`] is called concurrently, and once per row: it should
+/// return quickly. Any `Fn(Progress) + Sync` closure is one.
+pub trait Observer: Sync {
+    /// Called with each step of a comparison as it happens.
+    fn notify(&self, progress: Progress);
+}
+
+impl<F: Fn(Progress) + Sync> Observer for F {
+    fn notify(&self, progress: Progress) {
+        self(progress)
+    }
+}
+
 trait BirthmarkComparator: Sync {
     fn compare_birthmarks<'a>(
         &self,
         b1: &'a Birthmark,
         b2: &'a Birthmark,
         aggregator: &Aggregator,
+        observer: &dyn Observer,
     ) -> Result<Comparison<'a, Birthmark>> {
         // Asking the birthmark rather than re-deriving the conditions here
         // keeps the reason in the error: a mismatch of representation reads
@@ -360,7 +402,17 @@ trait BirthmarkComparator: Sync {
                 .iter()
                 .map(|f| in_shape(&f.data, shape))
                 .collect();
-            let r = build_matrix(&d1, &d2, |e1, e2| self.compare_data(e1, e2))?;
+            observer.notify(Progress::MatrixStarted {
+                rows: d1.len(),
+                columns: d2.len(),
+            });
+            let r = build_matrix(
+                &d1,
+                &d2,
+                |e1, e2| self.compare_data(e1, e2),
+                || observer.notify(Progress::RowFilled),
+            )?;
+            observer.notify(Progress::Aggregating);
             aggregator
                 .aggregate(&r)
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
@@ -391,11 +443,14 @@ trait BirthmarkComparator: Sync {
 /// of `p1`.
 ///
 /// The rows are filled in parallel: each cell depends on its two functions
-/// alone, and a large pair is where a comparison spends its time.
+/// alone, and a large pair is where a comparison spends its time. `on_row` is
+/// called as each row is done, a row being the finest step worth reporting:
+/// a cell can take well under a microsecond.
 fn build_matrix<T: Sync>(
     p1: &[T],
     p2: &[T],
     compare_func: impl Fn(&T, &T) -> f64 + Sync,
+    on_row: impl Fn() + Sync,
 ) -> Result<Matrix> {
     let mut similarities = vec![0.0; p1.len() * p2.len()];
     if !p2.is_empty() {
@@ -406,6 +461,7 @@ fn build_matrix<T: Sync>(
                 for (cell, item2) in row.iter_mut().zip(p2) {
                     *cell = compare_func(item1, item2);
                 }
+                on_row();
             });
     }
     Matrix::new((p1.len(), p2.len()), similarities).ok_or_else(|| {
@@ -625,15 +681,28 @@ impl Comparator {
         b2: &'a Birthmark,
         aggregator: &Aggregator,
     ) -> Result<Comparison<'a, Birthmark>> {
+        self.compare_birthmarks_with(b1, b2, aggregator, &|_: Progress| {})
+    }
+
+    /// [`Comparator::compare_birthmarks`], telling `observer` how far it has
+    /// got as it goes. The comparison is the same whatever `observer` does.
+    pub fn compare_birthmarks_with<'a>(
+        &self,
+        b1: &'a Birthmark,
+        b2: &'a Birthmark,
+        aggregator: &Aggregator,
+        observer: &dyn Observer,
+    ) -> Result<Comparison<'a, Birthmark>> {
+        let (a, o) = (aggregator, observer);
         self.pool.install(|| match &self.inner {
-            ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::Jaccard(j) => j.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::Levenshtein(l) => l.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2, aggregator),
-            ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2, aggregator),
+            ComparatorImpl::Cosine(c) => c.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Dice(d) => d.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Euclidean(e) => e.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Jaccard(j) => j.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Levenshtein(l) => l.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Lcs(lcs) => lcs.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::Simpson(s) => s.compare_birthmarks(b1, b2, a, o),
+            ComparatorImpl::WeightedJaccard(wj) => wj.compare_birthmarks(b1, b2, a, o),
         })
     }
 }
@@ -1349,7 +1418,7 @@ mod tests {
                 b1.functions = functions(0..4);
                 b2.functions = functions(1..6);
                 let c = comparator
-                    .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
+                    .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian, &|_: Progress| {})
                     .unwrap();
                 for (i, f1) in b1.functions.iter().enumerate() {
                     for (j, f2) in b2.functions.iter().enumerate() {
@@ -1385,7 +1454,7 @@ mod tests {
         let b1 = birthmark("a", &[("main", &["A"])]);
         let mut b2 = birthmark("b", &[("main", &["A"])]);
         b2.metadata.birthmark_type = BirthmarkType::OpSet;
-        match Jaccard.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian) {
+        match Jaccard.compare_birthmarks(&b1, &b2, &Aggregator::Hungarian, &|_: Progress| {}) {
             Err(Error::Mismatch(..)) => {}
             Err(e) => panic!("unexpected error: {e}"),
             Ok(_) => panic!("expected a mismatch error"),
@@ -1399,17 +1468,17 @@ mod tests {
 
         // both empty means identical
         let both = Jaccard
-            .compare_birthmarks(&empty, &empty, &Aggregator::Hungarian)
+            .compare_birthmarks(&empty, &empty, &Aggregator::Hungarian, &|_: Progress| {})
             .unwrap();
         assert_eq!(both.similarity(), 1.0);
 
         // exactly one empty means nothing in common
         let one = Jaccard
-            .compare_birthmarks(&empty, &filled, &Aggregator::Hungarian)
+            .compare_birthmarks(&empty, &filled, &Aggregator::Hungarian, &|_: Progress| {})
             .unwrap();
         assert_eq!(one.similarity(), 0.0);
         let other = Jaccard
-            .compare_birthmarks(&filled, &empty, &Aggregator::Hungarian)
+            .compare_birthmarks(&filled, &empty, &Aggregator::Hungarian, &|_: Progress| {})
             .unwrap();
         assert_eq!(other.similarity(), 0.0);
     }
@@ -1422,7 +1491,9 @@ mod tests {
             Aggregator::TopN(Size::All),
             Aggregator::TopN(Size::Num(1)),
         ] {
-            let c = Jaccard.compare_birthmarks(&b, &b, &aggregator).unwrap();
+            let c = Jaccard
+                .compare_birthmarks(&b, &b, &aggregator, &|_: Progress| {})
+                .unwrap();
             assert!(
                 (c.similarity() - 1.0).abs() < 1e-9,
                 "aggregator: {aggregator:?}"
@@ -1541,6 +1612,76 @@ mod tests {
                 four.similarity().to_bits(),
                 "{algorithm}"
             );
+        }
+    }
+
+    /// An observer hears the matrix start with its shape, one row filled per
+    /// row, and then the aggregation, in that order.
+    #[test]
+    fn an_observer_is_told_each_row_between_the_start_and_the_aggregation() {
+        let b1 = birthmark("a", &[("f", &["A"]), ("g", &["B"]), ("h", &["C"])]);
+        let b2 = birthmark("b", &[("f", &["A"]), ("g", &["B"])]);
+        let heard = std::sync::Mutex::new(Vec::new());
+        crate::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard)
+            .compare_birthmarks_with(&b1, &b2, &Aggregator::Hungarian, &|p| {
+                heard.lock().unwrap().push(p)
+            })
+            .unwrap();
+        assert_eq!(
+            heard.into_inner().unwrap(),
+            [
+                Progress::MatrixStarted {
+                    rows: 3,
+                    columns: 2
+                },
+                Progress::RowFilled,
+                Progress::RowFilled,
+                Progress::RowFilled,
+                Progress::Aggregating,
+            ]
+        );
+    }
+
+    /// Watching a comparison does not change it.
+    #[test]
+    fn a_comparison_observed_scores_as_one_not_observed() {
+        let b1 = birthmark("a", &[("f", &["A", "B"]), ("g", &["B", "C"])]);
+        let b2 = birthmark("b", &[("f", &["A", "C"]), ("g", &["B"]), ("h", &[])]);
+        let oinkie = crate::Oinkie::new().unwrap();
+        for algorithm in Algorithm::ALL {
+            let comparator = oinkie.comparator(algorithm);
+            let plain = comparator
+                .compare_birthmarks(&b1, &b2, &Aggregator::Hungarian)
+                .unwrap();
+            let observed = comparator
+                .compare_birthmarks_with(&b1, &b2, &Aggregator::Hungarian, &|_| {})
+                .unwrap();
+            assert_eq!(plain.matrix(), observed.matrix(), "{algorithm}");
+            assert_eq!(
+                plain.similarity().to_bits(),
+                observed.similarity().to_bits(),
+                "{algorithm}"
+            );
+        }
+    }
+
+    /// A pair with an empty side has no matrix to fill, so there is nothing
+    /// to report.
+    #[test]
+    fn a_pair_with_an_empty_side_reports_nothing() {
+        let empty = birthmark("a", &[]);
+        let filled = birthmark("b", &[("f", &["A"])]);
+        let comparator = crate::Oinkie::new()
+            .unwrap()
+            .comparator(&Algorithm::Jaccard);
+        for (b1, b2) in [(&empty, &empty), (&empty, &filled), (&filled, &empty)] {
+            comparator
+                .compare_birthmarks_with(b1, b2, &Aggregator::Hungarian, &|p| {
+                    panic!("reported {p:?}")
+                })
+                .unwrap();
         }
     }
 

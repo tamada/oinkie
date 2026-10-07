@@ -17,6 +17,7 @@ _oinkie() {
     _arguments "${_arguments_options[@]}" : \
 '-l+[Log level for the application]:LEVEL:(error warn info debug trace off)' \
 '--level=[Log level for the application]:LEVEL:(error warn info debug trace off)' \
+'--no-progress[Draw no progress bars, as when stderr is kept in a log or a CI output]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \

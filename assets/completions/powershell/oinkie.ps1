@@ -23,6 +23,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
         'oinkie' {
             [CompletionResult]::new('-l', '-l', [CompletionResultType]::ParameterName, 'Log level for the application')
             [CompletionResult]::new('--level', '--level', [CompletionResultType]::ParameterName, 'Log level for the application')
+            [CompletionResult]::new('--no-progress', '--no-progress', [CompletionResultType]::ParameterName, 'Draw no progress bars, as when stderr is kept in a log or a CI output')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')

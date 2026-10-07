@@ -549,6 +549,8 @@ impl Oinkie {
                     &aggregator,
                     min_elements.as_ref(),
                     &confine,
+                    // Its stderr is not the user's to draw on.
+                    &crate::progress::Bars::new(false),
                 )?;
                 let scores = review
                     .results

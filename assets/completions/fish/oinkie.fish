@@ -1,6 +1,6 @@
 # Print an optspec for argparse to handle cmd's options that are independent of any subcommand.
 function __fish_oinkie_global_optspecs
-	string join \n l/level= h/help V/version
+	string join \n l/level= no-progress h/help V/version
 end
 
 function __fish_oinkie_needs_command
@@ -30,6 +30,7 @@ info\t''
 debug\t''
 trace\t''
 off\t''"
+complete -c oinkie -n "__fish_oinkie_needs_command" -l no-progress -d 'Draw no progress bars, as when stderr is kept in a log or a CI output'
 complete -c oinkie -n "__fish_oinkie_needs_command" -s h -l help -d 'Print help'
 complete -c oinkie -n "__fish_oinkie_needs_command" -s V -l version -d 'Print version'
 complete -c oinkie -n "__fish_oinkie_needs_command" -f -a "info" -d 'Display information about the application'

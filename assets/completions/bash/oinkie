@@ -71,7 +71,7 @@ _oinkie() {
 
     case "${cmd}" in
         oinkie)
-            opts="-l -h -V --level --help --version info lift extract compare review stats run help"
+            opts="-l -h -V --level --no-progress --help --version info lift extract compare review stats run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
