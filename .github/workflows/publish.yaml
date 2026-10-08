@@ -57,85 +57,19 @@ jobs:
           gh release edit "$TAG" --repo "$REPO" --notes-file notes.md
           echo "release notes for $TAG taken from $notes" >> "$GITHUB_STEP_SUMMARY"
 
+  # The binaries, one per platform, built and uploaded to the draft. How they
+  # are built lives in release-binaries.yaml, which pull requests changing it
+  # run too, so that it is not first exercised here.
   publish:
-    runs-on: ${{ matrix.os }}
     needs: start
+    uses: ./.github/workflows/release-binaries.yaml
+    with:
+      appname: ${{ needs.start.outputs.appname }}
+      version: ${{ needs.start.outputs.version }}
+      tag: ${{ needs.start.outputs.tag }}
+      ref: main
     permissions:
       contents: write
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            architecture: arm64
-            os_name: linux
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            architecture: amd64
-            os_name: linux
-            # the runner can execute what it just built, so the artifact itself
-            # can be asked whether it serves MCP
-            native: true
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            architecture: arm64
-            os_name: darwin
-            native: true
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            architecture: amd64
-            os_name: darwin
-    steps:
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v2
-
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
-
-      - name: build
-        run: |
-          rustup update stable
-          rustup target add ${{ matrix.target }}
-          cargo install cargo-zigbuild
-          # --features mcp: without it the published binary has no `oinkie mcp`.
-          cargo zigbuild --release --features mcp --target ${{ matrix.target }}
-
-      # Only where the runner can execute what it just built -- two of the four
-      # targets are cross-compiled. Those two are enough: the flag that would go
-      # missing is the same one for every target.
-      - name: Verify the binary serves MCP
-        if: matrix.native
-        run: ./.github/scripts/verify_mcp.sh target/${{ matrix.target }}/release/oinkie
-
-      - name: Create distribution files.
-        env:
-          APPNAME: ${{ needs.start.outputs.appname }}
-          VERSION: ${{ needs.start.outputs.version }}
-          ARCHITECTURE: ${{ matrix.architecture }}
-          OS_NAME: ${{ matrix.os_name }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          ASSET_NAME="${APPNAME}-${VERSION}_${ARCHITECTURE}_${OS_NAME}"
-          mkdir -p "dist/$ASSET_NAME"
-          cp "target/${TARGET}/release/${APPNAME}" "dist/$ASSET_NAME/"
-          cp README.md LICENSE "dist/$ASSET_NAME/"
-          cp -r assets/completions "dist/$ASSET_NAME/"
-          tar cvfz "dist/${ASSET_NAME}.tar.gz" -C dist "$ASSET_NAME"
-
-      - name: Upload assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          APPNAME: ${{ needs.start.outputs.appname }}
-          VERSION: ${{ needs.start.outputs.version }}
-          TAG: ${{ needs.start.outputs.tag }}
-          ARCHITECTURE: ${{ matrix.architecture }}
-          OS_NAME: ${{ matrix.os_name }}
-        run: |
-          ASSET_NAME="${APPNAME}-${VERSION}_${ARCHITECTURE}_${OS_NAME}"
-          gh release upload "$TAG" "dist/${ASSET_NAME}.tar.gz"
 
   container:
     runs-on: ubuntu-latest

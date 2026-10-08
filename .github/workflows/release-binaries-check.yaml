@@ -1,0 +1,28 @@
+name: release binaries check
+
+# Builds the release binaries without releasing them, when a pull request
+# changes what they are made from or how. Otherwise they are built nowhere but
+# in the release, where a broken platform shows only once the tag and the
+# draft exist -- which is how v0.8.0 shipped without Windows.
+#
+# Not on every pull request: it builds six binaries, and a change to the code
+# alone is built and tested by build.yaml on all three systems.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/release-binaries.yaml"
+      - ".github/workflows/release-binaries-check.yaml"
+      - ".github/workflows/publish.yaml"
+      - ".github/scripts/verify_mcp.sh"
+      - "Cargo.toml"
+      - "Cargo.lock"
+  workflow_dispatch:
+
+jobs:
+  binaries:
+    uses: ./.github/workflows/release-binaries.yaml
+    with:
+      appname: oinkie
+      version: check
+    permissions:
+      contents: read

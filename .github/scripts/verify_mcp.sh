@@ -68,7 +68,8 @@ while IFS= read -r line; do
     }
 done < "$out"
 
-got=$(jq -r 'select(.id == 2) | .result.tools[].name' "$out" | sort | tr '\n' ' ')
+# jq on Windows can end its lines with \r\n; the \r would stick to each name.
+got=$(jq -r 'select(.id == 2) | .result.tools[].name' "$out" | tr -d '\r' | sort | tr '\n' ' ')
 got="${got% }"
 
 if [[ "$got" != "$EXPECTED" ]]; then

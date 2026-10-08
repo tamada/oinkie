@@ -1,0 +1,150 @@
+name: release binaries
+
+# The binaries a release ships, one per platform: built, asked whether they
+# serve MCP where the runner can run them, packed, and uploaded to the release
+# when a tag is given.
+#
+# publish.yaml calls this to build and upload. release-binaries-check.yaml
+# calls it to build only, on a pull request that changes how the binaries are
+# made, so that a broken entry shows before a release rather than after the
+# tag and the draft already exist.
+on:
+  workflow_call:
+    inputs:
+      appname:
+        type: string
+        required: true
+      version:
+        type: string
+        required: true
+      # The release to upload to. Empty to build and pack only, in which case
+      # the archives are kept as the run's artifacts instead.
+      tag:
+        type: string
+        default: ""
+      # What to build. Empty for the commit that triggered the caller.
+      ref:
+        type: string
+        default: ""
+
+jobs:
+  binary:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Each platform is its own answer; one failing first should not hide
+      # the others.
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            architecture: arm64
+            os_name: linux
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            architecture: amd64
+            os_name: linux
+            # the runner can execute what it just built, so the artifact itself
+            # can be asked whether it serves MCP
+            native: true
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            architecture: arm64
+            os_name: darwin
+            native: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            architecture: amd64
+            os_name: darwin
+          # Windows is built on a runner of each CPU rather than cross-compiled:
+          # zigbuild does not target MSVC, and built natively each binary can
+          # also be run.
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            architecture: amd64
+            os_name: windows
+            exe: .exe
+            native: true
+          - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            architecture: arm64
+            os_name: windows
+            exe: .exe
+            native: true
+    defaults:
+      run:
+        shell: bash
+    env:
+      APPNAME: ${{ inputs.appname }}
+      VERSION: ${{ inputs.version }}
+      TARGET: ${{ matrix.target }}
+      ARCHITECTURE: ${{ matrix.architecture }}
+      OS_NAME: ${{ matrix.os_name }}
+      EXE: ${{ matrix.exe }}
+    steps:
+      - name: Setup Zig
+        if: runner.os != 'Windows'
+        uses: mlugg/setup-zig@v2
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      # Installed rather than assumed: not every runner image carries rustup.
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: |
+          # --features mcp: without it the published binary has no `oinkie mcp`.
+          if [ "$RUNNER_OS" = Windows ]; then
+            cargo build --release --features mcp --target "$TARGET"
+          else
+            cargo install cargo-zigbuild
+            cargo zigbuild --release --features mcp --target "$TARGET"
+          fi
+
+      # Only where the runner can execute what it just built. The cross-compiled
+      # targets need it least: the flag that would go missing is the same one
+      # for every target.
+      - name: Verify the binary serves MCP
+        if: matrix.native
+        run: ./.github/scripts/verify_mcp.sh "target/${TARGET}/release/${APPNAME}${EXE}"
+
+      # A zip for Windows, which Explorer opens without other tools; a tar.gz
+      # elsewhere. Each holds one directory named for the archive.
+      - name: Pack
+        run: |
+          ASSET_NAME="${APPNAME}-${VERSION}_${ARCHITECTURE}_${OS_NAME}"
+          mkdir -p "dist/$ASSET_NAME"
+          cp "target/${TARGET}/release/${APPNAME}${EXE}" "dist/$ASSET_NAME/"
+          cp README.md LICENSE "dist/$ASSET_NAME/"
+          cp -r assets/completions "dist/$ASSET_NAME/"
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd dist && powershell -NoProfile -Command "Compress-Archive -Path '$ASSET_NAME' -DestinationPath '$ASSET_NAME.zip'")
+            echo "ASSET=dist/${ASSET_NAME}.zip" >> "$GITHUB_ENV"
+          else
+            tar cvfz "dist/${ASSET_NAME}.tar.gz" -C dist "$ASSET_NAME"
+            echo "ASSET=dist/${ASSET_NAME}.tar.gz" >> "$GITHUB_ENV"
+          fi
+
+      - name: Upload to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" "$ASSET"
+
+      # Without a release, kept with the run for a while, so that a binary for
+      # a platform at hand can be downloaded and tried.
+      - name: Keep as an artifact
+        if: inputs.tag == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.appname }}_${{ matrix.architecture }}_${{ matrix.os_name }}
+          path: ${{ env.ASSET }}
+          retention-days: 7

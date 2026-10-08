@@ -29,8 +29,8 @@ jobs:
           distribution: "zulu"
           java-version: "25.0.2"
 
-      # On every runner, Windows included: the release ships Windows natives,
-      # so it is the platform that needs the least to lift.
+      # On every runner, Windows included: the release ships Windows binaries,
+      # so it is a platform people lift on.
       - name: Setup ghidra
         uses: antoniovazquezblanco/setup-ghidra@v2
         with:
