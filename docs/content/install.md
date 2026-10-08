@@ -48,6 +48,20 @@ cargo install oinkie --features mcp
 
 ---
 
+## 📦 From the Release Page
+
+Each [release](https://github.com/tamada/oinkie/releases) carries a pre-compiled `oinkie`, with the MCP server, for six platforms:
+
+| System | x86_64 | arm64 |
+| --- | --- | --- |
+| Linux | `oinkie-X.Y.Z_amd64_linux.tar.gz` | `oinkie-X.Y.Z_arm64_linux.tar.gz` |
+| macOS | `oinkie-X.Y.Z_amd64_darwin.tar.gz` | `oinkie-X.Y.Z_arm64_darwin.tar.gz` |
+| Windows | `oinkie-X.Y.Z_amd64_windows.zip` | `oinkie-X.Y.Z_arm64_windows.zip` |
+
+Each archive holds the binary (`oinkie.exe` on Windows), `README.md`, `LICENSE` and the shell completions. Put the binary somewhere on your `PATH`. Windows binaries are released from v0.8.1.
+
+---
+
 ## 📦 Building from Source
 
 You can clone the repository and compile **oinkie** directly on your machine.
