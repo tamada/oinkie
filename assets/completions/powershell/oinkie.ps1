@@ -24,8 +24,8 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('-l', '-l', [CompletionResultType]::ParameterName, 'Log level for the application')
             [CompletionResult]::new('--level', '--level', [CompletionResultType]::ParameterName, 'Log level for the application')
             [CompletionResult]::new('--no-progress', '--no-progress', [CompletionResultType]::ParameterName, 'Draw no progress bars, as when stderr is kept in a log or a CI output')
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('--version', '--version', [CompletionResultType]::ParameterName, 'Print version')
             [CompletionResult]::new('info', 'info', [CompletionResultType]::ParameterValue, 'Display information about the application')
@@ -39,8 +39,8 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             break
         }
         'oinkie;info' {
-            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
-            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
+            [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
+            [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             break
         }
         'oinkie;lift' {
@@ -66,6 +66,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: ''./birthmarks'' directory)')
             [CompletionResult]::new('-b', '-b', [CompletionResultType]::ParameterName, 'Type of birthmark to extract, such as ''op-seq'' or ''fc-freq''; ''oinkie info'' lists them')
             [CompletionResult]::new('--birthmark-type', '--birthmark-type', [CompletionResultType]::ParameterName, 'Type of birthmark to extract, such as ''op-seq'' or ''fc-freq''; ''oinkie info'' lists them')
+            [CompletionResult]::new('--threads', '--threads', [CompletionResultType]::ParameterName, 'Number of threads to compute on [default: one per core]')
             [CompletionResult]::new('-S', '-S ', [CompletionResultType]::ParameterName, 'Skip the resultant birthmark file is already exists')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip the resultant birthmark file is already exists')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -81,6 +82,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--strategy', '--strategy', [CompletionResultType]::ParameterName, 'Pairing strategy for comparing files')
             [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Destination directory for the results')
             [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Destination directory for the results')
+            [CompletionResult]::new('--threads', '--threads', [CompletionResultType]::ParameterName, 'Number of threads to compute on [default: one per core]')
             [CompletionResult]::new('-S', '-S ', [CompletionResultType]::ParameterName, 'Skip if the similarity file already exists for the pair of birthmarks')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip if the similarity file already exists for the pair of birthmarks')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -93,6 +95,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.')
             [CompletionResult]::new('--dest-file', '--dest-file', [CompletionResultType]::ParameterName, 'Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.')
             [CompletionResult]::new('--min-elements', '--min-elements', [CompletionResultType]::ParameterName, 'Drop the functions with fewer elements than this before aggregating: N elements, or R times the mean (Rx)')
+            [CompletionResult]::new('--threads', '--threads', [CompletionResultType]::ParameterName, 'Number of threads to compute on [default: one per core]')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
             break
@@ -104,6 +107,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Write the statistics to FILE rather than to standard output')
             [CompletionResult]::new('-t', '-t', [CompletionResultType]::ParameterName, 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.')
             [CompletionResult]::new('--top', '--top', [CompletionResultType]::ParameterName, 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.')
+            [CompletionResult]::new('--threads', '--threads', [CompletionResultType]::ParameterName, 'Number of threads to compute on [default: one per core]')
             [CompletionResult]::new('-r', '-r', [CompletionResultType]::ParameterName, 'Descend into the subdirectories of the given directories')
             [CompletionResult]::new('--recursive', '--recursive', [CompletionResultType]::ParameterName, 'Descend into the subdirectories of the given directories')
             [CompletionResult]::new('--per-file', '--per-file', [CompletionResultType]::ParameterName, 'Report each birthmark file as well as each group. With -f csv this replaces the summary table.')
@@ -120,6 +124,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('--dest', '--dest', [CompletionResultType]::ParameterName, 'Destination path for the output CSV file (default: ''similarities'' directory')
             [CompletionResult]::new('-A', '-A ', [CompletionResultType]::ParameterName, 'Aggregator combining a pair''s function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted')
             [CompletionResult]::new('--aggregator', '--aggregator', [CompletionResultType]::ParameterName, 'Aggregator combining a pair''s function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted')
+            [CompletionResult]::new('--threads', '--threads', [CompletionResultType]::ParameterName, 'Number of threads to compute on [default: one per core]')
             [CompletionResult]::new('-S', '-S ', [CompletionResultType]::ParameterName, 'Skip if the similarity file already exists for the pair of birthmarks')
             [CompletionResult]::new('--skip', '--skip', [CompletionResultType]::ParameterName, 'Skip if the similarity file already exists for the pair of birthmarks')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help (see more with ''--help'')')
@@ -132,6 +137,7 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             [CompletionResult]::new('extract', 'extract', [CompletionResultType]::ParameterValue, 'Extract birthmarks from a lifted binary file (JSON format)')
             [CompletionResult]::new('compare', 'compare', [CompletionResultType]::ParameterValue, 'Compare birthmarks and output the similarity score')
             [CompletionResult]::new('review', 'review', [CompletionResultType]::ParameterValue, 'Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities')
+            [CompletionResult]::new('reaggregate', 'reaggregate', [CompletionResultType]::ParameterValue, 'The old name of `review`, kept only to say so. Hidden from help and completion; remove it in the next minor')
             [CompletionResult]::new('stats', 'stats', [CompletionResultType]::ParameterValue, 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is')
             [CompletionResult]::new('run', 'run', [CompletionResultType]::ParameterValue, 'Extract birthmarks and compare them in one command')
             [CompletionResult]::new('help', 'help', [CompletionResultType]::ParameterValue, 'Print this message or the help of the given subcommand(s)')
@@ -150,6 +156,9 @@ Register-ArgumentCompleter -Native -CommandName 'oinkie' -ScriptBlock {
             break
         }
         'oinkie;help;review' {
+            break
+        }
+        'oinkie;help;reaggregate' {
             break
         }
         'oinkie;help;stats' {

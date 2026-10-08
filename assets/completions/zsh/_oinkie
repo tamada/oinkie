@@ -18,8 +18,8 @@ _oinkie() {
 '-l+[Log level for the application]:LEVEL:(error warn info debug trace off)' \
 '--level=[Log level for the application]:LEVEL:(error warn info debug trace off)' \
 '--no-progress[Draw no progress bars, as when stderr is kept in a log or a CI output]' \
-'-h[Print help (see more with '\''--help'\'')]' \
-'--help[Print help (see more with '\''--help'\'')]' \
+'-h[Print help]' \
+'--help[Print help]' \
 '-V[Print version]' \
 '--version[Print version]' \
 ":: :_oinkie_commands" \
@@ -33,14 +33,14 @@ _oinkie() {
         case $line[1] in
             (info)
 _arguments "${_arguments_options[@]}" : \
-'-h[Print help (see more with '\''--help'\'')]' \
-'--help[Print help (see more with '\''--help'\'')]' \
+'-h[Print help]' \
+'--help[Print help]' \
 && ret=0
 ;;
 (lift)
 _arguments "${_arguments_options[@]}" : \
-'-d+[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files' \
-'--dest=[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files' \
+'-d+[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files -/' \
+'--dest=[Specify the directory for putting the resultant JSON files of the lifted programs (default\: '\''./pcodes'\'' directory)]:DIRECTORY:_files -/' \
 '-r+[Intermediate representation to produce. This also picks the tool, since a representation is only produced by one of them; several representations can come from the same tool.]:IR:((ghidra-pcode\:"Ghidra'\''s P-Code, as refined by the decompiler — what \`HighFunction\` yields, rather than raw lifted P-Code"
 ida-microcode\:"The Hex-Rays microcode -- which runs IDA Pro'\''s decompiler, so on an installation with a cloud decompiler each function is sent to Hex-Rays'\'' servers"
 binary-ninja-llil\:"Binary Ninja'\''s Low Level IL\: one expression per machine instruction, registers and flags still explicit"
@@ -51,13 +51,13 @@ ida-microcode\:"The Hex-Rays microcode -- which runs IDA Pro'\''s decompiler, so
 binary-ninja-llil\:"Binary Ninja'\''s Low Level IL\: one expression per machine instruction, registers and flags still explicit"
 binary-ninja-mlil\:"Binary Ninja'\''s Medium Level IL\: stack and registers resolved into variables, calls carrying their parameters"
 binary-ninja-hlil\:"Binary Ninja'\''s High Level IL\: control flow recovered, the level its decompiler output is rendered from"))' \
-'-H+[Path to the installation directory of the tool behind --ir. If not specified, that tool'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files' \
-'--home=[Path to the installation directory of the tool behind --ir. If not specified, that tool'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files' \
-'-i+[Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.]:DIRECTORY:_files' \
-'--intermediate=[Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.]:DIRECTORY:_files' \
+'-H+[Path to the installation directory of the tool behind --ir. If not specified, that tool'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files -/' \
+'--home=[Path to the installation directory of the tool behind --ir. If not specified, that tool'\''s own environment variable (GHIDRA_HOME for Ghidra) is read, then the usual install locations are searched. The error names which variable to set.]:HOME:_files -/' \
+'-i+[Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.]:DIRECTORY:_files -/' \
+'--intermediate=[Directory for the lifter to work in, kept rather than discarded. Every lifter runs in one, since that is where its script writes; Ghidra also keeps its project there. If not specified, a temporary directory is used and deleted.]:DIRECTORY:_files -/' \
 '--script=[Path to a custom lifting script, replacing the built-in one. The language is that of the tool behind --ir\: Java for Ghidra. It must write {input file name}.json into its working directory.]:SCRIPT:_files' \
-'-j+[Lift up to N files at a time (default\: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.]:N:_default' \
-'--jobs=[Lift up to N files at a time (default\: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.]:N:_default' \
+'-j+[Lift up to N files at a time (default\: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.]:N:_oinkie_threads' \
+'--jobs=[Lift up to N files at a time (default\: 1, one after another). Lifting runs a whole decompiler process per file, and several of them against a Ghidra installation whose language cache has not been built yet can corrupt it, so parallelism is opt-in.]:N:_oinkie_threads' \
 '-S[Skip if the resultant JSON file already exists]' \
 '--skip[Skip if the resultant JSON file already exists]' \
 '-h[Print help (see more with '\''--help'\'')]' \
@@ -67,8 +67,8 @@ binary-ninja-hlil\:"Binary Ninja'\''s High Level IL\: control flow recovered, th
 ;;
 (extract)
 _arguments "${_arguments_options[@]}" : \
-'-d+[Specify the directory for putting the resultant JSON files for the extracted birthmarks (default\: '\''./birthmarks'\'' directory)]:DIRECTORY:_files' \
-'--dest=[Specify the directory for putting the resultant JSON files for the extracted birthmarks (default\: '\''./birthmarks'\'' directory)]:DIRECTORY:_files' \
+'-d+[Specify the directory for putting the resultant JSON files for the extracted birthmarks (default\: '\''./birthmarks'\'' directory)]:DIRECTORY:_files -/' \
+'--dest=[Specify the directory for putting the resultant JSON files for the extracted birthmarks (default\: '\''./birthmarks'\'' directory)]:DIRECTORY:_files -/' \
 '-b+[Type of birthmark to extract, such as '\''op-seq'\'' or '\''fc-freq'\''; '\''oinkie info'\'' lists them]:BIRTHMARK_TYPE:((fc-seq\:"the sequence of method calls in a program"
 fc-freq\:"the frequency of method calls in a program"
 fc-set\:"the set of method calls in a program"
@@ -129,11 +129,12 @@ op-5gram-set\:"the set of 5-grams of operations in a program"
 op-6gram-set\:"the set of 6-grams of operations in a program"
 op-7gram-set\:"the set of 7-grams of operations in a program"
 op-8gram-set\:"the set of 8-grams of operations in a program"))' \
+'--threads=[Number of threads to compute on \[default\: one per core\]]:N:_oinkie_threads' \
 '-S[Skip the resultant birthmark file is already exists]' \
 '--skip[Skip the resultant birthmark file is already exists]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::files -- Path to the JSON files to extract birthmarks from:_files' \
+'*::files -- Path to the JSON files to extract birthmarks from:_files -g "*.json"' \
 && ret=0
 ;;
 (compare)
@@ -158,8 +159,8 @@ lcs\:"Longest Common Subsequence (LCS). Available\: seq"
 simpson\:"Simpson'\''s coefficient. Available\: seq, set and freq"
 tanimoto\:"Tanimoto coefficient over term frequency vectors. Available\: seq and freq"
 weighted-jaccard\:"Weighted Jaccard index based on term frequency vectors. Available\: seq and freq"))' \
-'-A+[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_default' \
-'--aggregator=[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_default' \
+'-A+[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_oinkie_aggregators' \
+'--aggregator=[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_oinkie_aggregators' \
 '-s+[Pairing strategy for comparing files]:STRATEGY:((all-and-self\:"All possible combinations including self-comparisons (\$_nC_2 + n\$). Used for full matrix visualization or comprehensive heatmaps"
 all\:"Compares all possible combinations (\$_nC_2\$). Used for comprehensive validation of accuracy (False Positive / True Positive)"
 self-coverage\:"Compares each file with itself (\$n\$). Used for sanity checks to ensure identical files yield a similarity score of 1.0"
@@ -172,25 +173,27 @@ self-coverage\:"Compares each file with itself (\$n\$). Used for sanity checks t
 adjacent\:"Compares only adjacent pairs in the list (\$n-1\$). Useful for comparing sequential versions (e.g., v1.0 vs v1.1, v1.1 vs v1.2)"
 first-vs-others\:"Compares a specific reference file against all other files (\$n-1\$). Compares first item and all other items. Useful for comparing a baseline version against multiple variants"
 last-vs-others\:"Compares a specific reference file against all other files (\$n-1\$). Compares the last item and all other items. Useful for comparing a baseline version against multiple variants"))' \
-'-d+[Destination directory for the results]:DIRECTORY:_files' \
-'--dest=[Destination directory for the results]:DIRECTORY:_files' \
+'-d+[Destination directory for the results]:DIRECTORY:_files -/' \
+'--dest=[Destination directory for the results]:DIRECTORY:_files -/' \
+'--threads=[Number of threads to compute on \[default\: one per core\]]:N:_oinkie_threads' \
 '-S[Skip if the similarity file already exists for the pair of birthmarks]' \
 '--skip[Skip if the similarity file already exists for the pair of birthmarks]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::files -- Path to the birthmark JSON files to compare:_files' \
+'*::files -- Path to the birthmark JSON files to compare:_files -g "*.json"' \
 && ret=0
 ;;
 (review)
 _arguments "${_arguments_options[@]}" : \
-'-A+[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_default' \
-'--aggregator=[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_default' \
-'-d+[Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.]:RESULT.CSV:_files' \
-'--dest-file=[Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.]:RESULT.CSV:_files' \
-'--min-elements=[Drop the functions with fewer elements than this before aggregating\: N elements, or R times the mean (Rx)]:N|Rx:_default' \
+'-A+[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_oinkie_aggregators' \
+'--aggregator=[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_oinkie_aggregators' \
+'-d+[Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.]:RESULT.CSV:_files -g "*.csv"' \
+'--dest-file=[Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.]:RESULT.CSV:_files -g "*.csv"' \
+'--min-elements=[Drop the functions with fewer elements than this before aggregating\: N elements, or R times the mean (Rx)]:N|Rx:_oinkie_min_elements' \
+'--threads=[Number of threads to compute on \[default\: one per core\]]:N:_oinkie_threads' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-':score_directory -- Path to the score directory\: the pair CSVs that compare or run wrote, holding the function similarities:_files' \
+':score_directory -- Path to the score directory\: the pair CSVs that compare or run wrote, holding the function similarities:_files -/' \
 && ret=0
 ;;
 (stats)
@@ -203,14 +206,15 @@ csv\:"One table\: the summary, or the per-file rows with --per-file, or the most
 markdown\:"Tables to read, or to paste into a paper"))' \
 '-o+[Write the statistics to FILE rather than to standard output]:FILE:_files' \
 '--output=[Write the statistics to FILE rather than to standard output]:FILE:_files' \
-'-t+[Report the N most frequent elements of each group. With -f csv this replaces the summary table.]:N:_default' \
-'--top=[Report the N most frequent elements of each group. With -f csv this replaces the summary table.]:N:_default' \
+'-t+[Report the N most frequent elements of each group. With -f csv this replaces the summary table.]:N: ' \
+'--top=[Report the N most frequent elements of each group. With -f csv this replaces the summary table.]:N: ' \
+'--threads=[Number of threads to compute on \[default\: one per core\]]:N:_oinkie_threads' \
 '-r[Descend into the subdirectories of the given directories]' \
 '--recursive[Descend into the subdirectories of the given directories]' \
 '--per-file[Report each birthmark file as well as each group. With -f csv this replaces the summary table.]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::inputs -- Birthmark files, or directories holding them. A directory contributes the *.json directly inside it; a file that does not read as a birthmark is skipped with a warning and counted.:_files' \
+'*::inputs -- Birthmark files, or directories holding them. A directory contributes the *.json directly inside it; a file that does not read as a birthmark is skipped with a warning and counted.:_files -g "*.json"' \
 && ret=0
 ;;
 (run)
@@ -229,15 +233,16 @@ self-coverage\:"Compares each file with itself (\$n\$). Used for sanity checks t
 adjacent\:"Compares only adjacent pairs in the list (\$n-1\$). Useful for comparing sequential versions (e.g., v1.0 vs v1.1, v1.1 vs v1.2)"
 first-vs-others\:"Compares a specific reference file against all other files (\$n-1\$). Compares first item and all other items. Useful for comparing a baseline version against multiple variants"
 last-vs-others\:"Compares a specific reference file against all other files (\$n-1\$). Compares the last item and all other items. Useful for comparing a baseline version against multiple variants"))' \
-'-d+[Destination path for the output CSV file (default\: '\''similarities'\'' directory]:DEST:_files' \
-'--dest=[Destination path for the output CSV file (default\: '\''similarities'\'' directory]:DEST:_files' \
-'-A+[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_default' \
-'--aggregator=[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_default' \
+'-d+[Destination path for the output CSV file (default\: '\''similarities'\'' directory]:DEST:_files -/' \
+'--dest=[Destination path for the output CSV file (default\: '\''similarities'\'' directory]:DEST:_files -/' \
+'-A+[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_oinkie_aggregators' \
+'--aggregator=[Aggregator combining a pair'\''s function similarities into its similarity\: hungarian, topn\:N, containment, matched\:T or weighted]:METHOD:_oinkie_aggregators' \
+'--threads=[Number of threads to compute on \[default\: one per core\]]:N:_oinkie_threads' \
 '-S[Skip if the similarity file already exists for the pair of birthmarks]' \
 '--skip[Skip if the similarity file already exists for the pair of birthmarks]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
-'*::files -- Path to the JSON files:_files' \
+'*::files -- Path to the JSON files:_files -g "*.json"' \
 && ret=0
 ;;
 (help)
@@ -300,7 +305,7 @@ _oinkie_commands() {
 'lift:Lift binary files to JSON files of an intermediate representation, using a specified lifter' \
 'extract:Extract birthmarks from a lifted binary file (JSON format)' \
 'compare:Compare birthmarks and output the similarity score' \
-'review:Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities' \
+'review:Re-read a finished comparison\: recompute the similarity of each pair from the stored function similarities' \
 'stats:Summarise a set of birthmarks\: how many of each type, how many functions each holds, and how long each function'\''s birthmark is' \
 'run:Extract birthmarks and compare them in one command' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -324,7 +329,8 @@ _oinkie__subcmd__help_commands() {
 'lift:Lift binary files to JSON files of an intermediate representation, using a specified lifter' \
 'extract:Extract birthmarks from a lifted binary file (JSON format)' \
 'compare:Compare birthmarks and output the similarity score' \
-'review:Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities' \
+'review:Re-read a finished comparison\: recompute the similarity of each pair from the stored function similarities' \
+'reaggregate:The old name of \`review\`, kept only to say so. Hidden from help and completion; remove it in the next minor' \
 'stats:Summarise a set of birthmarks\: how many of each type, how many functions each holds, and how long each function'\''s birthmark is' \
 'run:Extract birthmarks and compare them in one command' \
 'help:Print this message or the help of the given subcommand(s)' \
@@ -355,6 +361,11 @@ _oinkie__subcmd__help__subcmd__info_commands() {
 _oinkie__subcmd__help__subcmd__lift_commands() {
     local commands; commands=()
     _describe -t commands 'oinkie help lift commands' commands "$@"
+}
+(( $+functions[_oinkie__subcmd__help__subcmd__reaggregate_commands] )) ||
+_oinkie__subcmd__help__subcmd__reaggregate_commands() {
+    local commands; commands=()
+    _describe -t commands 'oinkie help reaggregate commands' commands "$@"
 }
 (( $+functions[_oinkie__subcmd__help__subcmd__review_commands] )) ||
 _oinkie__subcmd__help__subcmd__review_commands() {
@@ -395,6 +406,46 @@ _oinkie__subcmd__run_commands() {
 _oinkie__subcmd__stats_commands() {
     local commands; commands=()
     _describe -t commands 'oinkie stats commands' commands "$@"
+}
+
+# 1 to the number of processors online, for --threads and --jobs.
+(( $+functions[_oinkie_threads] )) ||
+_oinkie_threads() {
+    local -a counts
+    counts=(${(f)"$(seq 1 $(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8))"})
+    _wanted counts expl 'number of threads' compadd -- $counts
+}
+# The aggregators. topn:N and matched:T take any count or threshold; a few
+# are offered as examples.
+(( $+functions[_oinkie_aggregators] )) ||
+_oinkie_aggregators() {
+    local -a aggregators
+    aggregators=(
+        'hungarian:one-to-one matching that maximises the total (the default)'
+        'topn\:all:each function'\''s best match, averaged over all of them'
+        'topn\:1:the single best match from each side'
+        'topn\:3:the 3 best matches from each side'
+        'topn\:5:the 5 best matches from each side'
+        'containment:hungarian, averaged over the smaller side'
+        'matched\:0.8:share of functions matched at 0.8 or above'
+        'matched\:0.9:share of functions matched at 0.9 or above'
+        'matched\:1:share of functions matched exactly'
+        'weighted:hungarian, each function counting by its size'
+    )
+    _describe -t aggregators 'aggregator' aggregators
+}
+# --min-elements: a count, or a ratio of the mean followed by x. A fraction
+# without the x is refused, so one typed is completed with it.
+(( $+functions[_oinkie_min_elements] )) ||
+_oinkie_min_elements() {
+    if [[ -z $PREFIX ]]; then
+        _wanted thresholds expl 'element count, or ratio of the mean' \
+            compadd -- 1 2 3 5 10 0.1x 0.3x 0.5x 1x
+    elif [[ $PREFIX =~ '^[0-9]+$' ]]; then
+        compadd -- $PREFIX ${PREFIX}x
+    elif [[ $PREFIX =~ '^[0-9]*\.[0-9]*$' ]]; then
+        compadd -- ${PREFIX}x
+    fi
 }
 
 if [ "$funcstack[1]" = "_oinkie" ]; then

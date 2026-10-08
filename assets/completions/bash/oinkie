@@ -1,5 +1,77 @@
+# Helpers for _oinkie. Each reads `cur`, the word being completed, from the
+# caller, and sets COMPREPLY. They keep to what bash 3.2, the one macOS ships,
+# understands: `compopt` is bash 4, so it is tried and its absence ignored.
+
+# Directories, and files matching the glob $1 (e.g. '*.json'): the
+# directories so that one can descend into them.
+_oinkie_files() {
+    local IFS=$'\n'
+    compopt -o filenames 2>/dev/null
+    COMPREPLY=($(compgen -d -- "${cur}") $(compgen -f -X "!$1" -- "${cur}"))
+}
+
+# Directories only.
+_oinkie_dirs() {
+    local IFS=$'\n'
+    compopt -o filenames 2>/dev/null
+    COMPREPLY=($(compgen -d -- "${cur}"))
+}
+
+# Numbers from 1 to the number of processors online.
+_oinkie_threads() {
+    COMPREPLY=($(compgen -W "$(seq 1 "$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 8)")" -- "${cur}"))
+}
+
+# Nothing, and no fallback to file names either: for a value such as a count,
+# a file name would only be wrong.
+_oinkie_none() {
+    COMPREPLY=()
+    compopt +o default +o bashdefault 2>/dev/null
+}
+
+# The word being completed and the one before it, as typed. bash splits words
+# at the colons in COMP_WORDBREAKS, so `topn:3` reaches the function as
+# `topn`, `:` and `3`; the line itself is not split.
+_oinkie_typed() {
+    local line="${COMP_LINE:0:COMP_POINT}"
+    typed_word="${line##*[[:space:]]}"
+    line="${line%"${typed_word}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    typed_prev="${line##*[[:space:]]}"
+}
+
+# The aggregators. `topn:N` and `matched:T` take any count or threshold; a few
+# are offered as examples. A candidate is completed past the last colon only,
+# since bash has already taken the part before it as typed.
+_oinkie_aggregators() {
+    local word="$1" candidates
+    candidates="hungarian topn topn:all topn:1 topn:3 topn:5 topn:10 containment"
+    candidates="${candidates} matched:0.5 matched:0.7 matched:0.8 matched:0.9 matched:1 weighted"
+    COMPREPLY=($(compgen -W "${candidates}" -- "${word}"))
+    if [[ "${word}" == *:* ]]; then
+        local prefix="${word%:*}:" i
+        for i in "${!COMPREPLY[@]}"; do
+            COMPREPLY[$i]="${COMPREPLY[$i]#"${prefix}"}"
+        done
+    fi
+}
+
+# --min-elements: a count of elements, or a ratio of the mean followed by x. A
+# fraction without the x is refused, so one typed is completed with it.
+_oinkie_min_elements() {
+    if [[ -z "${cur}" ]]; then
+        COMPREPLY=(1 2 3 5 10 0.1x 0.3x 0.5x 1x)
+    elif [[ "${cur}" =~ ^[0-9]+$ ]]; then
+        COMPREPLY=("${cur}" "${cur}x")
+    elif [[ "${cur}" =~ ^[0-9]*\.[0-9]*$ ]]; then
+        COMPREPLY=("${cur}x")
+    else
+        _oinkie_none
+    fi
+}
+
 _oinkie() {
-    local i cur prev opts cmd
+    local i cur prev opts cmd typed_word typed_prev
     COMPREPLY=()
     if [[ "${BASH_VERSINFO[0]}" -ge 4 ]]; then
         cur="$2"
@@ -9,6 +81,7 @@ _oinkie() {
     prev="$3"
     cmd=""
     opts=""
+    _oinkie_typed
 
     for i in "${COMP_WORDS[@]:0:COMP_CWORD}"
     do
@@ -61,6 +134,9 @@ _oinkie() {
             oinkie__subcmd__help,run)
                 cmd="oinkie__subcmd__help__subcmd__run"
                 ;;
+            oinkie__subcmd__help,reaggregate)
+                cmd="oinkie__subcmd__help__subcmd__reaggregate"
+                ;;
             oinkie__subcmd__help,stats)
                 cmd="oinkie__subcmd__help__subcmd__stats"
                 ;;
@@ -93,83 +169,69 @@ _oinkie() {
             return 0
             ;;
         oinkie__subcmd__compare)
-            opts="-a -A -s -d -S -h --algorithm --aggregator --strategy --dest --skip --help [JSON_FILES]..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            opts="-a -A -s -d -S -h --algorithm --aggregator --strategy --dest --skip --threads --help"
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
+            # Before `prev`, which a colon in the value splits off: `-A topn:`
+            # arrives with `:` as the previous word.
+            if [[ "${typed_prev}" == -A || "${typed_prev}" == --aggregator ]]; then
+                _oinkie_aggregators "${typed_word}"
+                return 0
+            fi
             case "${prev}" in
-                --algorithm)
+                -a|--algorithm)
                     COMPREPLY=($(compgen -W "cosine dice euclidean jaccard jensen-shannon levenshtein lcs simpson tanimoto weighted-jaccard" -- "${cur}"))
                     return 0
                     ;;
-                -a)
-                    COMPREPLY=($(compgen -W "cosine dice euclidean jaccard jensen-shannon levenshtein lcs simpson tanimoto weighted-jaccard" -- "${cur}"))
-                    return 0
-                    ;;
-                --aggregator)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -A)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --strategy)
+                -s|--strategy)
                     COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
                     return 0
                     ;;
-                -s)
-                    COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
+                -d|--dest)
+                    _oinkie_dirs
                     return 0
                     ;;
-                --dest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -d)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                --threads)
+                    _oinkie_threads
                     return 0
                     ;;
                 *)
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_files '*.json'
             return 0
             ;;
         oinkie__subcmd__extract)
-            opts="-d -b -S -h --dest --birthmark-type --skip --help [JSON_FILES]..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            opts="-d -b -S -h --dest --birthmark-type --skip --threads --help"
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --dest)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                -d|--dest)
+                    _oinkie_dirs
                     return 0
                     ;;
-                -d)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --birthmark-type)
+                -b|--birthmark-type)
                     COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-1gram-seq op-2gram-seq op-3gram-seq op-4gram-seq op-5gram-seq op-6gram-seq op-7gram-seq op-8gram-seq op-1gram-freq op-2gram-freq op-3gram-freq op-4gram-freq op-5gram-freq op-6gram-freq op-7gram-freq op-8gram-freq op-1gram-set op-2gram-set op-3gram-set op-4gram-set op-5gram-set op-6gram-set op-7gram-set op-8gram-set" -- "${cur}"))
                     return 0
                     ;;
-                -b)
-                    COMPREPLY=($(compgen -W "fc-seq fc-freq fc-set op-seq op-set op-freq op-1gram-seq op-2gram-seq op-3gram-seq op-4gram-seq op-5gram-seq op-6gram-seq op-7gram-seq op-8gram-seq op-1gram-freq op-2gram-freq op-3gram-freq op-4gram-freq op-5gram-freq op-6gram-freq op-7gram-freq op-8gram-freq op-1gram-set op-2gram-set op-3gram-set op-4gram-set op-5gram-set op-6gram-set op-7gram-set op-8gram-set" -- "${cur}"))
+                --threads)
+                    _oinkie_threads
                     return 0
                     ;;
                 *)
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_files '*.json'
             return 0
             ;;
         oinkie__subcmd__help)
-            opts="info lift extract compare review stats run help"
+            opts="info lift extract compare review reaggregate stats run help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -182,7 +244,7 @@ _oinkie() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        oinkie__subcmd__help__subcmd__compare)
+        oinkie__subcmd__help__subcmd__compare|oinkie__subcmd__help__subcmd__extract|oinkie__subcmd__help__subcmd__help|oinkie__subcmd__help__subcmd__info|oinkie__subcmd__help__subcmd__lift|oinkie__subcmd__help__subcmd__reaggregate|oinkie__subcmd__help__subcmd__review|oinkie__subcmd__help__subcmd__run|oinkie__subcmd__help__subcmd__stats)
             opts=""
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -193,105 +255,7 @@ _oinkie() {
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__extract)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__help)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__info)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__lift)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__review)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__run)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        oinkie__subcmd__help__subcmd__stats)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_none
             return 0
             ;;
         oinkie__subcmd__info)
@@ -305,183 +269,143 @@ _oinkie() {
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_none
             return 0
             ;;
         oinkie__subcmd__lift)
-            opts="-d -r -H -i -j -S -h --dest --ir --home --intermediate --script --jobs --skip --help [FILES]..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            opts="-d -r -H -i -j -S -h --dest --ir --home --intermediate --script --jobs --skip --help"
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --dest)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                -d|--dest)
+                    _oinkie_dirs
                     return 0
                     ;;
-                -d)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --ir)
+                -r|--ir)
                     COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
                     return 0
                     ;;
-                -r)
-                    COMPREPLY=($(compgen -W "ghidra-pcode ida-microcode binary-ninja-llil binary-ninja-mlil binary-ninja-hlil" -- "${cur}"))
+                -H|--home)
+                    _oinkie_dirs
                     return 0
                     ;;
-                --home)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -H)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --intermediate)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -i)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                -i|--intermediate)
+                    _oinkie_dirs
                     return 0
                     ;;
                 --script)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    _oinkie_files '*'
                     return 0
                     ;;
-                --jobs)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -j)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                -j|--jobs)
+                    _oinkie_threads
                     return 0
                     ;;
                 *)
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_files '*'
             return 0
             ;;
         oinkie__subcmd__review)
-            opts="-A -d -h --aggregator --dest-file --min-elements --help <SCORE_DIRECTORY>"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            opts="-A -d -h --aggregator --dest-file --min-elements --threads --help"
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
+            # Before `prev`, which a colon in the value splits off: `-A topn:`
+            # arrives with `:` as the previous word.
+            if [[ "${typed_prev}" == -A || "${typed_prev}" == --aggregator ]]; then
+                _oinkie_aggregators "${typed_word}"
+                return 0
+            fi
             case "${prev}" in
-                --aggregator)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -A)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --dest-file)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -d)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                -d|--dest-file)
+                    _oinkie_files '*.csv'
                     return 0
                     ;;
                 --min-elements)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                    _oinkie_min_elements
+                    return 0
+                    ;;
+                --threads)
+                    _oinkie_threads
                     return 0
                     ;;
                 *)
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_dirs
             return 0
             ;;
         oinkie__subcmd__run)
-            opts="-a -s -d -A -S -h --analysis --strategy --dest --aggregator --skip --help [FILES]..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            opts="-a -s -d -A -S -h --analysis --strategy --dest --aggregator --skip --threads --help"
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
+            # Before `prev`, which a colon in the value splits off: `-A topn:`
+            # arrives with `:` as the previous word.
+            if [[ "${typed_prev}" == -A || "${typed_prev}" == --aggregator ]]; then
+                _oinkie_aggregators "${typed_word}"
+                return 0
+            fi
             case "${prev}" in
-                --analysis)
+                -a|--analysis)
                     COMPREPLY=($(compgen -W "fc-seq-levenshtein fc-seq-lcs fc-freq-cosine fc-freq-euclidean fc-freq-jensenshannon fc-freq-tanimoto fc-freq-weightedjaccard fc-set-dice fc-set-jaccard fc-set-simpson op-seq-levenshtein op-seq-lcs op-set-dice op-set-jaccard op-set-simpson op-freq-cosine op-freq-euclidean op-freq-jensenshannon op-freq-tanimoto op-freq-weightedjaccard op-1gram-seq-levenshtein op-1gram-seq-lcs op-2gram-seq-levenshtein op-2gram-seq-lcs op-3gram-seq-levenshtein op-3gram-seq-lcs op-4gram-seq-levenshtein op-4gram-seq-lcs op-5gram-seq-levenshtein op-5gram-seq-lcs op-6gram-seq-levenshtein op-6gram-seq-lcs op-7gram-seq-levenshtein op-7gram-seq-lcs op-8gram-seq-levenshtein op-8gram-seq-lcs op-1gram-freq-cosine op-1gram-freq-euclidean op-1gram-freq-jensenshannon op-1gram-freq-tanimoto op-1gram-freq-weightedjaccard op-2gram-freq-cosine op-2gram-freq-euclidean op-2gram-freq-jensenshannon op-2gram-freq-tanimoto op-2gram-freq-weightedjaccard op-3gram-freq-cosine op-3gram-freq-euclidean op-3gram-freq-jensenshannon op-3gram-freq-tanimoto op-3gram-freq-weightedjaccard op-4gram-freq-cosine op-4gram-freq-euclidean op-4gram-freq-jensenshannon op-4gram-freq-tanimoto op-4gram-freq-weightedjaccard op-5gram-freq-cosine op-5gram-freq-euclidean op-5gram-freq-jensenshannon op-5gram-freq-tanimoto op-5gram-freq-weightedjaccard op-6gram-freq-cosine op-6gram-freq-euclidean op-6gram-freq-jensenshannon op-6gram-freq-tanimoto op-6gram-freq-weightedjaccard op-7gram-freq-cosine op-7gram-freq-euclidean op-7gram-freq-jensenshannon op-7gram-freq-tanimoto op-7gram-freq-weightedjaccard op-8gram-freq-cosine op-8gram-freq-euclidean op-8gram-freq-jensenshannon op-8gram-freq-tanimoto op-8gram-freq-weightedjaccard op-1gram-set-dice op-1gram-set-jaccard op-1gram-set-simpson op-2gram-set-dice op-2gram-set-jaccard op-2gram-set-simpson op-3gram-set-dice op-3gram-set-jaccard op-3gram-set-simpson op-4gram-set-dice op-4gram-set-jaccard op-4gram-set-simpson op-5gram-set-dice op-5gram-set-jaccard op-5gram-set-simpson op-6gram-set-dice op-6gram-set-jaccard op-6gram-set-simpson op-7gram-set-dice op-7gram-set-jaccard op-7gram-set-simpson op-8gram-set-dice op-8gram-set-jaccard op-8gram-set-simpson" -- "${cur}"))
                     return 0
                     ;;
-                -a)
-                    COMPREPLY=($(compgen -W "fc-seq-levenshtein fc-seq-lcs fc-freq-cosine fc-freq-euclidean fc-freq-jensenshannon fc-freq-tanimoto fc-freq-weightedjaccard fc-set-dice fc-set-jaccard fc-set-simpson op-seq-levenshtein op-seq-lcs op-set-dice op-set-jaccard op-set-simpson op-freq-cosine op-freq-euclidean op-freq-jensenshannon op-freq-tanimoto op-freq-weightedjaccard op-1gram-seq-levenshtein op-1gram-seq-lcs op-2gram-seq-levenshtein op-2gram-seq-lcs op-3gram-seq-levenshtein op-3gram-seq-lcs op-4gram-seq-levenshtein op-4gram-seq-lcs op-5gram-seq-levenshtein op-5gram-seq-lcs op-6gram-seq-levenshtein op-6gram-seq-lcs op-7gram-seq-levenshtein op-7gram-seq-lcs op-8gram-seq-levenshtein op-8gram-seq-lcs op-1gram-freq-cosine op-1gram-freq-euclidean op-1gram-freq-jensenshannon op-1gram-freq-tanimoto op-1gram-freq-weightedjaccard op-2gram-freq-cosine op-2gram-freq-euclidean op-2gram-freq-jensenshannon op-2gram-freq-tanimoto op-2gram-freq-weightedjaccard op-3gram-freq-cosine op-3gram-freq-euclidean op-3gram-freq-jensenshannon op-3gram-freq-tanimoto op-3gram-freq-weightedjaccard op-4gram-freq-cosine op-4gram-freq-euclidean op-4gram-freq-jensenshannon op-4gram-freq-tanimoto op-4gram-freq-weightedjaccard op-5gram-freq-cosine op-5gram-freq-euclidean op-5gram-freq-jensenshannon op-5gram-freq-tanimoto op-5gram-freq-weightedjaccard op-6gram-freq-cosine op-6gram-freq-euclidean op-6gram-freq-jensenshannon op-6gram-freq-tanimoto op-6gram-freq-weightedjaccard op-7gram-freq-cosine op-7gram-freq-euclidean op-7gram-freq-jensenshannon op-7gram-freq-tanimoto op-7gram-freq-weightedjaccard op-8gram-freq-cosine op-8gram-freq-euclidean op-8gram-freq-jensenshannon op-8gram-freq-tanimoto op-8gram-freq-weightedjaccard op-1gram-set-dice op-1gram-set-jaccard op-1gram-set-simpson op-2gram-set-dice op-2gram-set-jaccard op-2gram-set-simpson op-3gram-set-dice op-3gram-set-jaccard op-3gram-set-simpson op-4gram-set-dice op-4gram-set-jaccard op-4gram-set-simpson op-5gram-set-dice op-5gram-set-jaccard op-5gram-set-simpson op-6gram-set-dice op-6gram-set-jaccard op-6gram-set-simpson op-7gram-set-dice op-7gram-set-jaccard op-7gram-set-simpson op-8gram-set-dice op-8gram-set-jaccard op-8gram-set-simpson" -- "${cur}"))
-                    return 0
-                    ;;
-                --strategy)
+                -s|--strategy)
                     COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
                     return 0
                     ;;
-                -s)
-                    COMPREPLY=($(compgen -W "all-and-self all self-coverage adjacent first-vs-others last-vs-others" -- "${cur}"))
+                -d|--dest)
+                    _oinkie_dirs
                     return 0
                     ;;
-                --dest)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -d)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --aggregator)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -A)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                --threads)
+                    _oinkie_threads
                     return 0
                     ;;
                 *)
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_files '*.json'
             return 0
             ;;
         oinkie__subcmd__stats)
-            opts="-f -o -r -t -h --format --output --recursive --per-file --top --help <PATHS>..."
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+            opts="-f -o -r -t -h --format --output --recursive --per-file --top --threads --help"
+            if [[ ${cur} == -* ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
             fi
             case "${prev}" in
-                --format)
+                -f|--format)
                     COMPREPLY=($(compgen -W "json csv markdown" -- "${cur}"))
                     return 0
                     ;;
-                -f)
-                    COMPREPLY=($(compgen -W "json csv markdown" -- "${cur}"))
+                -o|--output)
+                    _oinkie_files '*'
                     return 0
                     ;;
-                --output)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                -t|--top)
+                    _oinkie_none
                     return 0
                     ;;
-                -o)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                --top)
-                    COMPREPLY=($(compgen -f "${cur}"))
-                    return 0
-                    ;;
-                -t)
-                    COMPREPLY=($(compgen -f "${cur}"))
+                --threads)
+                    _oinkie_threads
                     return 0
                     ;;
                 *)
                     COMPREPLY=()
                     ;;
             esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            _oinkie_files '*.json'
             return 0
             ;;
     esac
