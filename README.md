@@ -1,12 +1,12 @@
 # oinkie 🐽🐷🐖
 
-[![Version](https://img.shields.io/badge/Version-0.7.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.7.0)
+[![Version](https://img.shields.io/badge/Version-0.8.0-blue)](https://github.com/tamada/oinkie/releases/tag/v0.8.0)
 [![License-MIT](https://img.shields.io/badge/License-MIT-blue)](https://github.com/tamada/oinkie/blob/main/LICENSE)
 
 [![Coverage Status](https://coveralls.io/repos/github/tamada/oinkie/badge.svg)](https://coveralls.io/github/tamada/oinkie)
 [![Quality gate status](https://sonarcloud.io/api/project_badges/measure?project=tamada_oinkie&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=tamada_oinkie)
 
-[![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.7.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
+[![Docker](https://img.shields.io/badge/Container-quay.io/tama5/oinkie:0.8.0-blue?logo=docker)](https://quay.io/repository/tama5/oinkie)
 
 Detects software theft by comparing birthmarks extracted from binaries, lifted by Ghidra, Binary Ninja or IDA Pro.
 
@@ -104,10 +104,22 @@ For more details, see ([`cli/README.md`](cli/README.md)).
 - Dice index,
 - Euclidean,
 - Jaccard index,
+- Jensen–Shannon divergence,
 - Levenshtein similarity,
 - LCS (Longest common subsequence) similarity,
-- Simpson index, and
+- Simpson index,
+- Tanimoto coefficient, and
 - Weighted Jaccard index.
+
+#### 🧮 Aggregator
+
+How the function similarities of a pair become its one similarity:
+
+- Hungarian: the one-to-one matching of functions that maximises the total (the default),
+- Top-N: each function's best match, the N best from each side,
+- Containment: the Hungarian matching, over the smaller program's functions,
+- Matched: the share of functions matched at a threshold or above, and
+- Weighted: the Hungarian matching, each function counting by its size.
 
 ### 5️⃣ Analyze the results to determine if software theft is suspected
 

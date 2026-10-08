@@ -1,8 +1,14 @@
 [package]
 name = "oinkie"
-version = "0.7.0"
+version = "0.8.0"
 description = "Detects software theft by comparing birthmarks extracted from binaries"
 edition = "2024"
+# The oldest Rust that builds what a user installs: the library, and the
+# command with or without `mcp`. Cargo resolves dependencies to versions that
+# build on it, and tells a user with an older Rust so rather than failing in
+# the compiler. Checked with that toolchain; the test-only dependencies may
+# need a newer one.
+rust-version = "1.88"
 # crates.io refuses an upload without a licence.
 license = "MIT"
 repository = "https://github.com/tamada/oinkie"
@@ -76,7 +82,7 @@ serde_json = "1.0.150"
 sha2 = { version = "0.11.0", optional = true }
 tempfile = "3.10.1"
 thiserror = "2.0.20"
-tokio = { version = "1", optional = true, features = [ "rt-multi-thread", "macros", "io-std" ] }
+tokio = { version = "1.53", optional = true, features = [ "rt-multi-thread", "macros", "io-std" ] }
 
 [[bin]]
 name = "oinkie"
