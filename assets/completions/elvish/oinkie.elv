@@ -21,8 +21,8 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand -l 'Log level for the application'
             cand --level 'Log level for the application'
             cand --no-progress 'Draw no progress bars, as when stderr is kept in a log or a CI output'
-            cand -h 'Print help (see more with ''--help'')'
-            cand --help 'Print help (see more with ''--help'')'
+            cand -h 'Print help'
+            cand --help 'Print help'
             cand -V 'Print version'
             cand --version 'Print version'
             cand info 'Display information about the application'
@@ -35,8 +35,8 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand help 'Print this message or the help of the given subcommand(s)'
         }
         &'oinkie;info'= {
-            cand -h 'Print help (see more with ''--help'')'
-            cand --help 'Print help (see more with ''--help'')'
+            cand -h 'Print help'
+            cand --help 'Print help'
         }
         &'oinkie;lift'= {
             cand -d 'Specify the directory for putting the resultant JSON files of the lifted programs (default: ''./pcodes'' directory)'
@@ -60,6 +60,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand --dest 'Specify the directory for putting the resultant JSON files for the extracted birthmarks (default: ''./birthmarks'' directory)'
             cand -b 'Type of birthmark to extract, such as ''op-seq'' or ''fc-freq''; ''oinkie info'' lists them'
             cand --birthmark-type 'Type of birthmark to extract, such as ''op-seq'' or ''fc-freq''; ''oinkie info'' lists them'
+            cand --threads 'Number of threads to compute on [default: one per core]'
             cand -S 'Skip the resultant birthmark file is already exists'
             cand --skip 'Skip the resultant birthmark file is already exists'
             cand -h 'Print help (see more with ''--help'')'
@@ -74,6 +75,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand --strategy 'Pairing strategy for comparing files'
             cand -d 'Destination directory for the results'
             cand --dest 'Destination directory for the results'
+            cand --threads 'Number of threads to compute on [default: one per core]'
             cand -S 'Skip if the similarity file already exists for the pair of birthmarks'
             cand --skip 'Skip if the similarity file already exists for the pair of birthmarks'
             cand -h 'Print help (see more with ''--help'')'
@@ -85,6 +87,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand -d 'Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.'
             cand --dest-file 'Specify the result CSV file of the comparing results to review. The file lists the similarity of each pair.'
             cand --min-elements 'Drop the functions with fewer elements than this before aggregating: N elements, or R times the mean (Rx)'
+            cand --threads 'Number of threads to compute on [default: one per core]'
             cand -h 'Print help (see more with ''--help'')'
             cand --help 'Print help (see more with ''--help'')'
         }
@@ -95,6 +98,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand --output 'Write the statistics to FILE rather than to standard output'
             cand -t 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.'
             cand --top 'Report the N most frequent elements of each group. With -f csv this replaces the summary table.'
+            cand --threads 'Number of threads to compute on [default: one per core]'
             cand -r 'Descend into the subdirectories of the given directories'
             cand --recursive 'Descend into the subdirectories of the given directories'
             cand --per-file 'Report each birthmark file as well as each group. With -f csv this replaces the summary table.'
@@ -110,6 +114,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand --dest 'Destination path for the output CSV file (default: ''similarities'' directory'
             cand -A 'Aggregator combining a pair''s function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted'
             cand --aggregator 'Aggregator combining a pair''s function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted'
+            cand --threads 'Number of threads to compute on [default: one per core]'
             cand -S 'Skip if the similarity file already exists for the pair of birthmarks'
             cand --skip 'Skip if the similarity file already exists for the pair of birthmarks'
             cand -h 'Print help (see more with ''--help'')'
@@ -121,6 +126,7 @@ set edit:completion:arg-completer[oinkie] = {|@words|
             cand extract 'Extract birthmarks from a lifted binary file (JSON format)'
             cand compare 'Compare birthmarks and output the similarity score'
             cand review 'Re-read a finished comparison: recompute the similarity of each pair from the stored function similarities'
+            cand reaggregate 'The old name of `review`, kept only to say so. Hidden from help and completion; remove it in the next minor'
             cand stats 'Summarise a set of birthmarks: how many of each type, how many functions each holds, and how long each function''s birthmark is'
             cand run 'Extract birthmarks and compare them in one command'
             cand help 'Print this message or the help of the given subcommand(s)'
@@ -134,6 +140,8 @@ set edit:completion:arg-completer[oinkie] = {|@words|
         &'oinkie;help;compare'= {
         }
         &'oinkie;help;review'= {
+        }
+        &'oinkie;help;reaggregate'= {
         }
         &'oinkie;help;stats'= {
         }
