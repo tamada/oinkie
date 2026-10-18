@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: If you use oinkie, please cite it as below.
+type: software
+title: "oinkie: Detects software theft by comparing birthmarks extracted from binaries"
+abstract: >-
+    Software theft is difficult to detect because it is conducted stealthily,
+    and the source code of the stolen software remains private.
+    Compilers and their options sensitively alter the binary formats
+    (including executables) of software. The problem is further complicated
+    by the vast amount of software worldwide. Therefore, we need a method to detect
+    software theft targeting binary formats from large software repositories.
+    For this, Tamada et al. proposed the concept of software birthmarking in 2004.
+    It refers to the native characteristics of the programs and allows for comparison
+    between them. The similarities of the two birthmarks reflect how similar
+    the original programs are.
+    This toolkit extracts them from the binary code and compares them to calculate
+    the similarities between two birthmarks. The high similarity suggests that either
+    program is suspected of being a copy of the other.
+authors:
+  - family-names: Tamada
+    given-names: Haruaki
+    affiliation: Kyoto Sangyo University
+repository-code: https://github.com/tamada/oinkie
+url: https://tamada.github.io/oinkie/
+license: MIT
+version: 0.8.1
+date-released: 2026-10-08
+keywords:
+  - birthmark toolkit
+  - birthmarks
+  - ghidra-pcode
+  - software-theft-detection
+  - plagiarism-detection
