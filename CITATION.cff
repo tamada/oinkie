@@ -20,6 +20,7 @@ authors:
   - family-names: Tamada
     given-names: Haruaki
     affiliation: Kyoto Sangyo University
+    orcid: "https://orcid.org/0000-0003-1838-9184"
 repository-code: https://github.com/tamada/oinkie
 url: https://tamada.github.io/oinkie/
 license: MIT
