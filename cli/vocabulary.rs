@@ -13,7 +13,7 @@
 
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
 use oinkie::birthmarks::BirthmarkType;
-use oinkie::compare::{Algorithm, PairingStrategy};
+use oinkie::compare::{Aggregator, Algorithm, PairingStrategy, Size};
 use oinkie::lift::Ir;
 
 /// How far the completion and help lists go for k-grams.
@@ -143,6 +143,34 @@ pub const STRATEGIES: Table<PairingStrategy> = &[
         PairingStrategy::LastVsOthers,
         "last-vs-others",
         "Compares a specific reference file against all other files ($n-1$). Compares the last item and all other items. Useful for comparing a baseline version against multiple variants",
+    ),
+];
+
+pub const AGGREGATORS: Table<Aggregator> = &[
+    (
+        Aggregator::Containment,
+        "containment",
+        "The matching of [`Aggregator::Hungarian`], averaged over the smaller side's functions rather than the larger's: how much of the smaller birthmark is found in the larger one. A program copied whole into a larger one scores 1.0, where under `Hungarian` it scores the share of the larger it makes up. It says the smaller is contained in the larger, not that the two are alike.",
+    ),
+    (
+        Aggregator::Hungarian,
+        "hungarian",
+        "The one-to-one matching of functions that maximises the total, by the Hungarian algorithm; the matched pairs' similarities are averaged. The default.",
+    ),
+    (
+        Aggregator::Weighted,
+        "weighted",
+        "The one-to-one matching that maximises the matched similarities each weighted by the two functions' element counts, $(w_i + w_j) s_{ij}$, divided by the element count of every function of both sides. A function then counts in proportion to its size: two short functions, which agree by chance and two empty ones exactly, count for little, and an unmatched function lowers the score by its weight. With every function of one size it is $2\\sum s_{ij} / (n_1 + n_2)$, counting both sides' functions as Dice's coefficient does, which is `Hungarian` only when $n_1 = n_2$. Needs each function's size; see [`Aggregator::uses_sizes`].",
+    ),
+    (
+        Aggregator::Matched(0.0),
+        "matched<f>",
+        "The matching of [`Aggregator::Hungarian`], counting the matched pairs whose similarity is at least this threshold: the proportion of the larger side's functions that have a counterpart that close. Read from `matched:T`, which refuses a threshold outside (0, 1].",
+    ),
+    (
+        Aggregator::TopN(Size::All),
+        "topn:<s>",
+        "Each function's best match in the other birthmark, on both sides and not necessarily one-to-one; the [<s>] best of those from each side are averaged. <s> should be i32 value or \"all\"",
     ),
 ];
 

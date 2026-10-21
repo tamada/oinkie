@@ -522,11 +522,19 @@ Oinkie extracts birthmarks from given codes and compares them to calculate the s
     );
     println!("============ Birthmarks =============");
     vocabulary::advertised_birthmarks().iter().for_each(|b| {
-        println!("- {:<20}  {}", b.to_string(), vocabulary::describe(b));
+        println!("- {:<15}  {}", b.to_string(), vocabulary::describe(b));
     });
+    println!("========= Paring Strategy ==========");
+    vocabulary::STRATEGIES
+        .iter()
+        .for_each(|(_, strategy, description)| println!("- {strategy:<15}  {description}"));
     println!("======== Compare Algorithms ========");
     vocabulary::ALGORITHMS.iter().for_each(|(_, name, help)| {
-        println!("- {:<20}  {}", name, help);
+        println!("- {name:<15}  {help}");
+    });
+    println!("=========== Aggregators ============");
+    vocabulary::AGGREGATORS.iter().for_each(|(_, name, help)| {
+        println!("- {name:15}  {help}");
     });
     Ok(vec![now.elapsed()])
 }
