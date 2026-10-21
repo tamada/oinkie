@@ -71,6 +71,14 @@ for f in README.md docs/content/_index.md; do
         -e "s|(oinkie:)${V}|\1${TO_VERSION}|g"
 done
 
+# The release date is the day this runs, in UTC as GitHub dates releases. The
+# workflow runs on every push to the release branch, so the date follows the
+# branch up to its last push, which is as close to the merge that publishes it
+# as this can get while still landing in the tagged commit.
+rewrite CITATION.cff \
+    -e "s/^version: .*/version: ${TO_VERSION}/" \
+    -e "s/^date-released: .*/date-released: $(date -u +%Y-%m-%d)/"
+
 # Cargo.lock names this package's version too, and the container builds with
 # `cargo build --locked`, which refuses to reconcile a lock that disagrees with
 # the manifest -- it exits 101 rather than fixing it. Leaving the lock behind
