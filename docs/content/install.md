@@ -60,6 +60,24 @@ Each [release](https://github.com/tamada/oinkie/releases) carries a pre-compiled
 
 Each archive holds the binary (`oinkie.exe` on Windows), `README.md`, `LICENSE` and the shell completions. Put the binary somewhere on your `PATH`. Windows binaries are released from v0.8.1.
 
+### Checking a download
+
+From v0.9.0, each release also carries `oinkie-X.Y.Z_checksums.txt`, the SHA-256 of every archive. Download it beside the archive and check it on Linux:
+
+```sh
+sha256sum --ignore-missing -c oinkie-X.Y.Z_checksums.txt
+```
+
+On macOS, where `sha256sum` may be missing, `shasum -a 256 --ignore-missing -c oinkie-X.Y.Z_checksums.txt` does the same. Each prints `OK` beside the archive it checked.
+
+On Windows, compute the hash in PowerShell and compare it with the archive's line in the checksums file:
+
+```powershell
+(Get-FileHash -Algorithm SHA256 oinkie-X.Y.Z_amd64_windows.zip).Hash.ToLower()
+```
+
+A checksum shows that the archive is the file the release holds; it does not show who made the release.
+
 ---
 
 ## 📦 Building from Source
