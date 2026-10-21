@@ -41,4 +41,3 @@ Use the following \(\BibTeX\) entry.
     year   = {2026},
 }
 ```
-
