@@ -508,27 +508,71 @@ fn format_duration(dur: Duration) -> String {
     let mm = total_ms / 60000;
     let ss = (total_ms % 60000) / 1000;
     let sss = total_ms % 1000;
-
     format!("{:02}:{:02}:{:03}", mm, ss, sss)
+}
+
+fn header(header: &str, width: usize) -> String {
+    let header = format!(" {} ", header);
+    format!("{:=^width$}", header)
 }
 
 fn perform_info() -> Result<Vec<Duration>> {
     let now = Instant::now();
-    println!("=========== Oinkie Info ============");
-    println!(
-        "Oinkie is a tool for detecting the code theft with Ghidra P-code as birthmarks.
-The birthmark is a unique characteristic of a program that can be used to identify it.
-Oinkie extracts birthmarks from given codes and compares them to calculate the similarities."
-    );
-    println!("============ Birthmarks =============");
-    vocabulary::advertised_birthmarks().iter().for_each(|b| {
-        println!("- {:<20}  {}", b.to_string(), vocabulary::describe(b));
-    });
-    println!("======== Compare Algorithms ========");
-    vocabulary::ALGORITHMS.iter().for_each(|(_, name, help)| {
-        println!("- {:<20}  {}", name, help);
-    });
+    let width = textwrap::termwidth();
+    println!("{}", header("Oinkie Info", width));
+    textwrap::wrap(
+        "Oinkie is a tool for detecting the code theft with Ghidra P-code as birthmarks. The birthmark is a unique characteristic of a program that can be used to identify it. Oinkie extracts birthmarks from given codes and compares them to calculate the similarities.",
+        width,
+    )
+    .iter()
+    .for_each(|s| println!("{s}"));
+    let sections = sections();
+    let label_width = sections
+        .iter()
+        .flat_map(|(_, rows)| rows.iter().map(|(name, _)| name.len()))
+        .max()
+        .unwrap_or(0);
+    let indent = " ".repeat(label_width + 4);
+    let options = textwrap::Options::new(width)
+        .initial_indent("- ")
+        .subsequent_indent(&indent);
+    for (title, rows) in sections {
+        println!("{}", header(title, width));
+        for (name, description) in rows {
+            let s = format!("{name:<label_width$}  {description}");
+            println!("{}", textwrap::fill(&s, &options));
+        }
+    }
     Ok(vec![now.elapsed()])
+}
+
+fn sections() -> [(&'static str, Vec<(String, String)>); 4] {
+    [
+        (
+            "Birthmarks",
+            vocabulary::advertised_birthmarks()
+                .iter()
+                .map(|b| (b.to_string(), vocabulary::describe(b)))
+                .collect(),
+        ),
+        ("Pairing Strategies", described(vocabulary::STRATEGIES)),
+        ("Compare Algorithms", described(vocabulary::ALGORITHMS)),
+        (
+            "Aggregators",
+            vocabulary::AGGREGATORS
+                .iter()
+                .map(|(name, description)| (name.to_string(), description.to_string()))
+                .collect(),
+        ),
+    ]
+}
+
+/// The names and descriptions of a table, as `info` lists them.
+fn described<T>(table: &[(T, &str, &str)]) -> Vec<(String, String)> {
+    table
+        .iter()
+        .map(|(_, name, description)| (name.to_string(), description.to_string()))
+        .collect()
 }
 
 fn validate_extract_opts(opts: cli::ExtractOpts) -> Result<cli::ExtractOpts> {

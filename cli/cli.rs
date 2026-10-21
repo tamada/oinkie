@@ -9,7 +9,7 @@ use std::str::FromStr;
 
 pub use crate::values::Analysis;
 use crate::values::{AnalysisParser, BirthmarkTypeParser};
-use crate::vocabulary::{algorithm_parser, ir_parser, strategy_parser};
+use crate::vocabulary::{aggregator_help, algorithm_parser, ir_parser, strategy_parser};
 use clap::ValueEnum;
 use oinkie::birthmarks::{AnalysisType, BirthmarkType};
 use oinkie::compare::{Aggregator, Algorithm, Comparator, PairingStrategy};
@@ -378,13 +378,7 @@ pub struct ReviewOpts {
         value_name = "METHOD",
         ignore_case = true,
         help = "Aggregator combining a pair's function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted",
-        long_help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
-
-- hungarian: use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.
-- topn:N: take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.
-- containment: as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.
-- matched:T: as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.
-- weighted: as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names."
+        long_help = aggregator_help()
     )]
     aggregator: Aggregator,
 
@@ -590,13 +584,7 @@ pub struct CompareOpts {
         value_name = "METHOD",
         ignore_case = true,
         help = "Aggregator combining a pair's function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted",
-        long_help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
-
-- hungarian: use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.
-- topn:N: take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.
-- containment: as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.
-- matched:T: as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.
-- weighted: as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names."
+        long_help = aggregator_help()
     )]
     aggregator: Aggregator,
 
@@ -685,13 +673,7 @@ parses in a k-gram name, not only the ones listed.")]
         value_name = "METHOD",
         ignore_case = true,
         help = "Aggregator combining a pair's function similarities into its similarity: hungarian, topn:N, containment, matched:T or weighted",
-        long_help = "Specify the aggregator for combining the function similarities of a pair into its similarity.
-
-- hungarian: use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.
-- topn:N: take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.
-- containment: as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.
-- matched:T: as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.
-- weighted: as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names."
+        long_help = aggregator_help()
     )]
     aggregator: Aggregator,
 
