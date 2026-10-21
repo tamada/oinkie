@@ -64,6 +64,10 @@ pub(crate) fn assign_by(
 /// the pairing is optimal once the last row is in. Index 0 of `p`, `way`,
 /// `v`, `min_to` and `visited` is a virtual column that holds the row being
 /// placed; the real columns are 1..=m, and `p[j] == 0` marks column `j` free.
+///
+/// The steps of placing a row are free functions over slices rather than
+/// methods on a struct: as parameters the slices are known not to alias, so
+/// the scan over the columns keeps its loads in registers.
 fn solve(n: usize, m: usize, similarity: impl Fn(usize, usize) -> f64) -> Vec<Option<usize>> {
     // Maximising similarity is minimising its negation.
     let cost = |i: usize, j: usize| -similarity(i - 1, j - 1);
@@ -78,43 +82,25 @@ fn solve(n: usize, m: usize, similarity: impl Fn(usize, usize) -> f64) -> Vec<Op
         let mut j0 = 0;
         min_to.fill(f64::INFINITY);
         visited.fill(false);
+        // Grow a shortest path from row `i` until it reaches a free column.
         loop {
             visited[j0] = true;
             let i0 = p[j0];
-            let mut delta = f64::INFINITY;
-            let mut j1 = 0;
-            for j in 1..=m {
-                if visited[j] {
-                    continue;
-                }
-                let reduced = cost(i0, j) - u[i0] - v[j];
-                if reduced < min_to[j] {
-                    min_to[j] = reduced;
-                    way[j] = j0;
-                }
-                if min_to[j] < delta {
-                    delta = min_to[j];
-                    j1 = j;
-                }
-            }
-            for j in 0..=m {
-                if visited[j] {
-                    u[p[j]] += delta;
-                    v[j] -= delta;
-                } else {
-                    min_to[j] -= delta;
-                }
-            }
+            let (delta, j1) = nearest_column(
+                |j| cost(i0, j) - u[i0],
+                j0,
+                &v,
+                &mut min_to,
+                &mut way,
+                &visited,
+            );
+            shift(delta, &mut u, &mut v, &p, &mut min_to, &visited);
             j0 = j1;
             if p[j0] == 0 {
                 break;
             }
         }
-        while j0 != 0 {
-            let j1 = way[j0];
-            p[j0] = p[j1];
-            j0 = j1;
-        }
+        augment(j0, &mut p, &way);
     }
     let mut by_row = vec![None; n];
     for j in 1..=m {
@@ -123,6 +109,65 @@ fn solve(n: usize, m: usize, similarity: impl Fn(usize, usize) -> f64) -> Vec<Op
         }
     }
     by_row
+}
+
+/// Relaxes the unvisited columns through the row paired with column `j0`
+/// and returns the least reduced cost among them with the column that has
+/// it. `row(j)` is that row's cost to column `j` less the row's potential.
+fn nearest_column(
+    row: impl Fn(usize) -> f64,
+    j0: usize,
+    v: &[f64],
+    min_to: &mut [f64],
+    way: &mut [usize],
+    visited: &[bool],
+) -> (f64, usize) {
+    let mut delta = f64::INFINITY;
+    let mut j1 = 0;
+    for j in 1..visited.len() {
+        if visited[j] {
+            continue;
+        }
+        let reduced = row(j) - v[j];
+        if reduced < min_to[j] {
+            min_to[j] = reduced;
+            way[j] = j0;
+        }
+        if min_to[j] < delta {
+            delta = min_to[j];
+            j1 = j;
+        }
+    }
+    (delta, j1)
+}
+
+/// Moves the potentials by `delta`, which keeps them feasible and makes the
+/// edge to the nearest column tight.
+fn shift(
+    delta: f64,
+    u: &mut [f64],
+    v: &mut [f64],
+    p: &[usize],
+    min_to: &mut [f64],
+    visited: &[bool],
+) {
+    for j in 0..visited.len() {
+        if visited[j] {
+            u[p[j]] += delta;
+            v[j] -= delta;
+        } else {
+            min_to[j] -= delta;
+        }
+    }
+}
+
+/// Flips the pairs along the path that ends at the free column `j0`.
+fn augment(mut j0: usize, p: &mut [usize], way: &[usize]) {
+    while j0 != 0 {
+        let j1 = way[j0];
+        p[j0] = p[j1];
+        j0 = j1;
+    }
 }
 
 #[cfg(test)]
@@ -247,5 +292,36 @@ mod tests {
     fn an_empty_side_pairs_nothing() {
         assert_eq!(assign::<f64>(0, 3, &[]), Some(vec![]));
         assert_eq!(assign::<f64>(3, 0, &[]), Some(vec![None, None, None]));
+    }
+
+    /// The pairings [`assign`] gives on larger matrices, folded into one
+    /// number. Among tied pairings the solver's choice follows the order of
+    /// its comparisons and the rounding of its potentials, so this catches a
+    /// change to either even where the totals stay optimal; with the pairing
+    /// goes every score built from it, bit for bit.
+    #[test]
+    fn pairings_on_larger_matrices_stay_the_same() {
+        let mut rng = XorShift(0x5eed);
+        // FNV-1a over each row's column, `u64::MAX` for none.
+        let mut digest = 0xcbf2_9ce4_8422_2325u64;
+        for (rows, cols, tied) in [
+            (40, 40, false),
+            (40, 40, true),
+            (30, 50, false),
+            (50, 30, true),
+            (64, 64, true),
+        ] {
+            let cells: Vec<f64> = (0..rows * cols)
+                .map(|_| {
+                    let x = rng.next_f64();
+                    if tied { (x * 4.0).floor() / 3.0 } else { x }
+                })
+                .collect();
+            for j in assign(rows, cols, &cells).unwrap() {
+                let code = j.map_or(u64::MAX, |j| j as u64);
+                digest = (digest ^ code).wrapping_mul(0x0100_0000_01b3);
+            }
+        }
+        assert_eq!(digest, 15_174_369_435_942_584_603);
     }
 }
