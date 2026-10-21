@@ -514,29 +514,52 @@ fn format_duration(dur: Duration) -> String {
 
 fn perform_info() -> Result<Vec<Duration>> {
     let now = Instant::now();
-    println!("=========== Oinkie Info ============");
+    println!("{:=^36}", " Oinkie Info ");
     println!(
         "Oinkie is a tool for detecting the code theft with Ghidra P-code as birthmarks.
 The birthmark is a unique characteristic of a program that can be used to identify it.
 Oinkie extracts birthmarks from given codes and compares them to calculate the similarities."
     );
-    println!("============ Birthmarks =============");
-    vocabulary::advertised_birthmarks().iter().for_each(|b| {
-        println!("- {:<15}  {}", b.to_string(), vocabulary::describe(b));
-    });
-    println!("========= Paring Strategy ==========");
-    vocabulary::STRATEGIES
+    let sections: [(&str, Vec<(String, String)>); 4] = [
+        (
+            "Birthmarks",
+            vocabulary::advertised_birthmarks()
+                .iter()
+                .map(|b| (b.to_string(), vocabulary::describe(b)))
+                .collect(),
+        ),
+        ("Pairing Strategies", described(vocabulary::STRATEGIES)),
+        ("Compare Algorithms", described(vocabulary::ALGORITHMS)),
+        (
+            "Aggregators",
+            vocabulary::AGGREGATORS
+                .iter()
+                .map(|(name, description)| (name.to_string(), description.to_string()))
+                .collect(),
+        ),
+    ];
+    // One column for the descriptions of every section, as wide as the
+    // longest name in any of them.
+    let width = sections
         .iter()
-        .for_each(|(_, strategy, description)| println!("- {strategy:<15}  {description}"));
-    println!("======== Compare Algorithms ========");
-    vocabulary::ALGORITHMS.iter().for_each(|(_, name, help)| {
-        println!("- {name:<15}  {help}");
-    });
-    println!("=========== Aggregators ============");
-    vocabulary::AGGREGATORS.iter().for_each(|(_, name, help)| {
-        println!("- {name:15}  {help}");
-    });
+        .flat_map(|(_, rows)| rows.iter().map(|(name, _)| name.len()))
+        .max()
+        .unwrap_or(0);
+    for (title, rows) in sections {
+        println!("{:=^36}", format!(" {title} "));
+        for (name, description) in rows {
+            println!("- {name:<width$}  {description}");
+        }
+    }
     Ok(vec![now.elapsed()])
+}
+
+/// The names and descriptions of a table, as `info` lists them.
+fn described<T>(table: &[(T, &str, &str)]) -> Vec<(String, String)> {
+    table
+        .iter()
+        .map(|(_, name, description)| (name.to_string(), description.to_string()))
+        .collect()
 }
 
 fn validate_extract_opts(opts: cli::ExtractOpts) -> Result<cli::ExtractOpts> {

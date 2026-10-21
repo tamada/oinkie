@@ -13,7 +13,7 @@
 
 use clap::builder::{PossibleValue, PossibleValuesParser, TypedValueParser};
 use oinkie::birthmarks::BirthmarkType;
-use oinkie::compare::{Aggregator, Algorithm, PairingStrategy, Size};
+use oinkie::compare::{Algorithm, PairingStrategy};
 use oinkie::lift::Ir;
 
 /// How far the completion and help lists go for k-grams.
@@ -146,33 +146,43 @@ pub const STRATEGIES: Table<PairingStrategy> = &[
     ),
 ];
 
-pub const AGGREGATORS: Table<Aggregator> = &[
+/// Each aggregator, as `--aggregator` is written, and its description.
+///
+/// Names rather than values, unlike the tables above: `topn:N` and
+/// `matched:T` each stand for many values, so the name is what a person
+/// types, with `N` and `T` for the number. A test reads each back through
+/// `Aggregator::from_str`.
+pub const AGGREGATORS: &[(&str, &str)] = &[
     (
-        Aggregator::Containment,
-        "containment",
-        "The matching of [`Aggregator::Hungarian`], averaged over the smaller side's functions rather than the larger's: how much of the smaller birthmark is found in the larger one. A program copied whole into a larger one scores 1.0, where under `Hungarian` it scores the share of the larger it makes up. It says the smaller is contained in the larger, not that the two are alike.",
-    ),
-    (
-        Aggregator::Hungarian,
         "hungarian",
-        "The one-to-one matching of functions that maximises the total, by the Hungarian algorithm; the matched pairs' similarities are averaged. The default.",
+        "use the Hungarian algorithm to find the one-to-one matching between the functions of the two birthmarks that maximises the total similarity.",
     ),
     (
-        Aggregator::Weighted,
+        "topn:N",
+        "take each function's best match in the other birthmark, and average the N best of those from each side. Matches need not be one-to-one, which can reduce noise from less relevant matches. topn:all, or topn, takes them all.",
+    ),
+    (
+        "containment",
+        "as hungarian, but average over the smaller birthmark's functions rather than the larger's: how much of the smaller is found in the larger. A program copied whole into a larger one scores 1.0. It says the smaller is contained, not that the two are alike.",
+    ),
+    (
+        "matched:T",
+        "as hungarian, but the proportion of the larger birthmark's functions matched with a similarity of at least T, where 0 < T <= 1.",
+    ),
+    (
         "weighted",
-        "The one-to-one matching that maximises the matched similarities each weighted by the two functions' element counts, $(w_i + w_j) s_{ij}$, divided by the element count of every function of both sides. A function then counts in proportion to its size: two short functions, which agree by chance and two empty ones exactly, count for little, and an unmatched function lowers the score by its weight. With every function of one size it is $2\\sum s_{ij} / (n_1 + n_2)$, counting both sides' functions as Dice's coefficient does, which is `Hungarian` only when $n_1 = n_2$. Needs each function's size; see [`Aggregator::uses_sizes`].",
-    ),
-    (
-        Aggregator::Matched(0.0),
-        "matched<f>",
-        "The matching of [`Aggregator::Hungarian`], counting the matched pairs whose similarity is at least this threshold: the proportion of the larger side's functions that have a counterpart that close. Read from `matched:T`, which refuses a threshold outside (0, 1].",
-    ),
-    (
-        Aggregator::TopN(Size::All),
-        "topn:<s>",
-        "Each function's best match in the other birthmark, on both sides and not necessarily one-to-one; the [<s>] best of those from each side are averaged. <s> should be i32 value or \"all\"",
+        "as hungarian, but each function counts by its number of elements, so that short functions, which agree by chance, count for little. review reads the sizes from the birthmarks the comparison names.",
     ),
 ];
+
+/// `--aggregator`'s long help, which `compare`, `run` and `review` share.
+pub fn aggregator_help() -> String {
+    let mut help = "Specify the aggregator for combining the function similarities of a pair into its similarity.\n".to_string();
+    for (name, description) in AGGREGATORS {
+        help.push_str(&format!("\n- {name}: {description}"));
+    }
+    help
+}
 
 /// The value `name` stands for, in any case, or clap's own wording of why not.
 ///
@@ -301,6 +311,19 @@ mod tests {
         assert_eq!(names.len(), table.len(), "two entries share a name");
         for (v, name, help) in table {
             assert!(!help.is_empty(), "{v:?} ({name}) has no description");
+        }
+    }
+
+    /// Each aggregator's name, its placeholder filled in, is one the parser
+    /// reads.
+    #[test]
+    fn test_an_aggregator_is_offered_under_a_name_the_library_reads() {
+        for (name, _) in AGGREGATORS {
+            let name = name.replace('N', "3").replace('T', "0.5");
+            assert!(
+                name.parse::<oinkie::compare::Aggregator>().is_ok(),
+                "{name}"
+            );
         }
     }
 
