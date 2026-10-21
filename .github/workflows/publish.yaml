@@ -57,9 +57,9 @@ jobs:
           gh release edit "$TAG" --repo "$REPO" --notes-file notes.md
           echo "release notes for $TAG taken from $notes" >> "$GITHUB_STEP_SUMMARY"
 
-  # The binaries, one per platform, built and uploaded to the draft. How they
-  # are built lives in release-binaries.yaml, which pull requests changing it
-  # run too, so that it is not first exercised here.
+  # The binaries, one per platform, built and uploaded to the draft with their
+  # checksums file. How they are built lives in release-binaries.yaml, which
+  # pull requests changing it run too, so that it is not first exercised here.
   publish:
     needs: start
     uses: ./.github/workflows/release-binaries.yaml

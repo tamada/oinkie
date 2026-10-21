@@ -2,7 +2,7 @@ name: release binaries
 
 # The binaries a release ships, one per platform: built, asked whether they
 # serve MCP where the runner can run them, packed, and uploaded to the release
-# when a tag is given.
+# when a tag is given, with a checksums file covering them all.
 #
 # publish.yaml calls this to build and upload. release-binaries-check.yaml
 # calls it to build only, on a pull request that changes how the binaries are
@@ -147,4 +147,65 @@ jobs:
         with:
           name: ${{ inputs.appname }}_${{ matrix.architecture }}_${{ matrix.os_name }}
           path: ${{ env.ASSET }}
+          retention-days: 7
+
+  # The SHA-256 of every archive, in the format `sha256sum -c` reads back, so
+  # that a download can be checked and a packaging script can pin a hash. A job
+  # of its own because the archives come from the parallel jobs above, none of
+  # which sees the others'.
+  #
+  # Here rather than in publish.yaml so that the check workflow runs it too.
+  checksums:
+    needs: binary
+    runs-on: ubuntu-latest
+    env:
+      APPNAME: ${{ inputs.appname }}
+      VERSION: ${{ inputs.version }}
+      CHECKSUMS: ${{ inputs.appname }}-${{ inputs.version }}_checksums.txt
+    steps:
+      # From the release, so that the hashes are of the files it holds rather
+      # than of a copy that might differ from them.
+      - name: Download the archives from the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dist \
+            --pattern "${APPNAME}-${VERSION}_*.tar.gz" \
+            --pattern "${APPNAME}-${VERSION}_*.zip"
+
+      - name: Download the archives from this run
+        if: inputs.tag == ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.appname }}_*
+          path: dist
+          merge-multiple: true
+
+      - name: Compute
+        working-directory: dist
+        run: |
+          sha256sum -- *.tar.gz *.zip > "$CHECKSUMS"
+          cat "$CHECKSUMS"
+          sha256sum -c "$CHECKSUMS"
+
+      # --clobber so that re-running this job alone after a failure further on
+      # replaces the file rather than stopping at it: the archives it hashes
+      # are the same ones.
+      - name: Upload to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" "dist/$CHECKSUMS" --repo "$GITHUB_REPOSITORY" --clobber
+
+      # Named outside the archives' `appname_*`, so that the download above
+      # never takes it for one.
+      - name: Keep as an artifact
+        if: inputs.tag == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.appname }}-checksums
+          path: dist/${{ env.CHECKSUMS }}
           retention-days: 7
