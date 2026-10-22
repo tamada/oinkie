@@ -1736,6 +1736,30 @@ mod tests {
         }
     }
 
+    /// Each side is weighted by its own functions' sizes. The two birthmarks
+    /// hold the same number of functions, so weighting both by one side's
+    /// sizes would pass every length check and still score them wrongly.
+    #[test]
+    fn compare_birthmarks_weights_each_side_by_its_own_sizes() {
+        let b1 = birthmark("a", &[("f1", &["A"]), ("f2", &["B"])]);
+        let b2 = birthmark("b", &[("g1", &["A"]), ("g2", &["B", "C", "D", "E"])]);
+        // f1-g1 scores 1 at weight 1 + 1, f2-g2 scores 1/4 at weight 1 + 4,
+        // out of 2 + 5.
+        let expected = (2.0 * 1.0 + 5.0 * 0.25) / 7.0;
+        for (x, y) in [(&b1, &b2), (&b2, &b1)] {
+            let c = Jaccard
+                .compare_birthmarks(x, y, &Aggregator::Weighted, &|_: Progress| {})
+                .unwrap();
+            assert!(
+                (c.similarity() - expected).abs() < 1e-9,
+                "{} against {}: {}",
+                x.metadata.file_name,
+                y.metadata.file_name,
+                c.similarity()
+            );
+        }
+    }
+
     #[test]
     fn top_n_selection_limits_the_number_of_scores() {
         let matrix =
