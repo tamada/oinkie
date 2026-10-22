@@ -426,55 +426,23 @@ pub(crate) fn load_comparison<P: AsRef<Path>>(path: P) -> Result<Stored> {
         match prefix {
             "result" => {
                 if let Some(d_str) = record.get(1) {
-                    let nanos = d_str.parse::<u64>().unwrap_or(0);
-                    duration = Duration::from_nanos(nanos);
+                    duration = Duration::from_nanos(d_str.parse::<u64>().unwrap_or(0));
                 }
             }
             "left" => left = Some(recorded(&record)),
             "right" => right = Some(recorded(&record)),
-            "matrix" => {
-                let names = record
-                    .iter()
-                    .skip(2)
-                    .map(str::to_string)
-                    .collect::<Vec<_>>();
-                // `matrix,,` is how a side with no functions is written
-                col_names = Some(if names == [""] { Vec::new() } else { names });
-            }
+            "matrix" => col_names = Some(column_names(&record)),
             _ if !prefix.is_empty() && prefix.bytes().all(|b| b.is_ascii_digit()) => {
                 rows.push(row_name(record.get(1).unwrap_or("")));
-                for value in record.iter().skip(2) {
-                    items.push(
-                        value
-                            .parse::<f64>()
-                            .map_err(|e| Error::ParseFloat(value.to_string(), e))?,
-                    );
-                }
+                items.extend(row_values(&record)?);
             }
             _ => continue,
         }
     }
-    let Some(col_names) = col_names else {
-        return Err(Error::Parse(format!(
-            "Valid matrix data not found in {}",
-            path.display()
-        )));
-    };
-    if items.len() != rows.len() * col_names.len() {
-        return Err(Error::Parse(format!(
-            "{}: the matrix has {} values, not one for each of {} rows and {} columns",
-            path.display(),
-            items.len(),
-            rows.len(),
-            col_names.len()
-        )));
-    }
-    let matrix = Matrix::new((rows.len(), col_names.len()), items).ok_or_else(|| {
-        Error::Parse(format!(
-            "{}: the matrix holds a value that is not a finite number",
-            path.display()
-        ))
+    let col_names = col_names.ok_or_else(|| {
+        Error::Parse(format!("Valid matrix data not found in {}", path.display()))
     })?;
+    let matrix = matrix_of(path, rows.len(), col_names.len(), items)?;
     let mut left = left.unwrap_or_else(|| recorded(&csv::StringRecord::new()));
     let mut right = right.unwrap_or_else(|| recorded(&csv::StringRecord::new()));
     left.functions = col_names;
@@ -485,6 +453,51 @@ pub(crate) fn load_comparison<P: AsRef<Path>>(path: P) -> Result<Stored> {
         right,
         duration,
     })
+}
+
+/// The function names a `matrix,` line gives the columns.
+fn column_names(record: &csv::StringRecord) -> Vec<String> {
+    let names = record
+        .iter()
+        .skip(2)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    // `matrix,,` is how a side with no functions is written
+    if names == [""] { Vec::new() } else { names }
+}
+
+/// The similarities on one row of the matrix.
+fn row_values(record: &csv::StringRecord) -> Result<Vec<f64>> {
+    record
+        .iter()
+        .skip(2)
+        .map(|value| {
+            value
+                .parse::<f64>()
+                .map_err(|e| Error::ParseFloat(value.to_string(), e))
+        })
+        .collect()
+}
+
+/// The matrix of `items`, refused unless there is one finite value for each
+/// of its cells.
+fn matrix_of(path: &Path, rows: usize, columns: usize, items: Vec<f64>) -> Result<Matrix> {
+    if items.len() != rows * columns {
+        Err(Error::Parse(format!(
+            "{}: the matrix has {} values, not one for each of {} rows and {} columns",
+            path.display(),
+            items.len(),
+            rows,
+            columns
+        )))
+    } else {
+        Matrix::new((rows, columns), items).ok_or_else(|| {
+            Error::Parse(format!(
+                "{}: the matrix holds a value that is not a finite number",
+                path.display()
+            ))
+        })
+    }
 }
 
 #[cfg(test)]

@@ -96,6 +96,16 @@ pub(crate) struct Report {
     pub skipped: Vec<Skipped>,
 }
 
+impl Report {
+    pub fn new(groups: Vec<GroupStats>, files: Vec<FileStats>, skipped: Vec<Skipped>) -> Self {
+        Self {
+            groups,
+            files,
+            skipped,
+        }
+    }
+}
+
 /// A file that was given, or found, and is not a birthmark.
 ///
 /// Reported rather than only logged, so that a summary never silently covers
@@ -248,11 +258,7 @@ pub(crate) fn compute(paths: &[PathBuf], top: Option<usize>) -> Report {
         })
         .collect();
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    Report {
-        groups,
-        files,
-        skipped,
-    }
+    Report::new(groups, files, skipped)
 }
 
 fn read_file(path: &Path, birthmark: &Birthmark) -> FileData {
@@ -521,6 +527,24 @@ fn md_summary(s: &Option<Summary>) -> Vec<String> {
 }
 
 fn to_markdown(report: &Report, per_file: bool) -> String {
+    let mut s = md_intro(report);
+    s.push_str(&md_functions(report));
+    s.push_str(&md_elements(report));
+    report
+        .groups
+        .iter()
+        .filter_map(md_top)
+        .for_each(|top| s.push_str(&top));
+    if per_file {
+        s.push_str(&md_per_file(report));
+    }
+    if !report.skipped.is_empty() {
+        s.push_str(&md_skipped(report));
+    }
+    s
+}
+
+fn md_intro(report: &Report) -> String {
     let mut s = String::from("# Birthmark statistics\n\n");
     s.push_str(&format!(
         "{} birthmark files in {} groups.",
@@ -537,8 +561,10 @@ fn to_markdown(report: &Report, per_file: bool) -> String {
         "\n\nA birthmark file holds one entry per **function**; each function's birthmark \
          is made of **elements**. *Elements per function* is the birthmark length.\n",
     );
+    s
+}
 
-    s.push_str("\n## Functions per file\n\n");
+fn md_functions(report: &Report) -> String {
     let rows = report
         .groups
         .iter()
@@ -560,9 +586,10 @@ fn to_markdown(report: &Report, per_file: bool) -> String {
         "mean",
         "sd",
     ];
-    s.push_str(&md_table(&header, 2, &rows));
+    format!("\n## Functions per file\n\n{}", md_table(&header, 2, &rows))
+}
 
-    s.push_str("\n## Elements per function\n\n");
+fn md_elements(report: &Report) -> String {
     let rows = report
         .groups
         .iter()
@@ -597,69 +624,72 @@ fn to_markdown(report: &Report, per_file: bool) -> String {
         "vocabulary",
         "occurrences",
     ];
-    s.push_str(&md_table(&header, 2, &rows));
+    format!(
+        "\n## Elements per function\n\n{}",
+        md_table(&header, 2, &rows)
+    )
+}
 
-    for g in &report.groups {
-        let Some(top) = &g.top else { continue };
-        s.push_str(&format!(
-            "\n## Top {} elements: {} / {}\n\n",
-            top.len(),
-            cell(&g.ir),
-            cell(&g.birthmark_type)
-        ));
-        let rows = top
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                vec![
-                    (i + 1).to_string(),
-                    format!("`{}`", cell(&t.element)),
-                    t.count.to_string(),
-                ]
-            })
-            .collect::<Vec<_>>();
-        s.push_str(&md_table(&["rank", "element", "count"], 2, &rows));
-    }
+/// The group's most frequent elements, when they were asked for.
+fn md_top(g: &GroupStats) -> Option<String> {
+    let top = g.top.as_ref()?;
+    let rows = top
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            vec![
+                (i + 1).to_string(),
+                format!("`{}`", cell(&t.element)),
+                t.count.to_string(),
+            ]
+        })
+        .collect::<Vec<_>>();
+    Some(format!(
+        "\n## Top {} elements: {} / {}\n\n{}",
+        top.len(),
+        cell(&g.ir),
+        cell(&g.birthmark_type),
+        md_table(&["rank", "element", "count"], 2, &rows)
+    ))
+}
 
-    if per_file {
-        s.push_str("\n## Per file\n\n");
-        let rows = report
-            .files
-            .iter()
-            .map(|f| {
-                let mut r = vec![
-                    cell(&f.path.display().to_string()),
-                    cell(&f.ir),
-                    cell(&f.birthmark_type),
-                    f.functions.to_string(),
-                    f.empty.to_string(),
-                ];
-                let e = md_summary(&f.elements);
-                // min, median, max, mean: the quartiles and sd make the row
-                // too wide to read, and the JSON and CSV carry them.
-                r.extend([e[0].clone(), e[2].clone(), e[4].clone(), e[5].clone()]);
-                r
-            })
-            .collect::<Vec<_>>();
-        let header = [
-            "file",
-            "ir",
-            "birthmark",
-            "functions",
-            "empty",
-            "elements min",
-            "median",
-            "max",
-            "mean",
-        ];
-        s.push_str(&md_table(&header, 3, &rows));
-    }
+fn md_per_file(report: &Report) -> String {
+    let rows = report
+        .files
+        .iter()
+        .map(|f| {
+            let mut r = vec![
+                cell(&f.path.display().to_string()),
+                cell(&f.ir),
+                cell(&f.birthmark_type),
+                f.functions.to_string(),
+                f.empty.to_string(),
+            ];
+            let e = md_summary(&f.elements);
+            // min, median, max, mean: the quartiles and sd make the row
+            // too wide to read, and the JSON and CSV carry them.
+            r.extend([e[0].clone(), e[2].clone(), e[4].clone(), e[5].clone()]);
+            r
+        })
+        .collect::<Vec<_>>();
+    let header = [
+        "file",
+        "ir",
+        "birthmark",
+        "functions",
+        "empty",
+        "elements min",
+        "median",
+        "max",
+        "mean",
+    ];
+    format!("\n## Per file\n\n{}", md_table(&header, 3, &rows))
+}
 
-    if !report.skipped.is_empty() {
-        s.push_str("\n## Skipped\n\n");
-        for sk in &report.skipped {
-            s.push_str(&format!("- {}\n", sk.reason));
-        }
+fn md_skipped(report: &Report) -> String {
+    let mut s = String::from("\n## Skipped\n\n");
+    for sk in &report.skipped {
+        s.push_str(&format!("- {}\n", sk.reason));
     }
     s
 }

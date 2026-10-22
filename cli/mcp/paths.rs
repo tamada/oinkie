@@ -7,6 +7,7 @@
 //! has to resolve inside one of them. A refusal names the roots, because the
 //! useful half of "no" is what the caller may use instead.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use rmcp::ErrorData;
@@ -85,30 +86,35 @@ impl Roots {
     /// component is a rule that can be stated in one line; getting the
     /// arithmetic right is not.
     pub fn resolve(&self, path: &str) -> Result<PathBuf, ErrorData> {
-        let given = Path::new(path);
+        self.refuse_parent_components(path)?;
+        let absolute = absolute(Path::new(path))?;
+        let (canonical, tail) = self.deepest_existing(path, &absolute)?;
+        let resolved = append(path, canonical, tail)?;
+        self.inside_a_root(path, resolved)
+    }
+
+    fn refuse_parent_components(&self, path: &str) -> Result<(), ErrorData> {
         if has_parent_component(path) {
-            return Err(ErrorData::invalid_params(
-                format!(
-                    "{path}: a path may not contain '..'. Write the location directly. Allowed: {}",
-                    self.render()
-                ),
-                None,
-            ));
-        }
-
-        let absolute = if given.is_absolute() {
-            given.to_path_buf()
+            Err(self.refusal(format!(
+                "{path}: a path may not contain '..'. Write the location directly."
+            )))
         } else {
-            std::env::current_dir()
-                .map_err(|e| ErrorData::internal_error(format!("no working directory: {e}"), None))?
-                .join(given)
-        };
+            Ok(())
+        }
+    }
 
-        let mut walked = absolute.as_path();
-        let mut tail: Vec<std::ffi::OsString> = Vec::new();
-        let canonical = loop {
+    /// The deepest ancestor of `absolute` that exists, canonicalized, and the
+    /// names below it that do not exist yet, deepest first.
+    fn deepest_existing(
+        &self,
+        path: &str,
+        absolute: &Path,
+    ) -> Result<(PathBuf, Vec<OsString>), ErrorData> {
+        let mut walked = absolute;
+        let mut tail = Vec::new();
+        loop {
             match walked.canonicalize() {
-                Ok(c) => break c,
+                Ok(c) => break Ok((c, tail)),
                 // Only "it is not there" means keep looking further up. Every
                 // other failure is about a component that *is* there and could
                 // not be resolved -- no permission to traverse it, a symlink
@@ -117,25 +123,21 @@ impl Roots {
                 // established, then checks *that* against the roots. The
                 // verdict would mean nothing whichever way it came out.
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-                    return Err(ErrorData::invalid_params(
-                        format!("{path}: cannot resolve {}: {e}", walked.display()),
-                        None,
-                    ));
+                    break Err(invalid(format!(
+                        "{path}: cannot resolve {}: {e}",
+                        walked.display()
+                    )));
                 }
                 // NotFound also comes back for a symlink whose target does
                 // not exist, and that one is there: writing to it creates the
                 // target, wherever the link points. Treated as a name still to
                 // be created, it would be appended to its directory and pass.
                 Err(_) if walked.symlink_metadata().is_ok() => {
-                    return Err(ErrorData::invalid_params(
-                        format!(
-                            "{path}: {} is a symlink to something that does not exist, \
-                             so where it leads cannot be checked. Allowed: {}",
-                            walked.display(),
-                            self.render()
-                        ),
-                        None,
-                    ));
+                    break Err(self.refusal(format!(
+                        "{path}: {} is a symlink to something that does not exist, \
+                         so where it leads cannot be checked.",
+                        walked.display()
+                    )));
                 }
                 Err(_) => match (walked.file_name(), walked.parent()) {
                     (Some(name), Some(parent)) => {
@@ -146,52 +148,28 @@ impl Roots {
                     // machine where the root directory itself cannot be
                     // canonicalized there is nothing sensible left to say.
                     _ => {
-                        return Err(ErrorData::invalid_params(
-                            format!(
-                                "{path}: no part of this path exists. Allowed: {}",
-                                self.render()
-                            ),
-                            None,
-                        ));
+                        break Err(self.refusal(format!("{path}: no part of this path exists.")));
                     }
                 },
             }
-        };
-
-        // The deepest thing that exists has to be a directory if anything is
-        // to be appended to it, and the operating systems do not agree about
-        // saying so. Unix reports ENOTDIR for a path that runs through a file,
-        // which the loop above turns into "cannot resolve"; Windows reports
-        // NotFound, so the loop walks up past the file and treats it as the
-        // base. Asked here, both answer the same way -- and the answer is the
-        // one the loop's own comment already describes.
-        if !tail.is_empty() && !canonical.is_dir() {
-            return Err(ErrorData::invalid_params(
-                format!(
-                    "{path}: cannot resolve {}: it is not a directory",
-                    canonical.display()
-                ),
-                None,
-            ));
         }
+    }
 
-        let mut resolved = canonical;
-        for part in tail.into_iter().rev() {
-            resolved.push(part);
-        }
-
+    fn inside_a_root(&self, path: &str, resolved: PathBuf) -> Result<PathBuf, ErrorData> {
         if self.0.iter().any(|root| resolved.starts_with(root)) {
             Ok(resolved)
         } else {
-            Err(ErrorData::invalid_params(
-                format!(
-                    "{path} resolves to {}, which is outside every allowed directory. Allowed: {}",
-                    resolved.display(),
-                    self.render()
-                ),
-                None,
-            ))
+            Err(self.refusal(format!(
+                "{path} resolves to {}, which is outside every allowed directory.",
+                resolved.display()
+            )))
         }
+    }
+
+    /// A refusal that ends by naming the roots, because the useful half of
+    /// "no" is what the caller may use instead.
+    fn refusal(&self, message: String) -> ErrorData {
+        invalid(format!("{message} Allowed: {}", self.render()))
     }
 
     fn render(&self) -> String {
@@ -200,6 +178,42 @@ impl Roots {
             .map(|r| r.display().to_string())
             .collect::<Vec<_>>()
             .join(", ")
+    }
+}
+
+fn invalid(message: String) -> ErrorData {
+    ErrorData::invalid_params(message, None)
+}
+
+/// `given`, joined to the working directory when it is relative.
+fn absolute(given: &Path) -> Result<PathBuf, ErrorData> {
+    if given.is_absolute() {
+        Ok(given.to_path_buf())
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(given))
+            .map_err(|e| ErrorData::internal_error(format!("no working directory: {e}"), None))
+    }
+}
+
+/// `tail`, deepest first, appended to `canonical`.
+///
+/// The deepest thing that exists has to be a directory if anything is to be
+/// appended to it, and the operating systems do not agree about saying so.
+/// Unix reports ENOTDIR for a path that runs through a file, which
+/// `deepest_existing` turns into "cannot resolve"; Windows reports NotFound,
+/// so the walk goes up past the file and takes it as the base. Asked here,
+/// both answer the same way.
+fn append(path: &str, canonical: PathBuf, tail: Vec<OsString>) -> Result<PathBuf, ErrorData> {
+    if !tail.is_empty() && !canonical.is_dir() {
+        Err(invalid(format!(
+            "{path}: cannot resolve {}: it is not a directory",
+            canonical.display()
+        )))
+    } else {
+        let mut resolved = canonical;
+        resolved.extend(tail.into_iter().rev());
+        Ok(resolved)
     }
 }
 
