@@ -487,11 +487,12 @@ impl Oinkie {
 
     #[tool(
         name = "oinkie_review",
-        description = "Recompute the similarity of every pair in a directory of pair CSVs \
-                       similarity CSVs, using a different aggregator, without comparing \
-                       anything again. Use this to ask what the same comparison would have \
-                       scored under 'topn' or 'containment' rather than 'hungarian', or without the functions \
-                       too short to be evidence (min_elements)."
+        description = "Recompute the similarity of every pair in a directory of pair CSVs, \
+                       the function similarities oinkie_compare or oinkie_run wrote, using a \
+                       different aggregator, without comparing anything again. Use this to ask \
+                       what the same comparison would have scored under 'topn' or \
+                       'containment' rather than 'hungarian', or without the functions too \
+                       short to be evidence (min_elements)."
     )]
     async fn oinkie_review(
         &self,
