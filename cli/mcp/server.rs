@@ -498,89 +498,25 @@ impl Oinkie {
         Parameters(params): Parameters<ReviewParams>,
     ) -> Result<Json<Reviewed>, ErrorData> {
         let score_dir = self.roots.resolve(&params.score_directory)?;
-        let dest = params
-            .dest_file
-            .as_deref()
-            .map(|d| self.roots.resolve(d))
-            .transpose()?;
-
-        // Parsed here, and refused here, rather than through the shared
-        // conversion. `Aggregator::from_str` fails with `Error::Parse`, which
-        // is a catch-all that spans both sides and so is not reported as the
-        // caller's fault -- but this one is theirs, and they can fix it.
+        let dest = self.dest(params.dest_file.as_deref())?;
         let name = params.aggregator.unwrap_or_else(|| "hungarian".to_string());
-        let aggregator = Aggregator::from_str(&name).map_err(|e| {
-            ErrorData::invalid_params(
-                format!("{e}. Call oinkie_info for the aggregators this accepts."),
-                None,
-            )
-        })?;
-
-        let min_elements = params
-            .min_elements
-            .as_deref()
-            .map(crate::cli::MinElements::from_str)
-            .transpose()
-            .map_err(|e| ErrorData::invalid_params(format!("min_elements: {e}"), None))?;
+        let aggregator = review_aggregator(&name)?;
+        let min_elements = review_min_elements(params.min_elements.as_deref())?;
 
         let written = dest.clone();
         let roots = self.roots.clone();
-        let scores = self
+        let (scores, min_elements) = self
             .compute(move || {
-                let start = std::time::Instant::now();
-                // The birthmarks are named by the score CSVs, not by the caller,
-                // and are read only if they are under a root like everything else.
-                let confine = |p: &Path| -> oinkie::Result<()> {
-                    let refused = |message: String| {
-                        oinkie::Error::Io(
-                            p.to_path_buf(),
-                            std::io::Error::new(std::io::ErrorKind::PermissionDenied, message),
-                        )
-                    };
-                    let text = p
-                        .to_str()
-                        .ok_or_else(|| refused("not a path the server can confine".to_string()))?;
-                    roots
-                        .resolve(text)
-                        .map(|_| ())
-                        .map_err(|e| refused(e.message.to_string()))
-                };
-                let review = crate::review::review_all(
+                review(
                     &score_dir,
                     &aggregator,
                     min_elements.as_ref(),
-                    &confine,
-                    // Its stderr is not the user's to draw on.
-                    &crate::progress::Bars::new(false),
-                )?;
-                let scores = review
-                    .results
-                    .iter()
-                    .map(|r| Score {
-                        index: r.index,
-                        left: r.path1.display().to_string(),
-                        right: r.path2.display().to_string(),
-                        similarity: r.similarity,
-                        duration_ms: r.duration.as_millis() as u64,
-                    })
-                    .collect::<Vec<_>>();
-                let applied =
-                    review
-                        .min_elements
-                        .as_ref()
-                        .map(|(given, threshold)| MinElementsApplied {
-                            given: given.to_string(),
-                            threshold: *threshold,
-                        });
-                if let Some(d) = written {
-                    crate::review::store(review, &d, start)?;
-                }
-                Ok::<_, oinkie::Error>((scores, applied))
+                    &roots,
+                    written.as_deref(),
+                )
             })
             .await?
             .map_err(super::error::to_mcp)?;
-
-        let (scores, min_elements) = scores;
         Ok(Json(Reviewed {
             aggregator: name,
             scores,
@@ -588,6 +524,79 @@ impl Oinkie {
             min_elements,
         }))
     }
+}
+
+/// The aggregator `oinkie_review` was asked for.
+///
+/// Parsed here, and refused here, rather than through the shared conversion.
+/// `Aggregator::from_str` fails with `Error::Parse`, which is a catch-all that
+/// spans both sides and so is not reported as the caller's fault -- but this
+/// one is theirs, and they can fix it.
+fn review_aggregator(name: &str) -> Result<Aggregator, ErrorData> {
+    Aggregator::from_str(name).map_err(|e| {
+        ErrorData::invalid_params(
+            format!("{e}. Call oinkie_info for the aggregators this accepts."),
+            None,
+        )
+    })
+}
+
+fn review_min_elements(given: Option<&str>) -> Result<Option<crate::cli::MinElements>, ErrorData> {
+    given
+        .map(crate::cli::MinElements::from_str)
+        .transpose()
+        .map_err(|e| ErrorData::invalid_params(format!("min_elements: {e}"), None))
+}
+
+/// The pairs in `score_dir` scored again under `aggregator`, and the
+/// threshold `min_elements` came to. The summary is written to `dest` when
+/// one is given.
+fn review(
+    score_dir: &Path,
+    aggregator: &Aggregator,
+    min_elements: Option<&crate::cli::MinElements>,
+    roots: &Roots,
+    dest: Option<&Path>,
+) -> oinkie::Result<(Vec<Score>, Option<MinElementsApplied>)> {
+    let start = std::time::Instant::now();
+    let review = crate::review::review_all(
+        score_dir,
+        aggregator,
+        min_elements,
+        &|p: &Path| confine_birthmark(roots, p),
+        // Its stderr is not the user's to draw on.
+        &crate::progress::Bars::new(false),
+    )?;
+    let scores = analysis::scores(&review.results);
+    let applied = review
+        .min_elements
+        .as_ref()
+        .map(|(given, threshold)| MinElementsApplied {
+            given: given.to_string(),
+            threshold: *threshold,
+        });
+    if let Some(d) = dest {
+        crate::review::store(review, d, start)?;
+    }
+    Ok((scores, applied))
+}
+
+/// Whether a birthmark a score CSV names may be read. The CSVs name them, not
+/// the caller, so they are held to the roots like everything else.
+fn confine_birthmark(roots: &Roots, p: &Path) -> oinkie::Result<()> {
+    let refused = |message: String| {
+        oinkie::Error::Io(
+            p.to_path_buf(),
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, message),
+        )
+    };
+    let text = p
+        .to_str()
+        .ok_or_else(|| refused("not a path the server can confine".to_string()))?;
+    roots
+        .resolve(text)
+        .map(|_| ())
+        .map_err(|e| refused(e.message.to_string()))
 }
 
 // `router = self.tool_router` rather than the default. The default expands to

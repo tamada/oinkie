@@ -47,7 +47,7 @@ fn ms(d: std::time::Duration) -> u64 {
     d.as_millis() as u64
 }
 
-fn scores(results: &[CompareResult]) -> Vec<Score> {
+pub(super) fn scores(results: &[CompareResult]) -> Vec<Score> {
     results
         .iter()
         .map(|r| Score {
