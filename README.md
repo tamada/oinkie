@@ -152,8 +152,8 @@ fn main() -> oinkie::Result<()> {
     // Two lifted programs, as `oinkie lift` writes them.
     let analysis = AnalysisType::try_from("op-set-jaccard")?;
     let extractor = Extractor::new(&analysis);
-    let a = extractor.extract(&Program::load(Path::new("a.json"))?)?;
-    let b = extractor.extract(&Program::load(Path::new("b.json"))?)?;
+    let a = extractor.extract(&Program::load("a.json")?)?;
+    let b = extractor.extract(&Program::load("b.json")?)?;
 
     // One Oinkie, kept for every comparison: it owns the threads they run on.
     let oinkie = Oinkie::new()?;

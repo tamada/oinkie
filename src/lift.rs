@@ -423,23 +423,23 @@ impl LifterBuilder {
     /// (`GHIDRA_HOME` for Ghidra), and then the usual installation directories
     /// are looked in. [`Error::ToolNotFound`](crate::Error::ToolNotFound)
     /// names both when neither finds it.
-    pub fn home(mut self, home: Option<PathBuf>) -> Self {
-        self.home = home;
+    pub fn home(mut self, home: impl Into<PathBuf>) -> Self {
+        self.home = Some(home.into());
         self
     }
 
     /// A lifting script to run instead of the built-in one, in the tool's own
     /// language: Java for Ghidra, Python for IDA and Binary Ninja. It must
     /// write `{input file name}.json` into its working directory.
-    pub fn script(mut self, script: Option<PathBuf>) -> Self {
-        self.script = script;
+    pub fn script(mut self, script: impl Into<PathBuf>) -> Self {
+        self.script = Some(script.into());
         self
     }
 
     /// The directory the tool works in, kept afterwards. Without one -- the
     /// default -- a temporary directory is used and deleted.
-    pub fn intermediate_dir(mut self, dir: Option<PathBuf>) -> Self {
-        self.intermediate_dir = dir;
+    pub fn intermediate_dir(mut self, dir: impl Into<PathBuf>) -> Self {
+        self.intermediate_dir = Some(dir.into());
         self
     }
 

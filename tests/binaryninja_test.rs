@@ -43,7 +43,7 @@ fn fixture(level: &str, name: &str) -> PathBuf {
 #[test]
 fn test_each_level_reads_back_as_the_representation_it_names() {
     for (level, ir) in LEVELS {
-        let p = Program::load(&fixture(level, "hello_clang.json"))
+        let p = Program::load(fixture(level, "hello_clang.json"))
             .unwrap_or_else(|e| panic!("{level}: {e}"));
         assert_eq!(p.ir(), ir, "{level} loaded as the wrong representation");
         assert_eq!(p.name(), "hello_clang");
@@ -61,7 +61,7 @@ fn test_each_level_reads_back_as_the_representation_it_names() {
 #[test]
 fn test_every_level_finds_the_call_that_is_there() {
     for (level, _) in LEVELS {
-        let p = Program::load(&fixture(level, "hello_clang.json")).unwrap();
+        let p = Program::load(fixture(level, "hello_clang.json")).unwrap();
         let b = BirthmarkType::try_from("fc-set")
             .map(Extractor::new)
             .and_then(|extractor| extractor.extract(&p))
@@ -83,8 +83,8 @@ fn test_every_level_finds_the_call_that_is_there() {
 /// compared by mistake.
 #[test]
 fn test_two_levels_of_the_same_program_refuse_to_be_compared() {
-    let llil = Program::load(&fixture("llil", "hello_clang.json")).unwrap();
-    let hlil = Program::load(&fixture("hlil", "hello_clang.json")).unwrap();
+    let llil = Program::load(fixture("llil", "hello_clang.json")).unwrap();
+    let hlil = Program::load(fixture("hlil", "hello_clang.json")).unwrap();
     let err = match compare(&llil, &hlil) {
         Err(e) => e.to_string(),
         Ok(_) => panic!("LLIL and HLIL were compared"),
@@ -98,8 +98,8 @@ fn test_two_levels_of_the_same_program_refuse_to_be_compared() {
 #[test]
 fn test_a_level_compares_with_itself() {
     for (level, _) in LEVELS {
-        let a = Program::load(&fixture(level, "hello_clang.json")).unwrap();
-        let b = Program::load(&fixture(level, "hello_gcc.json")).unwrap();
+        let a = Program::load(fixture(level, "hello_clang.json")).unwrap();
+        let b = Program::load(fixture(level, "hello_gcc.json")).unwrap();
         let s = compare(&a, &b).unwrap_or_else(|e| panic!("{level}: {e}"));
         assert!(
             (0.0..=1.0).contains(&s),

@@ -127,7 +127,8 @@ impl Program {
     /// representation would fail on the first foreign opcode, reported as an
     /// unknown variant among seventy-five alternatives rather than as the one
     /// fact that matters.
-    pub fn load(path: &Path) -> Result<Self> {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        let path = path.as_ref();
         // Read once and deserialize twice from the same bytes: the probe has
         // to see the file before the reader can be chosen, and reading it
         // again would cost more than the scan does.
@@ -181,8 +182,8 @@ impl Program {
     /// Records the file this program was read from, which
     /// [`Program::json_path`] then returns. [`Program::load`] does not record
     /// it by itself.
-    pub fn set_json_path(&mut self, path: PathBuf) {
-        dispatch!(&mut self.0, p => p.set_json_path(path))
+    pub fn set_json_path(&mut self, path: impl Into<PathBuf>) {
+        dispatch!(&mut self.0, p => p.set_json_path(path.into()))
     }
 
     /// Where this program was read from, once [`Program::set_json_path`] has
@@ -203,8 +204,8 @@ impl Program {
 }
 
 impl<T> TypedProgram<T> {
-    pub fn set_json_path(&mut self, path: PathBuf) {
-        self.json_path = Some(path);
+    pub fn set_json_path(&mut self, path: impl Into<PathBuf>) {
+        self.json_path = Some(path.into());
     }
 
     /// The intermediate representation these operations are written in.

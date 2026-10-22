@@ -892,7 +892,7 @@ mod tests {
     #[test]
     fn test_freq_counts_occurrences_and_kgrams_are_one_element_each() {
         let d = tempfile::tempdir().unwrap();
-        let k = |ops: &[&str]| Kgram::new(ops.iter().map(|o| s(o)).collect());
+        let k = |ops: &[&str]| Kgram::new(ops.iter().copied());
         let freq = Data::KgramFreq(
             [(k(&["COPY", "CALL"]), 3), (k(&["CALL", "RETURN"]), 1)]
                 .into_iter()

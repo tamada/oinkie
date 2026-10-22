@@ -764,11 +764,24 @@ fn perform_lift(opts: cli::LiftOpts, bars: &Bars) -> Result<Vec<Duration>> {
     r
 }
 
+/// Calls a builder's setter only when there is a value to set, so that an
+/// optional argument stays in the chain.
+trait SetIfSome: Sized {
+    fn set_if_some<T>(self, value: Option<T>, set: impl FnOnce(Self, T) -> Self) -> Self {
+        match value {
+            Some(v) => set(self, v),
+            None => self,
+        }
+    }
+}
+
+impl SetIfSome for LifterBuilder {}
+
 fn build_lifter(opts: &cli::LiftOpts) -> Result<Box<dyn Lifter + Sync>> {
     LifterBuilder::new(opts.ir())
-        .home(opts.home().map(Path::to_path_buf))
-        .script(opts.script().map(Path::to_path_buf))
-        .intermediate_dir(opts.intermediate_dir().map(Path::to_path_buf))
+        .set_if_some(opts.home(), LifterBuilder::home)
+        .set_if_some(opts.script(), LifterBuilder::script)
+        .set_if_some(opts.intermediate_dir(), LifterBuilder::intermediate_dir)
         .build()
         .map_err(with_home_hint)
 }
