@@ -53,9 +53,10 @@ fn test_the_fixture_reads_back_as_the_representation_it_names() {
 #[test]
 fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
     let p = Program::load(&fixture("hello_clang.json")).unwrap();
-    let b = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
-        .extract(&p)
-        .unwrap();
+    let b = BirthmarkType::try_from("fc-set")
+        .map(Extractor::new)
+        .and_then(|extractor| extractor.extract(&p))
+        .expect("extracting fc-set");
     let calls: Vec<String> = b
         .functions()
         .iter()

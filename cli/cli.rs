@@ -349,7 +349,7 @@ impl ExtractOpts {
     }
 
     pub fn extractor(&self) -> Extractor {
-        Extractor::new(self.birthmark_type.clone())
+        Extractor::new(&self.birthmark_type)
     }
 
     pub fn len(&self) -> usize {

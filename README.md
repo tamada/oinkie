@@ -54,7 +54,7 @@ The terms used here and in the documentation are defined in the [Glossary](https
 At first, we should collect the binary files to examine the targets.
 Note that `oinkie` does not care about the binary formats; it only looks at the intermediate representation (IR), which is called the Oinkie IR format (OIR format).
 
-### 2️⃣​ Lifts the binary files to the intermediate representation (IR)
+### 2️⃣ Lifts the binary files to the intermediate representation (IR)
 
 Next, we should lift the binary files to the OIR format.
 `oinkie` lifts with [Ghidra](https://www.ghidradocs.com), to its P-Code; with
@@ -151,7 +151,7 @@ use oinkie::{Oinkie, Program};
 fn main() -> oinkie::Result<()> {
     // Two lifted programs, as `oinkie lift` writes them.
     let analysis = AnalysisType::try_from("op-set-jaccard")?;
-    let extractor = Extractor::new(analysis.birthmark().clone());
+    let extractor = Extractor::new(&analysis);
     let a = extractor.extract(&Program::load(Path::new("a.json"))?)?;
     let b = extractor.extract(&Program::load(Path::new("b.json"))?)?;
 

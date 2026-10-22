@@ -39,7 +39,7 @@ fn test_extractor_and_comparator() {
     ];
 
     for (bt, algo) in combinations {
-        let extractor = Extractor::new(bt.clone());
+        let extractor = Extractor::new(&bt);
         let b1 = extractor.extract(&p1).unwrap();
         let b2 = extractor.extract(&p2).unwrap();
 

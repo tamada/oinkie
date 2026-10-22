@@ -76,6 +76,12 @@ pub enum BirthmarkType {
     OpKgramSet(usize),
 }
 
+impl From<&BirthmarkType> for BirthmarkType {
+    fn from(bt: &BirthmarkType) -> Self {
+        bt.clone()
+    }
+}
+
 impl TryFrom<&str> for BirthmarkType {
     type Error = Error;
 
@@ -640,6 +646,18 @@ impl Data {
 pub struct AnalysisType {
     pub(crate) birthmark: BirthmarkType,
     pub(crate) algorithm: Algorithm,
+}
+
+impl From<AnalysisType> for BirthmarkType {
+    fn from(at: AnalysisType) -> Self {
+        at.birthmark
+    }
+}
+
+impl From<&AnalysisType> for BirthmarkType {
+    fn from(at: &AnalysisType) -> Self {
+        at.birthmark().clone()
+    }
 }
 
 impl AnalysisType {

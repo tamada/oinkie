@@ -62,8 +62,9 @@ fn test_each_level_reads_back_as_the_representation_it_names() {
 fn test_every_level_finds_the_call_that_is_there() {
     for (level, _) in LEVELS {
         let p = Program::load(&fixture(level, "hello_clang.json")).unwrap();
-        let b = Extractor::new(BirthmarkType::try_from("fc-set").unwrap())
-            .extract(&p)
+        let b = BirthmarkType::try_from("fc-set")
+            .map(Extractor::new)
+            .and_then(|extractor| extractor.extract(&p))
             .unwrap_or_else(|e| panic!("{level}: {e}"));
         let calls: Vec<String> = b
             .functions()

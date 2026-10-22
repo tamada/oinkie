@@ -115,7 +115,7 @@ pub fn extract(
     skip: bool,
 ) -> Result<Vec<Extracted>> {
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
-    let extractor = Extractor::new(birthmark_type.clone());
+    let extractor = Extractor::new(birthmark_type);
     let inputs = inputs.iter().collect::<Vec<_>>();
     let done = crate::unique_destinations(&inputs, dest)?
         .par_iter()
@@ -179,7 +179,7 @@ pub fn run(
 ) -> Result<Vec<Score>> {
     let start = Instant::now();
     prepare(dest)?;
-    let extractor = Extractor::new(analysis.birthmark().clone());
+    let extractor = Extractor::new(analysis);
     let by_input = match dest {
         Some(d) => {
             let dir = birthmarks_dir(d);
