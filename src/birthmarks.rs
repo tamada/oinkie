@@ -348,6 +348,13 @@ impl Birthmark {
         &self.functions
     }
 
+    pub(crate) fn function_mapper<'a, F, R>(&'a self, f: F) -> Vec<R>
+    where
+        F: Fn(&'a Function) -> R,
+    {
+        self.functions.iter().map(f).collect()
+    }
+
     /// How many functions it holds.
     pub fn len(&self) -> usize {
         self.functions.len()
