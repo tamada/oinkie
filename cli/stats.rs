@@ -96,6 +96,16 @@ pub(crate) struct Report {
     pub skipped: Vec<Skipped>,
 }
 
+impl Report {
+    pub fn new(groups: Vec<GroupStats>, files: Vec<FileStats>, skipped: Vec<Skipped>) -> Self {
+        Self {
+            groups,
+            files,
+            skipped,
+        }
+    }
+}
+
 /// A file that was given, or found, and is not a birthmark.
 ///
 /// Reported rather than only logged, so that a summary never silently covers
@@ -248,11 +258,7 @@ pub(crate) fn compute(paths: &[PathBuf], top: Option<usize>) -> Report {
         })
         .collect();
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    Report {
-        groups,
-        files,
-        skipped,
-    }
+    Report::new(groups, files, skipped)
 }
 
 fn read_file(path: &Path, birthmark: &Birthmark) -> FileData {
