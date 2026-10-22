@@ -778,15 +778,15 @@ impl CompareResult {
     pub fn new(
         index: usize,
         similarity: f64,
-        path1: PathBuf,
-        path2: PathBuf,
+        path1: impl Into<PathBuf>,
+        path2: impl Into<PathBuf>,
         duration: std::time::Duration,
     ) -> Self {
         Self {
             index,
             similarity,
-            path1,
-            path2,
+            path1: path1.into(),
+            path2: path2.into(),
             duration,
         }
     }
