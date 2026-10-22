@@ -29,7 +29,7 @@
 //! # }
 //! ```
 
-use crate::birthmarks::{Birthmark, Data, Shape};
+use crate::birthmarks::{Birthmark, Data, Function, Shape};
 use crate::{Error, Result};
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -430,6 +430,19 @@ impl<F: Fn(Progress) + Sync> Observer for F {
     }
 }
 
+/// The comparison of two birthmarks at least one of which has no functions:
+/// two empty birthmarks are alike, and an empty one is like nothing else.
+fn empty_comparison<'a>(b1: &'a Birthmark, b2: &'a Birthmark) -> Comparison<'a, Birthmark> {
+    use std::time::Duration;
+    let similarity = if b1.is_empty() && b2.is_empty() {
+        1.0
+    } else {
+        0.0
+    };
+    let matrix = Matrix::zeros((b1.len(), b2.len()));
+    Comparison::new(b1, b2, matrix, similarity, Duration::ZERO)
+}
+
 trait BirthmarkComparator: Sync {
     fn compare_birthmarks<'a>(
         &self,
@@ -442,58 +455,25 @@ trait BirthmarkComparator: Sync {
         // keeps the reason in the error: a mismatch of representation reads
         // differently from a mismatch of type.
         b1.check_comparable_with(b2)?;
-        let p1_len = b1.functions.len();
-        let p2_len = b2.functions.len();
-        if p1_len == 0 && p2_len == 0 {
-            Ok(Comparison::new(
-                b1,
-                b2,
-                Matrix::zeros((0, 0)),
-                1.0,
-                std::time::Duration::from_millis(0),
-            ))
-        } else if p1_len == 0 || p2_len == 0 {
-            Ok(Comparison::new(
-                b1,
-                b2,
-                Matrix::zeros((p1_len, p2_len)),
-                0.0,
-                std::time::Duration::from_millis(0),
-            ))
+        if b1.is_empty() || b2.is_empty() {
+            Ok(empty_comparison(b1, b2))
         } else {
             let start = Instant::now();
             // Each function once in the shape the algorithm compares, rather
             // than once per cell: converting is what a cell would otherwise
             // spend most of its time on.
             let shape = self.shape();
-            let d1: Vec<_> = b1
-                .functions
-                .iter()
-                .map(|f| in_shape(&f.data, shape))
-                .collect();
-            let d2: Vec<_> = b2
-                .functions
-                .iter()
-                .map(|f| in_shape(&f.data, shape))
-                .collect();
+            let d1 = b1.function_mapper(|f| in_shape(&f.data, shape));
+            let d2 = b2.function_mapper(|f| in_shape(&f.data, shape));
             observer.notify(Progress::MatrixStarted {
                 rows: d1.len(),
                 columns: d2.len(),
             });
-            let r = build_matrix(
-                &d1,
-                &d2,
-                |e1, e2| self.compare_data(e1, e2),
-                || observer.notify(Progress::RowFilled),
-            )?;
+            let notifier = || observer.notify(Progress::RowFilled);
+            let r = build_matrix(&d1, &d2, |e1, e2| self.compare_data(e1, e2), notifier)?;
             observer.notify(Progress::Aggregating);
-            let sizes = |b: &Birthmark| {
-                b.functions
-                    .iter()
-                    .map(crate::birthmarks::Function::len)
-                    .collect::<Vec<_>>()
-            };
-            let (s1, s2) = (sizes(b1), sizes(b2));
+            let s1 = b1.function_mapper(Function::len);
+            let s2 = b2.function_mapper(Function::len);
             aggregator
                 .aggregate(&r, Some((&s1, &s2)))
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
@@ -1752,6 +1732,30 @@ mod tests {
             assert!(
                 (c.similarity() - 1.0).abs() < 1e-9,
                 "aggregator: {aggregator:?}"
+            );
+        }
+    }
+
+    /// Each side is weighted by its own functions' sizes. The two birthmarks
+    /// hold the same number of functions, so weighting both by one side's
+    /// sizes would pass every length check and still score them wrongly.
+    #[test]
+    fn compare_birthmarks_weights_each_side_by_its_own_sizes() {
+        let b1 = birthmark("a", &[("f1", &["A"]), ("f2", &["B"])]);
+        let b2 = birthmark("b", &[("g1", &["A"]), ("g2", &["B", "C", "D", "E"])]);
+        // f1-g1 scores 1 at weight 1 + 1, f2-g2 scores 1/4 at weight 1 + 4,
+        // out of 2 + 5.
+        let expected = (2.0 * 1.0 + 5.0 * 0.25) / 7.0;
+        for (x, y) in [(&b1, &b2), (&b2, &b1)] {
+            let c = Jaccard
+                .compare_birthmarks(x, y, &Aggregator::Weighted, &|_: Progress| {})
+                .unwrap();
+            assert!(
+                (c.similarity() - expected).abs() < 1e-9,
+                "{} against {}: {}",
+                x.metadata.file_name,
+                y.metadata.file_name,
+                c.similarity()
             );
         }
     }

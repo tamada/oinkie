@@ -19,6 +19,12 @@ pub fn oinkie::birthmarks::BirthmarkType::clone(&self) -> Self
 impl core::cmp::Eq for oinkie::birthmarks::BirthmarkType
 impl core::cmp::PartialEq for oinkie::birthmarks::BirthmarkType
 pub fn oinkie::birthmarks::BirthmarkType::eq(&self, &Self) -> bool
+impl core::convert::From<&oinkie::birthmarks::AnalysisType> for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::from(&oinkie::birthmarks::AnalysisType) -> Self
+impl core::convert::From<&oinkie::birthmarks::BirthmarkType> for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::from(&oinkie::birthmarks::BirthmarkType) -> Self
+impl core::convert::From<oinkie::birthmarks::AnalysisType> for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::from(oinkie::birthmarks::AnalysisType) -> Self
 impl core::convert::TryFrom<&str> for oinkie::birthmarks::BirthmarkType
 pub type oinkie::birthmarks::BirthmarkType::Error = oinkie::Error
 pub fn oinkie::birthmarks::BirthmarkType::try_from(&str) -> oinkie::Result<Self>
@@ -66,6 +72,10 @@ impl oinkie::birthmarks::AnalysisType
 pub fn oinkie::birthmarks::AnalysisType::algorithm(&self) -> &oinkie::compare::Algorithm
 pub fn oinkie::birthmarks::AnalysisType::birthmark(&self) -> &oinkie::birthmarks::BirthmarkType
 pub fn oinkie::birthmarks::AnalysisType::new(oinkie::birthmarks::BirthmarkType, oinkie::compare::Algorithm) -> oinkie::Result<Self>
+impl core::convert::From<&oinkie::birthmarks::AnalysisType> for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::from(&oinkie::birthmarks::AnalysisType) -> Self
+impl core::convert::From<oinkie::birthmarks::AnalysisType> for oinkie::birthmarks::BirthmarkType
+pub fn oinkie::birthmarks::BirthmarkType::from(oinkie::birthmarks::AnalysisType) -> Self
 impl core::convert::TryFrom<&str> for oinkie::birthmarks::AnalysisType
 pub type oinkie::birthmarks::AnalysisType::Error = oinkie::Error
 pub fn oinkie::birthmarks::AnalysisType::try_from(&str) -> oinkie::Result<Self>
@@ -252,7 +262,7 @@ pub struct oinkie::extract::Extractor
 impl oinkie::extract::Extractor
 pub fn oinkie::extract::Extractor::birthmark_type(&self) -> &oinkie::birthmarks::BirthmarkType
 pub fn oinkie::extract::Extractor::extract(&self, &oinkie::Program) -> oinkie::Result<oinkie::birthmarks::Birthmark>
-pub fn oinkie::extract::Extractor::new(oinkie::birthmarks::BirthmarkType) -> Self
+pub fn oinkie::extract::Extractor::new(impl core::convert::Into<oinkie::birthmarks::BirthmarkType>) -> Self
 pub mod oinkie::lift
 #[non_exhaustive] pub enum oinkie::lift::Ir
 pub oinkie::lift::Ir::BinaryNinjaHlil

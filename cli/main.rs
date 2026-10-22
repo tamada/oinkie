@@ -64,7 +64,7 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie, bars: &Bars) -> Result<Vec<D
     // The analysis names a birthmark and an algorithm, and both are used: each
     // program's birthmark is extracted and the birthmarks are compared, which is
     // what `extract` followed by `compare` does.
-    let extractor = Extractor::new(atype.birthmark().clone());
+    let extractor = Extractor::new(atype);
     std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
 
     // Each input once, rather than once per pair it is in, and written down:

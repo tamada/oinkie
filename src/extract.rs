@@ -32,8 +32,8 @@ pub struct Extractor {
 impl Extractor {
     /// An extractor of `bt`. A k-gram of size 0 is refused when extracting,
     /// with [`Error::BirthmarkType`](crate::Error::BirthmarkType).
-    pub fn new(bt: BirthmarkType) -> Self {
-        Self { bt }
+    pub fn new(bt: impl Into<BirthmarkType>) -> Self {
+        Self { bt: bt.into() }
     }
 
     /// The birthmark this extractor makes.
@@ -269,7 +269,7 @@ mod tests {
             BirthmarkType::OpKgramSet(0),
             BirthmarkType::OpKgramFreq(0),
         ] {
-            let err = Extractor::new(bt.clone())
+            let err = Extractor::new(&bt)
                 .extract(&p)
                 .err()
                 .unwrap_or_else(|| panic!("{bt} was extracted"));
@@ -305,8 +305,9 @@ mod tests {
     fn test_calls_that_resolve_to_nothing_give_an_empty_birthmark() {
         let p = a_program_whose_calls_resolve_to_nothing();
         for bt in ["fc-set", "fc-seq", "fc-freq"] {
-            let b = Extractor::new(BirthmarkType::try_from(bt).unwrap())
-                .extract(&p)
+            let b = BirthmarkType::try_from(bt)
+                .map(Extractor::new)
+                .and_then(|extractor| extractor.extract(&p))
                 .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
             assert_eq!(b.len(), 1, "{bt}: one function was expected");
             let calls: Vec<String> = b.iter().flat_map(|e| e.ops().map(String::from)).collect();
@@ -343,7 +344,9 @@ mod tests {
             .unwrap();
             programs.push(crate::program::Program::load(&path).unwrap());
         }
-        let extractor = Extractor::new(BirthmarkType::try_from("fc-set").unwrap());
+        let extractor = BirthmarkType::try_from("fc-set")
+            .map(Extractor::new)
+            .expect("construct extractor from fc-set");
         let sizes: Vec<usize> = programs
             .iter()
             .map(|p| {
@@ -432,8 +435,9 @@ mod tests {
     #[test]
     fn test_the_op_families_are_not_refused_for_unresolvable_calls() {
         let p = a_program_whose_calls_resolve_to_nothing();
-        let b = Extractor::new(BirthmarkType::try_from("op-set").unwrap())
-            .extract(&p)
+        let b = BirthmarkType::try_from("op-set")
+            .map(Extractor::new)
+            .and_then(|extractor| extractor.extract(&p))
             .expect("op-set does not depend on symbols");
         assert_eq!(b.len(), 1);
     }
@@ -509,7 +513,7 @@ mod tests {
             BirthmarkType::FcSet,
             BirthmarkType::FcFreq,
         ] {
-            let b = Extractor::new(bt.clone())
+            let b = Extractor::new(&bt)
                 .extract_each_typed(&program)
                 .unwrap_or_else(|e| panic!("{bt} was refused: {e}"));
             assert!(
