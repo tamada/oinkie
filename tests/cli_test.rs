@@ -553,6 +553,101 @@ fn test_run_skip_does_not_reuse_a_birthmark_of_another_type() {
     );
 }
 
+/// A score no comparison of the test inputs gives, written into a pair's CSV
+/// so that a summary showing it can only have read it from there.
+const PLANTED: f64 = 0.123456;
+
+/// Rewrites the similarity on the `result,` line of `pair_csv` to [`PLANTED`],
+/// keeping the duration beside it.
+fn plant_score(pair_csv: &std::path::Path) {
+    let content = fs::read_to_string(pair_csv).unwrap();
+    let planted = content
+        .lines()
+        .map(|l| match l.strip_prefix("result,") {
+            Some(rest) => format!("result,{},{PLANTED}", rest.split(',').next().unwrap()),
+            None => l.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    fs::write(pair_csv, planted + "\n").unwrap();
+}
+
+/// `run --skip` takes a pair's score from the CSV an earlier run left, when
+/// both birthmarks are still the ones it compared, rather than comparing the
+/// pair again.
+#[test]
+fn test_run_skip_reuses_the_score_an_earlier_run_left() {
+    let dir = tempdir().unwrap();
+    let dest = dir.path().join("out");
+    let run = |skip: bool| {
+        let mut cmd = Command::cargo_bin("oinkie").unwrap();
+        cmd.args(["run", "-a", "op-set-jaccard", "-s", "all", "-d"]);
+        cmd.arg(&dest);
+        if skip {
+            cmd.arg("-S");
+        }
+        cmd.args([
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/udl.json",
+        ]);
+        cmd.assert().success();
+    };
+    run(false);
+    assert_ne!(first_score(&dest.join("results.csv")), PLANTED);
+    plant_score(&dest.join("00000.csv"));
+
+    run(true);
+    assert_eq!(
+        first_score(&dest.join("results.csv")),
+        PLANTED,
+        "the pair was compared again rather than read from its CSV"
+    );
+}
+
+/// `compare --skip` takes a pair's score from the CSV an earlier comparison
+/// left, rather than comparing the pair again.
+#[test]
+fn test_compare_skip_reuses_the_score_an_earlier_comparison_left() {
+    let dir = tempdir().unwrap();
+    let birthmarks = dir.path().join("birthmarks");
+    Command::cargo_bin("oinkie")
+        .unwrap()
+        .args(["extract", "-b", "op-set", "-d"])
+        .arg(&birthmarks)
+        .args([
+            "testdata/lifted/pcodes/hello_clang.json",
+            "testdata/lifted/pcodes/udl.json",
+        ])
+        .assert()
+        .success();
+    let mut extracted = fs::read_dir(&birthmarks)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect::<Vec<_>>();
+    extracted.sort();
+    let dest = dir.path().join("scores");
+    let compare = |skip: bool| {
+        let mut cmd = Command::cargo_bin("oinkie").unwrap();
+        cmd.args(["compare", "-a", "jaccard", "-s", "all", "-d"]);
+        cmd.arg(&dest);
+        if skip {
+            cmd.arg("-S");
+        }
+        cmd.args(&extracted);
+        cmd.assert().success();
+    };
+    compare(false);
+    assert_ne!(first_score(&dest.join("results.csv")), PLANTED);
+    plant_score(&dest.join("00000.csv"));
+
+    compare(true);
+    assert_eq!(
+        first_score(&dest.join("results.csv")),
+        PLANTED,
+        "the pair was compared again rather than read from its CSV"
+    );
+}
+
 /// The same input twice is extracted once and written once, rather than by
 /// two workers into one file at the same time.
 #[test]
