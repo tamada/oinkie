@@ -68,12 +68,12 @@ fn extract_birthmark_op<T: crate::Op>(
     p: &TypedProgram<T>,
     bt: &BirthmarkType,
 ) -> Result<Birthmark> {
+    use BirthmarkType::{
+        FcFreq, FcSeq, FcSet, OpFreq, OpKgramFreq, OpKgramSeq, OpKgramSet, OpSeq, OpSet,
+    };
     // A name with k = 0 does not parse, but the variant can be built by hand,
     // and a window of size zero panics. Refused as the unknown birthmark it is.
-    if let BirthmarkType::OpKgramSeq(0)
-    | BirthmarkType::OpKgramSet(0)
-    | BirthmarkType::OpKgramFreq(0) = bt
-    {
+    if let OpKgramSeq(0) | OpKgramSet(0) | OpKgramFreq(0) = bt {
         return Err(crate::Error::BirthmarkType(bt.to_string()));
     }
     let now = std::time::Instant::now();
@@ -82,10 +82,8 @@ fn extract_birthmark_op<T: crate::Op>(
     // not distinguish it. Said rather than refused, because the two empty
     // birthmarks it produces will score 1.0 against each other and the reader
     // should know which of those two things they are looking at.
-    if matches!(
-        bt,
-        BirthmarkType::FcSeq | BirthmarkType::FcSet | BirthmarkType::FcFreq
-    ) && let Some(reason) = empty_family(p)
+    if matches!(bt, FcSeq | FcSet | FcFreq)
+        && let Some(reason) = empty_family(p)
     {
         log::warn!("{}", reason.message(p.path(), p.ir()));
     }
@@ -94,19 +92,15 @@ fn extract_birthmark_op<T: crate::Op>(
         .map(|f| {
             let name = f.name().to_string();
             let data = match bt {
-                BirthmarkType::FcFreq => Data::Freq(extract_function_calls_freq(f, p)),
-                BirthmarkType::FcSet => {
-                    Data::Set(extract_function_calls_freq(f, p).into_keys().collect())
-                }
-                BirthmarkType::FcSeq => Data::Seq(extract_function_calls(f, p)),
-                BirthmarkType::OpFreq => Data::Freq(f.ops_freq()),
-                BirthmarkType::OpSet => Data::Set(f.ops_freq().into_keys().collect()),
-                BirthmarkType::OpSeq => Data::Seq(f.ops().map(Into::into).collect()),
-                BirthmarkType::OpKgramSeq(k) => Data::KgramSeq(extract_op_kgram_seq(f, *k)),
-                BirthmarkType::OpKgramFreq(k) => Data::KgramFreq(extract_op_kgram_freq(f, *k)),
-                BirthmarkType::OpKgramSet(k) => {
-                    Data::KgramSet(extract_op_kgram_seq(f, *k).into_iter().collect())
-                }
+                FcFreq => Data::Freq(extract_function_calls_freq(f, p)),
+                FcSet => Data::Set(extract_function_calls_freq(f, p).into_keys().collect()),
+                FcSeq => Data::Seq(extract_function_calls(f, p)),
+                OpFreq => Data::Freq(f.ops_freq()),
+                OpSet => Data::Set(f.ops_freq().into_keys().collect()),
+                OpSeq => Data::Seq(f.ops().map(Into::into).collect()),
+                OpKgramSeq(k) => Data::KgramSeq(extract_op_kgram_seq(f, *k)),
+                OpKgramFreq(k) => Data::KgramFreq(extract_op_kgram_freq(f, *k)),
+                OpKgramSet(k) => Data::KgramSet(extract_op_kgram_seq(f, *k).into_iter().collect()),
             };
             Function { name, data }
         })
