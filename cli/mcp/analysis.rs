@@ -16,6 +16,7 @@ use oinkie::extract::Extractor;
 use oinkie::{Error, Program, Result};
 use rayon::prelude::*;
 use rmcp::schemars;
+use rustc_hash::FxHashMap;
 use serde::Serialize;
 
 use crate::CompareResult;
@@ -180,28 +181,7 @@ pub fn run(
     let start = Instant::now();
     prepare(dest)?;
     let extractor = Extractor::new(analysis);
-    let by_input = match dest {
-        Some(d) => {
-            let dir = birthmarks_dir(d);
-            std::fs::create_dir_all(&dir).map_err(|e| Error::Io(dir.clone(), e))?;
-            crate::extract_all(inputs, &dir, &extractor, false, || ())?
-                .into_iter()
-                .map(|(input, e)| (input, e.birthmark))
-                .collect::<rustc_hash::FxHashMap<_, _>>()
-        }
-        None => {
-            let mut unique = inputs.iter().collect::<Vec<_>>();
-            unique.sort();
-            unique.dedup();
-            let done = unique
-                .par_iter()
-                .map(|input| Ok(((*input).clone(), extractor.extract(&Program::load(input)?)?)))
-                .collect::<Vec<_>>();
-            Error::vec_result_to_result_vec(done)?
-                .into_iter()
-                .collect::<rustc_hash::FxHashMap<_, _>>()
-        }
-    };
+    let by_input = extract_inputs(inputs, &extractor, dest)?;
     let results = strategy
         .pairs(inputs)
         .enumerate()
@@ -215,13 +195,40 @@ pub fn run(
             Ok(CompareResult::new(
                 i,
                 comparison.similarity(),
-                b1.path().to_path_buf(),
-                b2.path().to_path_buf(),
+                b1.path(),
+                b2.path(),
                 comparison.duration(),
             ))
         })
         .collect::<Vec<_>>();
     finish(results, dest, start)
+}
+
+/// Each input's birthmark, extracted once however many pairs it is in:
+/// written below `dest` when one is given, and kept only in memory otherwise.
+fn extract_inputs(
+    inputs: &[PathBuf],
+    extractor: &Extractor,
+    dest: Option<&Path>,
+) -> Result<FxHashMap<PathBuf, Birthmark>> {
+    match dest {
+        Some(d) => {
+            let dir = birthmarks_dir(d);
+            std::fs::create_dir_all(&dir).map_err(|e| Error::Io(dir.clone(), e))?;
+            let extracted = crate::extract_all(inputs, &dir, extractor, false, || ())?;
+            Ok(extracted
+                .into_iter()
+                .map(|(input, e)| (input, e.birthmark))
+                .collect())
+        }
+        None => {
+            let done = crate::unique_inputs(inputs)
+                .par_iter()
+                .map(|input| Ok(((*input).clone(), extractor.extract(&Program::load(input)?)?)))
+                .collect::<Vec<_>>();
+            Ok(Error::vec_result_to_result_vec(done)?.into_iter().collect())
+        }
+    }
 }
 
 /// Compares birthmarks that `extract` already wrote.
@@ -250,8 +257,8 @@ pub fn compare(
             Ok(CompareResult::new(
                 i,
                 comparison.similarity(),
-                b1.path().to_path_buf(),
-                b2.path().to_path_buf(),
+                b1.path(),
+                b2.path(),
                 comparison.duration(),
             ))
         })

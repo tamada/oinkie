@@ -399,6 +399,14 @@ pub(crate) struct Extracted {
     pub(crate) fresh: bool,
 }
 
+/// Each input once, in order, however many times it was given.
+pub(crate) fn unique_inputs(inputs: &[PathBuf]) -> Vec<&PathBuf> {
+    let mut unique = inputs.iter().collect::<Vec<_>>();
+    unique.sort();
+    unique.dedup();
+    unique
+}
+
 /// The birthmark `extractor` makes of each program in `inputs`, written into
 /// `dir` under the name `extract` would give it, and returned with that path
 /// recorded, keyed by the input.
@@ -420,10 +428,7 @@ pub(crate) fn extract_all(
     skip: bool,
     on_each: impl Fn() + Sync,
 ) -> Result<FxHashMap<PathBuf, Extracted>> {
-    let mut unique = inputs.iter().collect::<Vec<_>>();
-    unique.sort();
-    unique.dedup();
-    let done = unique
+    let done = unique_inputs(inputs)
         .par_iter()
         .map(|path| {
             let dest_path = dir.join(dest_name::dest_file_name(path)?);
