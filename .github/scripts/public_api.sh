@@ -21,6 +21,11 @@ readonly NIGHTLY=nightly-2026-10-03
 readonly TOOL_VERSION=0.52.0
 readonly FILE=.github/public-api.txt
 
+# A target directory of its own. Cargo empties target/doc whenever a
+# different rustdoc writes to it, so the nightly here, sharing it with the
+# stable `cargo doc`, would delete the HTML documentation on every run.
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}/public-api"
+
 case "${1:-}" in
 --install)
     rustup toolchain install "$NIGHTLY" --profile minimal
