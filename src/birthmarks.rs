@@ -348,6 +348,10 @@ impl Birthmark {
         &self.functions
     }
 
+    /// `f` applied to each function, in the order the functions are held.
+    ///
+    /// `f` is given the functions for as long as `self` is borrowed, so what
+    /// it returns may borrow from them -- a `Cow` of a function's data, say.
     pub(crate) fn function_mapper<'a, F, R>(&'a self, f: F) -> Vec<R>
     where
         F: Fn(&'a Function) -> R,
