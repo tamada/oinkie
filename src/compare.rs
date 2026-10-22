@@ -473,7 +473,7 @@ trait BirthmarkComparator: Sync {
             let r = build_matrix(&d1, &d2, |e1, e2| self.compare_data(e1, e2), notifier)?;
             observer.notify(Progress::Aggregating);
             let s1 = b1.function_mapper(Function::len);
-            let s2 = b1.function_mapper(Function::len);
+            let s2 = b2.function_mapper(Function::len);
             aggregator
                 .aggregate(&r, Some((&s1, &s2)))
                 .map(|sim| Comparison::new(b1, b2, r, sim, start.elapsed()))
