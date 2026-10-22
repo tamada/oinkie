@@ -59,29 +59,8 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie, bars: &Bars) -> Result<Vec<D
         comparing_count,
         "Extracting",
     );
-    let pbar = &progress.overall;
-    let aggregator = opts.aggregator();
-    // The analysis names a birthmark and an algorithm, and both are used: each
-    // program's birthmark is extracted and the birthmarks are compared, which is
-    // what `extract` followed by `compare` does.
-    let extractor = Extractor::new(atype);
-    std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
-
-    // Each input once, rather than once per pair it is in, and written down:
-    // the score directory then holds the birthmarks its scores came from, which
-    // is what `review` re-reads a comparison from.
-    let birthmarks_dir = dest.join("birthmarks");
-    std::fs::create_dir_all(&birthmarks_dir).map_err(|e| Error::Io(birthmarks_dir.clone(), e))?;
-    let by_input = extract_all(
-        &opts.files,
-        &birthmarks_dir,
-        &extractor,
-        opts.is_skip(),
-        || pbar.inc(1),
-    )?;
-    // Duplicates were extracted once, so they never reach the bar.
-    pbar.inc((opts.files.len() - by_input.len()) as u64);
-    pbar.set_message("Comparing");
+    let by_input = extract_for_run(&opts, &atype, dest, &progress)?;
+    progress.overall.set_message("Comparing");
 
     let results = opts
         .iter()
@@ -96,34 +75,100 @@ fn perform_run(opts: cli::RunOpts, oinkie: &Oinkie, bars: &Bars) -> Result<Vec<D
             // none -- and keeping the score would leave it naming a birthmark
             // it did not compare.
             if dest_file.exists() && opts.is_skip() && !e1.fresh && !e2.fresh {
-                log::info!(
-                    "Similarity file for {:?} and {:?} already exists. Skipping comparison.",
-                    path1,
-                    path2
-                );
-                pbar.inc(1);
-                read_result_file(&dest_file, i, path1, path2)
+                reuse_result(&dest_file, i, path1, path2, &progress)
             } else {
-                let (b1, b2) = (&e1.birthmark, &e2.birthmark);
-                let pair = progress.pair(i);
-                let result = comparator.compare_birthmarks_with(b1, b2, aggregator, &pair)?;
-                drop(pair);
-                pbar.inc(1);
-                score_csv::store(&result, &dest_file)?;
-                Ok(CompareResult::new(
+                let pair = (&e1.birthmark, &e2.birthmark);
+                compare_and_store(
                     i,
-                    result.similarity(),
-                    b1.path().to_path_buf(),
-                    b2.path().to_path_buf(),
-                    result.duration(),
-                ))
+                    pair,
+                    &comparator,
+                    opts.aggregator(),
+                    &progress,
+                    &dest_file,
+                )
             }
         })
         .collect::<Vec<_>>();
     progress.finish();
     let results = Error::vec_result_to_result_vec(results)?;
-    let dest_file = dest.join("results.csv");
-    store_and_get_durations(results, &dest_file, start)
+    store_and_get_durations(results, &dest.join("results.csv"), start)
+}
+
+/// Each input's birthmark for `run`, extracted once and written below `dest`.
+///
+/// The analysis names a birthmark and an algorithm, and both are used: each
+/// program's birthmark is extracted and the birthmarks are compared, which is
+/// what `extract` followed by `compare` does.
+fn extract_for_run(
+    opts: &cli::RunOpts,
+    atype: &oinkie::birthmarks::AnalysisType,
+    dest: &Path,
+    progress: &Comparing,
+) -> Result<FxHashMap<PathBuf, Extracted>> {
+    let pbar = &progress.overall;
+    let extractor = Extractor::new(atype);
+    create_dir(dest)?;
+    // Each input once, rather than once per pair it is in, and written down:
+    // the score directory then holds the birthmarks its scores came from, which
+    // is what `review` re-reads a comparison from.
+    let birthmarks_dir = dest.join("birthmarks");
+    create_dir(&birthmarks_dir)?;
+    let by_input = extract_all(
+        &opts.files,
+        &birthmarks_dir,
+        &extractor,
+        opts.is_skip(),
+        || pbar.inc(1),
+    )?;
+    // Duplicates were extracted once, so they never reach the bar.
+    pbar.inc((opts.files.len() - by_input.len()) as u64);
+    Ok(by_input)
+}
+
+fn create_dir(dir: &Path) -> Result<()> {
+    std::fs::create_dir_all(dir).map_err(|e| Error::Io(dir.to_path_buf(), e))
+}
+
+/// The score of pair `index` as an earlier run left it in `dest_file`, in
+/// place of comparing the pair again.
+fn reuse_result(
+    dest_file: &Path,
+    index: usize,
+    path1: &Path,
+    path2: &Path,
+    progress: &Comparing,
+) -> Result<CompareResult> {
+    log::info!(
+        "Similarity file for {:?} and {:?} already exists. Skipping comparison.",
+        path1,
+        path2
+    );
+    progress.overall.inc(1);
+    read_result_file(dest_file, index, path1, path2)
+}
+
+/// Compares pair `index`, writes its function similarities to `dest_file`,
+/// and returns its row of the summary.
+fn compare_and_store(
+    index: usize,
+    (b1, b2): (&Birthmark, &Birthmark),
+    comparator: &Comparator,
+    aggregator: &Aggregator,
+    progress: &Comparing,
+    dest_file: &Path,
+) -> Result<CompareResult> {
+    let pair = progress.pair(index);
+    let result = comparator.compare_birthmarks_with(b1, b2, aggregator, &pair)?;
+    drop(pair);
+    progress.overall.inc(1);
+    score_csv::store(&result, dest_file)?;
+    Ok(CompareResult::new(
+        index,
+        result.similarity(),
+        b1.path(),
+        b2.path(),
+        result.duration(),
+    ))
 }
 
 /// Read the comparison result from the given CSV file and return a CompareResult struct.
@@ -139,6 +184,32 @@ fn read_result_file(
     _path1: &Path,
     _path2: &Path,
 ) -> Result<CompareResult> {
+    let (path1, path2, scored) = read_pair_and_score(dest_path)?;
+    let (duration_nanos, similarity) = scored
+        .ok_or_else(|| Error::Parse(format!("Result line not found in {}", dest_path.display())))?;
+    if path1.as_os_str().is_empty() || path2.as_os_str().is_empty() {
+        Err(Error::Parse(format!(
+            "Birthmark paths not found in {}",
+            dest_path.display()
+        )))
+    } else {
+        Ok(CompareResult::new(
+            index,
+            similarity,
+            path1,
+            path2,
+            Duration::from_nanos(duration_nanos),
+        ))
+    }
+}
+
+/// The two birthmark paths a pair's CSV names, and its duration in
+/// nanoseconds and similarity.
+type PairAndScore = (PathBuf, PathBuf, Option<(u64, f64)>);
+
+/// The two birthmark paths and the score a pair's CSV holds, each as the file
+/// gives it: an empty path, or no score, where it does not say.
+fn read_pair_and_score(dest_path: &Path) -> Result<PairAndScore> {
     let file = std::fs::File::open(dest_path).map_err(|e| Error::Io(dest_path.to_path_buf(), e))?;
     let mut reader = csv::ReaderBuilder::new()
         .flexible(true)
@@ -156,25 +227,7 @@ fn read_result_file(
     for result in reader.records() {
         let record = result.map_err(Error::Csv)?;
         match record.get(0) {
-            Some("result") => {
-                if record.len() < 3 {
-                    return Err(Error::Parse(format!(
-                        "Invalid result line format in {}",
-                        dest_path.display()
-                    )));
-                }
-                let duration_nanos = record[1]
-                    .parse()
-                    .map_err(|e| Error::ParseInt(record[1].to_string(), e))?;
-                let similarity = record[2].parse().map_err(|e| {
-                    Error::Parse(format!(
-                        "Failed to parse similarity value in {}: {}",
-                        dest_path.display(),
-                        e
-                    ))
-                })?;
-                scored = Some((duration_nanos, similarity));
-            }
+            Some("result") => scored = Some(parse_result_line(&record, dest_path)?),
             Some("left") => {
                 if let Some(s) = record.get(3) {
                     original_path1 = PathBuf::from(s);
@@ -188,27 +241,29 @@ fn read_result_file(
             _ => {}
         }
     }
+    Ok((original_path1, original_path2, scored))
+}
 
-    let Some((duration_nanos, similarity)) = scored else {
-        return Err(Error::Parse(format!(
-            "Result line not found in {}",
+/// The duration in nanoseconds and the similarity of a `result,` line.
+fn parse_result_line(record: &csv::StringRecord, dest_path: &Path) -> Result<(u64, f64)> {
+    if record.len() < 3 {
+        Err(Error::Parse(format!(
+            "Invalid result line format in {}",
             dest_path.display()
-        )));
-    };
-    if original_path1.as_os_str().is_empty() || original_path2.as_os_str().is_empty() {
-        return Err(Error::Parse(format!(
-            "Birthmark paths not found in {}",
-            dest_path.display()
-        )));
+        )))
+    } else {
+        let duration_nanos = record[1]
+            .parse()
+            .map_err(|e| Error::ParseInt(record[1].to_string(), e))?;
+        let similarity = record[2].parse().map_err(|e| {
+            Error::Parse(format!(
+                "Failed to parse similarity value in {}: {}",
+                dest_path.display(),
+                e
+            ))
+        })?;
+        Ok((duration_nanos, similarity))
     }
-
-    Ok(CompareResult::new(
-        index,
-        similarity,
-        original_path1,
-        original_path2,
-        Duration::from_nanos(duration_nanos),
-    ))
 }
 
 fn perform_compare(opts: cli::CompareOpts, oinkie: &Oinkie, bars: &Bars) -> Result<Vec<Duration>> {
@@ -286,7 +341,6 @@ fn compare_impl(
     aggregator: &Aggregator,
 ) -> Result<CompareResult> {
     let (i, (path1, path2)) = tuple;
-    let pbar = &progress.overall;
     let dest_file = dest.join(format!("{i:05}.csv"));
     log::info!(
         "compare_impl(dest: {} (exists: {}), skip: {skip})",
@@ -294,13 +348,7 @@ fn compare_impl(
         dest_file.exists()
     );
     if dest_file.exists() && skip {
-        log::info!(
-            "Similarity file for {:?} and {:?} already exists. Skipping comparison.",
-            path1,
-            path2
-        );
-        pbar.inc(1);
-        read_result_file(&dest_file, i, path1, path2)
+        reuse_result(&dest_file, i, path1, path2, progress)
     } else {
         log::info!("Loading birthmark from {:?}", path1.display());
         let mut b1: Birthmark = load(path1.to_path_buf())?;
@@ -314,18 +362,7 @@ fn compare_impl(
             b2.len(),
             i + 1
         );
-        let pair = progress.pair(i);
-        let result = comparator.compare_birthmarks_with(&b1, &b2, aggregator, &pair)?;
-        drop(pair);
-        pbar.inc(1);
-        score_csv::store(&result, &dest_file)?;
-        Ok(CompareResult::new(
-            i,
-            result.similarity(),
-            b1.path().to_path_buf(),
-            b2.path().to_path_buf(),
-            result.duration(),
-        ))
+        compare_and_store(i, (&b1, &b2), comparator, aggregator, progress, &dest_file)
     }
 }
 
@@ -685,14 +722,8 @@ fn with_home_hint(e: Error) -> Error {
 fn perform_lift(opts: cli::LiftOpts, bars: &Bars) -> Result<Vec<Duration>> {
     let dest = opts.dest();
     let pb = bars.overall(Kind::Lift, opts.len(), "Lifting");
-    std::fs::create_dir_all(dest).map_err(|e| Error::Io(dest.to_path_buf(), e))?;
-
-    let lifter: Box<dyn Lifter + Sync> = LifterBuilder::new(opts.ir())
-        .home(opts.home().map(Path::to_path_buf))
-        .script(opts.script().map(Path::to_path_buf))
-        .intermediate_dir(opts.intermediate_dir().map(Path::to_path_buf))
-        .build()
-        .map_err(with_home_hint)?;
+    create_dir(dest)?;
+    let lifter = build_lifter(&opts)?;
 
     // Said at most once per process, however many files `-j` lifts at a time,
     // and only when something is about to be lifted: a `--skip` run that finds
@@ -700,29 +731,7 @@ fn perform_lift(opts: cli::LiftOpts, bars: &Bars) -> Result<Vec<Duration>> {
     let noticed = std::sync::Once::new();
     let lift_one = |path: &PathBuf| {
         let e1 = Instant::now();
-        let dest_file = dest.join(format!(
-            "{}.json",
-            path.file_name().unwrap().to_str().unwrap()
-        ));
-        if dest_file.exists() && opts.is_skip() {
-            log::info!(
-                "Lifted JSON for {:?} already exists. Skipping lifting.",
-                path
-            );
-        } else {
-            // Before the first function can leave the machine, and straight to
-            // stderr rather than through `log`: `--level error` and `--level
-            // off` are ordinary things to pass, and either would silence a
-            // disclosure about where someone's code is going. A privacy
-            // warning that a verbosity flag can turn off is one the user never
-            // agreed to turn off.
-            noticed.call_once(|| {
-                if let Some(notice) = lifter.notice() {
-                    eprintln!("oinkie: {notice}");
-                }
-            });
-            lifter.lift(path, &dest_file)?;
-        }
+        lift_file(path, dest, opts.is_skip(), lifter.as_ref(), &noticed)?;
         // Counted whether it was lifted or skipped: the bar measures inputs
         // dealt with, and a --skip run that left it short of the total would
         // look as though it had stopped early.
@@ -736,23 +745,7 @@ fn perform_lift(opts: cli::LiftOpts, bars: &Bars) -> Result<Vec<Duration>> {
     }
 
     let start = Instant::now();
-    let r = if jobs == 1 {
-        opts.iter().map(lift_one).collect::<Result<Vec<_>>>()
-    } else {
-        // A pool of our own rather than rayon's global one, whose size is the
-        // machine's core count. --jobs has to bound decompiler processes, not
-        // rayon tasks.
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(jobs)
-            .build()
-            .map_err(|e| Error::Parse(format!("could not start {jobs} lift jobs: {e}")))?;
-        pool.install(|| {
-            opts.iter()
-                .par_bridge()
-                .map(lift_one)
-                .collect::<Result<Vec<_>>>()
-        })
-    };
+    let r = lift_in_jobs(jobs, &opts, lift_one);
     let duration = start.elapsed();
     // Only on success, so that a failed run does not announce that it
     // completed with the failure immediately below it.
@@ -764,6 +757,69 @@ fn perform_lift(opts: cli::LiftOpts, bars: &Bars) -> Result<Vec<Duration>> {
         );
     }
     r
+}
+
+fn build_lifter(opts: &cli::LiftOpts) -> Result<Box<dyn Lifter + Sync>> {
+    LifterBuilder::new(opts.ir())
+        .home(opts.home().map(Path::to_path_buf))
+        .script(opts.script().map(Path::to_path_buf))
+        .intermediate_dir(opts.intermediate_dir().map(Path::to_path_buf))
+        .build()
+        .map_err(with_home_hint)
+}
+
+/// Lifts `path` into `dest`, unless `skip` is given and it was lifted already.
+fn lift_file(
+    path: &Path,
+    dest: &Path,
+    skip: bool,
+    lifter: &(dyn Lifter + Sync),
+    noticed: &std::sync::Once,
+) -> Result<()> {
+    let dest_file = dest.join(format!(
+        "{}.json",
+        path.file_name().unwrap().to_str().unwrap()
+    ));
+    if dest_file.exists() && skip {
+        log::info!(
+            "Lifted JSON for {:?} already exists. Skipping lifting.",
+            path
+        );
+        Ok(())
+    } else {
+        // Before the first function can leave the machine, and straight to
+        // stderr rather than through `log`: `--level error` and `--level
+        // off` are ordinary things to pass, and either would silence a
+        // disclosure about where someone's code is going. A privacy
+        // warning that a verbosity flag can turn off is one the user never
+        // agreed to turn off.
+        noticed.call_once(|| {
+            if let Some(notice) = lifter.notice() {
+                eprintln!("oinkie: {notice}");
+            }
+        });
+        lifter.lift(path, &dest_file)
+    }
+}
+
+/// `lift_one` over every input, `jobs` at a time.
+fn lift_in_jobs(
+    jobs: usize,
+    opts: &cli::LiftOpts,
+    lift_one: impl Fn(&PathBuf) -> Result<Duration> + Sync + Send,
+) -> Result<Vec<Duration>> {
+    if jobs == 1 {
+        opts.iter().map(lift_one).collect()
+    } else {
+        // A pool of our own rather than rayon's global one, whose size is the
+        // machine's core count. --jobs has to bound decompiler processes, not
+        // rayon tasks.
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(jobs)
+            .build()
+            .map_err(|e| Error::Parse(format!("could not start {jobs} lift jobs: {e}")))?;
+        pool.install(|| opts.iter().par_bridge().map(lift_one).collect())
+    }
 }
 
 pub struct CompareResult {
