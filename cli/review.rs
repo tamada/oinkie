@@ -404,7 +404,7 @@ fn row_name(field: &str) -> String {
     }
 }
 
-pub(crate) fn load_comparison<P: AsRef<Path>>(path: P) -> Result<Stored> {
+pub(crate) fn load_comparison(path: impl AsRef<Path>) -> Result<Stored> {
     let path = path.as_ref();
     let mut file = std::fs::File::open(path).map_err(|e| Error::Io(path.to_path_buf(), e))?;
     let mut csv_reader = csv::ReaderBuilder::new()

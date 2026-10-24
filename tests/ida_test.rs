@@ -35,7 +35,7 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn test_the_fixture_reads_back_as_the_representation_it_names() {
-    let p = Program::load(&fixture("hello_clang.json")).unwrap();
+    let p = Program::load(fixture("hello_clang.json")).unwrap();
     assert_eq!(p.ir(), Ir::IdaMicrocode);
     assert_eq!(p.name(), "hello_clang");
 }
@@ -52,7 +52,7 @@ fn test_the_fixture_reads_back_as_the_representation_it_names() {
 /// call is *resolved*, not that one is present.
 #[test]
 fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
-    let p = Program::load(&fixture("hello_clang.json")).unwrap();
+    let p = Program::load(fixture("hello_clang.json")).unwrap();
     let b = BirthmarkType::try_from("fc-set")
         .map(Extractor::new)
         .and_then(|extractor| extractor.extract(&p))
@@ -72,7 +72,7 @@ fn test_the_call_in_the_fixture_is_resolved_to_its_name() {
 /// rather than the programs.
 #[test]
 fn test_the_microcode_refuses_to_be_compared_with_p_code() {
-    let mcode = Program::load(&fixture("hello_clang.json")).unwrap();
+    let mcode = Program::load(fixture("hello_clang.json")).unwrap();
     let pcode = Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json")).unwrap();
     let err = match compare(&mcode, &pcode) {
         Err(e) => e.to_string(),
@@ -86,8 +86,8 @@ fn test_the_microcode_refuses_to_be_compared_with_p_code() {
 
 #[test]
 fn test_two_programs_in_the_microcode_compare() {
-    let a = Program::load(&fixture("hello_clang.json")).unwrap();
-    let b = Program::load(&fixture("hello_gcc.json")).unwrap();
+    let a = Program::load(fixture("hello_clang.json")).unwrap();
+    let b = Program::load(fixture("hello_gcc.json")).unwrap();
     let s = compare(&a, &b).unwrap();
     assert!((0.0..=1.0).contains(&s), "scored outside [0, 1]: {s}");
 }

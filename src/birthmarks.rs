@@ -274,8 +274,18 @@ impl Birthmark {
     /// Records the file this birthmark was read from or written to, which
     /// [`Birthmark::json_path`] then returns. Reading one does not record it
     /// by itself.
-    pub fn set_json_path(&mut self, path: PathBuf) {
-        self.json_path = Some(path);
+    pub fn set_json_path(&mut self, path: impl Into<PathBuf>) {
+        self.json_path = Some(path.into());
+    }
+
+    /// Reads the birthmark a JSON file holds, as `oinkie extract` writes it.
+    ///
+    /// Fails with [`Error::Io`] when the file cannot be read, and with
+    /// [`Error::Json`] when it does not hold a birthmark. Where it was read
+    /// from is not recorded: [`Birthmark::json_path`] stays `None` until
+    /// [`Birthmark::set_json_path`] says so.
+    pub fn load(path: impl AsRef<Path>) -> Result<Self> {
+        Birthmark::try_from(path.as_ref().to_path_buf())
     }
 
     /// Explains why these two cannot be compared, when they cannot.
@@ -606,8 +616,8 @@ pub struct Kgram(Vec<String>);
 
 impl Kgram {
     /// A k-gram of these operations, in this order.
-    pub fn new(seq: Vec<String>) -> Self {
-        Self(seq)
+    pub fn new(seq: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self(seq.into_iter().map(Into::into).collect::<Vec<_>>())
     }
 
     /// The operations, in the order the k-gram holds them.
@@ -1360,7 +1370,7 @@ mod tests {
     }
 
     fn kgram(ops: &[&str]) -> Kgram {
-        Kgram::new(ops.iter().map(ToString::to_string).collect())
+        Kgram::new(ops.iter().copied())
     }
 
     fn kgram_freq_birthmark() -> Birthmark {

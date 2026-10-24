@@ -11,7 +11,7 @@
 //! use oinkie::extract::Extractor;
 //!
 //! # fn main() -> oinkie::Result<()> {
-//! let program = Program::load(Path::new("testdata/lifted/pcodes/udl.json"))?;
+//! let program = Program::load("testdata/lifted/pcodes/udl.json")?;
 //! let birthmark = Extractor::new(BirthmarkType::OpSeq).extract(&program)?;
 //! assert_eq!(birthmark.len(), program.len(), "one function's birthmark per function");
 //! # Ok(())
@@ -139,7 +139,7 @@ fn build_metadata<T>(
 fn extract_op_kgram_seq<T: crate::Op>(f: &TypedFunction<T>, k: usize) -> Vec<Kgram> {
     f.ops()
         .map(Into::into)
-        .collect::<Vec<_>>()
+        .collect::<Vec<String>>()
         .windows(k)
         .map(|w| Kgram::new(w.to_vec()))
         .collect()

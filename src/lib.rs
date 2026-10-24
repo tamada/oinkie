@@ -29,8 +29,8 @@
 //! # fn main() -> oinkie::Result<()> {
 //! let analysis = AnalysisType::try_from("op-set-jaccard")?;
 //! let extractor = Extractor::new(&analysis);
-//! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
-//! let b = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/udl.json"))?)?;
+//! let a = extractor.extract(&Program::load("testdata/lifted/pcodes/hello_clang.json")?)?;
+//! let b = extractor.extract(&Program::load("testdata/lifted/pcodes/udl.json")?)?;
 //!
 //! let comparison = Oinkie::new()?
 //!     .comparator(analysis.algorithm())

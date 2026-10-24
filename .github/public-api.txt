@@ -92,9 +92,10 @@ pub fn oinkie::birthmarks::Birthmark::ir(&self) -> oinkie::lift::Ir
 pub fn oinkie::birthmarks::Birthmark::is_empty(&self) -> bool
 pub fn oinkie::birthmarks::Birthmark::json_path(&self) -> core::option::Option<&std::path::Path>
 pub fn oinkie::birthmarks::Birthmark::len(&self) -> usize
+pub fn oinkie::birthmarks::Birthmark::load(impl core::convert::AsRef<std::path::Path>) -> oinkie::Result<Self>
 pub fn oinkie::birthmarks::Birthmark::name(&self) -> &str
 pub fn oinkie::birthmarks::Birthmark::path(&self) -> &std::path::Path
-pub fn oinkie::birthmarks::Birthmark::set_json_path(&mut self, std::path::PathBuf)
+pub fn oinkie::birthmarks::Birthmark::set_json_path(&mut self, impl core::convert::Into<std::path::PathBuf>)
 impl core::convert::TryFrom<&std::path::Path> for oinkie::birthmarks::Birthmark
 pub type oinkie::birthmarks::Birthmark::Error = oinkie::Error
 pub fn oinkie::birthmarks::Birthmark::try_from(&std::path::Path) -> oinkie::Result<Self>
@@ -122,7 +123,7 @@ impl<'de> serde_core::de::Deserialize<'de> for oinkie::birthmarks::Function
 pub fn oinkie::birthmarks::Function::deserialize<__D>(__D) -> core::result::Result<Self, <__D as serde_core::de::Deserializer>::Error> where __D: serde_core::de::Deserializer<'de>
 pub struct oinkie::birthmarks::Kgram(_)
 impl oinkie::birthmarks::Kgram
-pub fn oinkie::birthmarks::Kgram::new(alloc::vec::Vec<alloc::string::String>) -> Self
+pub fn oinkie::birthmarks::Kgram::new(impl core::iter::traits::collect::IntoIterator<Item = impl core::convert::Into<alloc::string::String>>) -> Self
 pub fn oinkie::birthmarks::Kgram::ops(&self) -> &[alloc::string::String]
 impl core::clone::Clone for oinkie::birthmarks::Kgram
 pub fn oinkie::birthmarks::Kgram::clone(&self) -> Self
@@ -296,10 +297,10 @@ pub fn oinkie::lift::Ir::deserialize<__D>(__D) -> core::result::Result<Self, <__
 pub struct oinkie::lift::LifterBuilder
 impl oinkie::lift::LifterBuilder
 pub fn oinkie::lift::LifterBuilder::build(self) -> oinkie::Result<alloc::boxed::Box<(dyn oinkie::lift::Lifter + core::marker::Sync)>>
-pub fn oinkie::lift::LifterBuilder::home(self, core::option::Option<std::path::PathBuf>) -> Self
-pub fn oinkie::lift::LifterBuilder::intermediate_dir(self, core::option::Option<std::path::PathBuf>) -> Self
+pub fn oinkie::lift::LifterBuilder::home(self, impl core::convert::Into<std::path::PathBuf>) -> Self
+pub fn oinkie::lift::LifterBuilder::intermediate_dir(self, impl core::convert::Into<std::path::PathBuf>) -> Self
 pub fn oinkie::lift::LifterBuilder::new(oinkie::lift::Ir) -> Self
-pub fn oinkie::lift::LifterBuilder::script(self, core::option::Option<std::path::PathBuf>) -> Self
+pub fn oinkie::lift::LifterBuilder::script(self, impl core::convert::Into<std::path::PathBuf>) -> Self
 pub trait oinkie::lift::Lifter
 pub fn oinkie::lift::Lifter::lift(&self, &std::path::Path, &std::path::Path) -> oinkie::Result<()>
 pub fn oinkie::lift::Lifter::notice(&self) -> core::option::Option<alloc::string::String>
@@ -361,10 +362,10 @@ pub fn oinkie::Program::ir(&self) -> oinkie::lift::Ir
 pub fn oinkie::Program::is_empty(&self) -> bool
 pub fn oinkie::Program::json_path(&self) -> core::option::Option<&std::path::Path>
 pub fn oinkie::Program::len(&self) -> usize
-pub fn oinkie::Program::load(&std::path::Path) -> oinkie::Result<Self>
+pub fn oinkie::Program::load(impl core::convert::AsRef<std::path::Path>) -> oinkie::Result<Self>
 pub fn oinkie::Program::name(&self) -> &str
 pub fn oinkie::Program::path(&self) -> &std::path::Path
-pub fn oinkie::Program::set_json_path(&mut self, std::path::PathBuf)
+pub fn oinkie::Program::set_json_path(&mut self, impl core::convert::Into<std::path::PathBuf>)
 pub fn oinkie::Program::symbol_count(&self) -> usize
 impl core::fmt::Debug for oinkie::Program
 pub fn oinkie::Program::fmt(&self, &mut core::fmt::Formatter<'_>) -> core::fmt::Result

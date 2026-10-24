@@ -74,7 +74,7 @@ impl Side for Program {
 }
 
 /// Writes one comparison to `dest`.
-pub(crate) fn store<S: Side, P: AsRef<Path>>(comparison: &Comparison<S>, dest: P) -> Result<()> {
+pub(crate) fn store<S: Side>(comparison: &Comparison<S>, dest: impl AsRef<Path>) -> Result<()> {
     let dest = dest.as_ref();
     let io_err = |e| Error::Io(dest.to_path_buf(), e);
     let mut file = std::fs::File::create(dest).map_err(io_err)?;
@@ -154,7 +154,7 @@ mod tests {
     }
 
     fn birthmark(lifted: &str) -> Birthmark {
-        let program = Program::load(Path::new(lifted)).unwrap();
+        let program = Program::load(lifted).unwrap();
         Extractor::new(BirthmarkType::OpSeq)
             .extract(&program)
             .unwrap()
@@ -268,7 +268,7 @@ mod tests {
     /// and says where it was read from once that is known.
     #[test]
     fn test_a_program_describes_itself() {
-        let mut p = Program::load(Path::new(LLIL)).unwrap();
+        let mut p = Program::load(LLIL).unwrap();
         assert_ne!(
             p.symbol_count(),
             p.len(),

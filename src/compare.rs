@@ -19,7 +19,7 @@
 //!
 //! # fn main() -> oinkie::Result<()> {
 //! let extractor = Extractor::new(BirthmarkType::OpSet);
-//! let a = extractor.extract(&Program::load(Path::new("testdata/lifted/pcodes/hello_clang.json"))?)?;
+//! let a = extractor.extract(&Program::load("testdata/lifted/pcodes/hello_clang.json")?)?;
 //!
 //! let comparison = Oinkie::new()?
 //!     .comparator(&Algorithm::Jaccard)
